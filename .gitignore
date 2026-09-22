@@ -12,6 +12,10 @@ build/
 build-*/
 sim/build*/
 managed_components/
+# JS-beroenden hör hemma i tools/relay och tools/interaction-relay, som
+# ignorerar sina egna node_modules. Regeln här fångar en npm install
+# som råkat köras i fel katalog (610 ospårade filer, 2026-09-22).
+node_modules/
 sdkconfig
 sdkconfig.old
 .worktrees/
