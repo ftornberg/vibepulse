@@ -7,6 +7,17 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Changed
 
+- **Claude and Codex approvals now share one shell-command classifier.**
+  The Claude path used to judge a Bash permission by its first word and the
+  absence of shell metacharacters alone, so `git branch -D main`,
+  `make -f evil.mk`, `git diff --output=…` and `pytest -p plugin` were
+  APPROVE-able from the panel. The strict shape check the Codex adapter
+  already applied (flags against small allowlists, argument positions) now
+  lives in `interactions.py` and gates both providers. Read-only shapes
+  (`git status --short`, `npm test --silent`, `make test`, plain `pytest`)
+  are unchanged. Found in the 2026-09-22 security review.
+- `.github-token` in the repository root, which the tokenserver reads for
+  the optional GitHub stargazer poll, is now git-ignored.
 - Encrypted live-status publishing runs at most every five seconds instead of
   two, reducing normal host status uploads by 60%. Changed activity can appear
   up to three seconds later; approval delivery and signed expiry are unchanged.
