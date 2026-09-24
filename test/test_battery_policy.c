@@ -153,6 +153,23 @@ static void test_single_low_sample_after_gap_is_not_critical(void) {
   check("single low sample after gap is not critical", v.state == TG_BATT_LOW && !v.shutdown);
 }
 
+static void test_invalid_sample_stops_dwell(void) {
+  tg_batt_policy p = {0};
+  tg_batt_sample s = sample(false, false, false, 4);
+  tg_batt_verdict v = tg_batt_update(&p, &s, SEC(0));
+  check("pct 4 is low", v.state == TG_BATT_LOW);
+  tg_batt_sample bad = {0};
+  v = tg_batt_update(&p, &bad, SEC(1));
+  check("one invalid keeps state", v.state == TG_BATT_LOW);
+  s = sample(false, false, false, 4);
+  v = tg_batt_update(&p, &s, SEC(31));
+  check("single low after invalid is not critical", v.state == TG_BATT_LOW && !v.shutdown);
+  v = tg_batt_update(&p, &s, SEC(60));
+  check("still low at 29 s after restart", v.state == TG_BATT_LOW);
+  v = tg_batt_update(&p, &s, SEC(61));
+  check("critical 30 s after restart", v.state == TG_BATT_CRITICAL);
+}
+
 int main(void) {
   test_charging_full_and_on_battery();
   test_low_with_hysteresis();
@@ -164,6 +181,7 @@ int main(void) {
   test_no_battery_is_unknown();
   test_invalid_gauge_hides_number();
   test_single_low_sample_after_gap_is_not_critical();
+  test_invalid_sample_stops_dwell();
   if (failures) { printf("%d failure(s)\n", failures); return 1; }
   printf("battery policy: ok\n");
   return 0;

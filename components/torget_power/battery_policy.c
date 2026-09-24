@@ -29,9 +29,9 @@ tg_batt_verdict tg_batt_update(tg_batt_policy *p, const tg_batt_sample *s,
   int before_pct = p->last_percent;
 
   if (!s->valid) {
+    p->dwell_running = false;
     if (++p->failures >= TG_BATT_FAILURES_TO_UNKNOWN) {
       p->state = TG_BATT_UNKNOWN;
-      p->dwell_running = false;
     }
   } else {
     p->failures = 0;
