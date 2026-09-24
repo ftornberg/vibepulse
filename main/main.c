@@ -109,27 +109,32 @@ static void power_task(void *arg) {
     tg_batt_sample s = tg_axp2101_read();
     tg_batt_verdict v = tg_batt_update(&s_batt, &s, esp_timer_get_time());
     s_batt_bright_cap = v.bright_cap;
+    /* Bara övergångar loggas. En saknad mätare skrivs aldrig som 0 %. */
     if (v.changed) {
-      /* Bara övergångar loggas. En saknad mätare skrivs aldrig som 0 %. */
       if (v.percent >= 0)
         ESP_LOGI(TAG, "batteri: %s %d %%", tg_batt_state_name(v.state), v.percent);
       else
         ESP_LOGI(TAG, "batteri: %s", tg_batt_state_name(v.state));
-      char text[40];
-      if (v.state == TG_BATT_UNKNOWN) snprintf(text, sizeof text, "NO BATTERY");
-      else if (v.state == TG_BATT_FULL) snprintf(text, sizeof text, "USB · FULL");
-      else if (v.state == TG_BATT_CHARGING && v.percent >= 0)
-        snprintf(text, sizeof text, "USB · CHARGING %d %%", v.percent);
-      else if (v.state == TG_BATT_CHARGING) snprintf(text, sizeof text, "USB · CHARGING");
-      else if (v.percent >= 0 && s.mv > 0)
-        snprintf(text, sizeof text, "BATTERY %d %% · %d.%02d V", v.percent,
-                 s.mv / 1000, (s.mv % 1000) / 10);
-      else snprintf(text, sizeof text, "BATTERY");
-      torget_ui_lock();
-      torget_battery_badge_set(v.state, v.percent);
-      torget_settings_set_power(text);
-      torget_ui_unlock();
     }
+    /* ABOUT-texten byggs varje poll så spänningen hålls levande; settern
+     * avduplicerar, så en oförändrad text kostar bara låset. NO BATTERY bara
+     * när PMU:n faktiskt svarat att inget batteri sitter i — en läsning som
+     * fallerar blir tom text, som menyn ritar som streck. */
+    char text[40];
+    if (s.valid && !s.present) snprintf(text, sizeof text, "NO BATTERY");
+    else if (v.state == TG_BATT_UNKNOWN) text[0] = '\0';
+    else if (v.state == TG_BATT_FULL) snprintf(text, sizeof text, "USB · FULL");
+    else if (v.state == TG_BATT_CHARGING && v.percent >= 0)
+      snprintf(text, sizeof text, "USB · CHARGING %d %%", v.percent);
+    else if (v.state == TG_BATT_CHARGING) snprintf(text, sizeof text, "USB · CHARGING");
+    else if (v.percent >= 0 && s.mv > 0)
+      snprintf(text, sizeof text, "BATTERY %d %% · %d.%02d V", v.percent,
+               s.mv / 1000, (s.mv % 1000) / 10);
+    else snprintf(text, sizeof text, "BATTERY");
+    torget_ui_lock();
+    if (v.changed) torget_battery_badge_set(v.state, v.percent);
+    torget_settings_set_power(text);
+    torget_ui_unlock();
     /* Del C bygger avstängningen; här bara varningen. */
     if (v.shutdown)
       ESP_LOGW(TAG, "batteri: avstängning begärd men inte kompilerad in (del C)");
@@ -146,10 +151,9 @@ static void power_task(void *arg) {
 static void power_start(void) {
 #ifndef TORGET_BOARD_241_V2
   if (bsp_i2c_init() != ESP_OK || tg_axp2101_init(bsp_i2c_get_handle()) != ESP_OK) {
+    /* ABOUT POWER lämnas tom: menyn ritar streck, det ärliga för "ingen
+     * PMU att läsa". */
     ESP_LOGW(TAG, "ingen PMU att läsa, batteriikonen visar okänd");
-    torget_ui_lock();
-    torget_settings_set_power("NO BATTERY");
-    torget_ui_unlock();
     return;
   }
   if (xTaskCreate(power_task, "power", 3072, NULL, 2, NULL) != pdPASS)

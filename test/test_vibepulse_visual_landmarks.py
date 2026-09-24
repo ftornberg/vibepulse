@@ -1449,6 +1449,9 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         for p in badge:
             if max(p) < 24:
                 continue  # the faintest anti-aliased edge carries no hue
+            if p[0] == 0:
+                foreign.append(p)  # no red at all: cannot be the accent
+                continue
             if (abs(p[1] / p[0] - accent[1] / accent[0]) > 0.08
                     or abs(p[2] / p[0] - accent[2] / accent[0]) > 0.08):
                 foreign.append(p)
