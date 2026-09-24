@@ -146,7 +146,7 @@ static void apply(void) {
   }
 
   if (pct >= 0 && !unknown) {
-    char text[8];
+    char text[12]; /* INT_MAX-siffror + "%" + NUL, annars format-truncation */
     snprintf(text, sizeof text, "%d%%", pct);
     lv_label_set_text(ui.pct, text);
     lv_obj_clear_flag(ui.pct, LV_OBJ_FLAG_HIDDEN);
