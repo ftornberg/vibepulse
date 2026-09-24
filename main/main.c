@@ -780,11 +780,13 @@ static void tick_cb(lv_timer_t *t) {
   };
   tg_button_outputs key3_out;
   tg_button_arbitrate(&key3_in, &key3_out);
-  /* Brickan göms när en övertagning äger glaset. SETTINGS-menyn täcker den
-   * redan i lagerordningen, och Needs You ritar sitt eget helskärmslager. */
+  /* Brickan göms när en övertagning äger glaset. Needs You och
+   * klarpulsen bor i appträdet UNDER topplagret, så de måste frågas
+   * uttryckligen; SETTINGS lyfter sig själv över brickan varje tick. */
   torget_battery_badge_set_covered(key3_in.notice_visible ||
                                    key3_in.maintenance_open ||
-                                   key3_in.setup_owns_input);
+                                   key3_in.setup_owns_input ||
+                                   tk_agent_monitor_takeover_visible());
 
   /* Verkställandet följer skiljedomens ordning: menyns lyft FÖRE dess
    * stängning, och båda före knappkedjans utdata. */
@@ -1206,6 +1208,13 @@ void app_main(void) {
   s_last_activity_us = esp_timer_get_time();
 
   torget_ui_lock();
+  /* Batteribrickan FÖRST på topplagret: allt som skapas där efter den —
+   * bootskärmen, nätlagret, SETTINGS, OTA — ritas över den. Bootskärmen
+   * täcker den alltså tills den river sig. Needs You bor i appträdet under
+   * topplagret och göms i stället via tick_cb:s täckpredikat. */
+  overlay_cost_mark();
+  torget_battery_badge_create();
+  overlay_cost_report("battery");
   /* Bootskärmen FÖRE apparna och FÖRE OTA-overlayn: apparnas halvbyggda
    * NO DATA-vyer göms bakom den, och READY-ringen vinner alltid över den
    * i lagerordningen. */
@@ -1229,11 +1238,6 @@ void app_main(void) {
   overlay_cost_mark();
   torget_settings_create();
   overlay_cost_report("settings");
-  /* Batteribrickan på samma topplager. Att SETTINGS ändå täcker den vilar på
-   * menyns lyft till förgrunden varje tick (se tick_cb), inte på ordningen. */
-  overlay_cost_mark();
-  torget_battery_badge_create();
-  overlay_cost_report("battery");
   /* OTA-overlayn EFTER det delade UI:t, på topplagret, dold tills KEY3-
    * hållet öppnar underhållsfönstret — appträdet rörs aldrig. */
   overlay_cost_mark();

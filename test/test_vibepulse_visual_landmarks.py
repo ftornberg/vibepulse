@@ -1427,6 +1427,43 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
                          dot_runs(charging, PAGER_ROW_Y, PAGER_ROW_SCAN_X_END),
                          "the badge must not move the page dots")
 
+    def _assert_badge_crop_black(self, name, why):
+        badge = self.image(name).crop(self.BADGE_CROP).get_flattened_data()
+        ink = sum(1 for p in badge if p != (0, 0, 0))
+        self.assertEqual(ink, 0, f"{name}: {why} ({ink} non-black px)")
+
+    def test_battery_badge_hidden_under_needs_you(self):
+        """Needs You lives in the app tree, BELOW the top layer the badge is
+        on, so z-order alone paints the badge over the takeover. The host
+        must cover it (tk_agent_monitor_takeover_visible in the predicate).
+
+        The takeover's own rounded Claude frame (inset 14) crosses the badge
+        box, so the crop is not all black: measured 205 accent px with the
+        badge hidden, 308 with it drawn. Every non-black pixel must therefore
+        be the accent #D97757 blended over black; the badge's grey outline,
+        yellow bolt and green/red fill all break that ratio."""
+        accent = (217, 119, 87)
+        name = "torget-vibepulse-needs-you-question.bmp"
+        badge = self.image(name).crop(self.BADGE_CROP).get_flattened_data()
+        foreign = []
+        for p in badge:
+            if max(p) < 24:
+                continue  # the faintest anti-aliased edge carries no hue
+            if (abs(p[1] / p[0] - accent[1] / accent[0]) > 0.08
+                    or abs(p[2] / p[0] - accent[2] / accent[0]) > 0.08):
+                foreign.append(p)
+        self.assertEqual(
+            foreign, [],
+            f"{name}: the badge must hide while Needs You owns the glass")
+
+    def test_battery_badge_hidden_under_boot_screen(self):
+        """The badge is created first on the top layer, so the boot overlay
+        (created later on the same layer) paints over it until it tears
+        itself down."""
+        self._assert_badge_crop_black(
+            "torget-boot-cold.bmp",
+            "the boot screen must sit above the badge")
+
     def test_battery_badge_unknown_is_outline_only(self):
         """torget-vibepulse-claude-fable.bmp is the very first static-QA
         frame, captured before any battery fixture is applied (Task 4 fixed

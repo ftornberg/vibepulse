@@ -223,7 +223,11 @@ static void dump_draw_buf_frame(lv_draw_buf_t *buf, const char *tag) {
   else printf("snapshot: %s\n", path);
 }
 
+/* Batteribrickans täckpredikat, definierat vid key3_tick. */
+static void badge_cover_sync(void);
+
 static void dump_obj_frame(lv_obj_t *root, const char *tag) {
+  badge_cover_sync();
   /* QA-dumpar får inte bero på var SDL:s nästa refresh råkar ligga. Tvinga
    * layout + redraw före snapshot så ett helt tillstånd fångas atomiskt. */
   lv_obj_update_layout(root);
@@ -238,6 +242,7 @@ static void dump_obj_frame(lv_obj_t *root, const char *tag) {
  * one shared Wi-Fi mark lives.  Snapshotting only lv_screen_active() silently
  * omitted it even though the physical display composites both layers. */
 static void dump_frame(const char *tag) {
+  badge_cover_sync();
   lv_obj_t *screen = lv_screen_active();
   lv_obj_t *top = lv_layer_top();
   lv_obj_update_layout(screen);
@@ -703,6 +708,19 @@ static void key3_open_maintenance_window(void) {
   torget_ota_ui_set(TG_OTA_UI_OPEN, 0, 600);
 }
 
+/* Batteribrickan göms när en övertagning äger glaset — samma fyra termer som
+ * targetets tick_cb, läst ur bänkens egna motsvarigheter. Kallas varje tick
+ * OCH före varje statisk QA-dump: på glaset utvärderas predikatet var
+ * 100 ms, så varje ram panelen visar har redan gått genom det; de statiska
+ * dumparna tickar inte, och utan anropet här fotograferades brickan ovanpå
+ * Needs You. */
+static void badge_cover_sync(void) {
+  torget_battery_badge_set_covered(torget_ota_ui_notice_visible() ||
+                                   key3_maintenance_open ||
+                                   tg_wifi_setup_owns_input(key3_setup_phase) ||
+                                   tk_agent_monitor_takeover_visible());
+}
+
 /* En tick av värdlagret. `down` är knappens råa nivå, `now_us` bänkens klocka. */
 static void key3_tick(bool down, int64_t now_us) {
   static tg_button_policy policy;
@@ -726,6 +744,7 @@ static void key3_tick(bool down, int64_t now_us) {
   };
   tg_button_outputs out;
   tg_button_arbitrate(&in, &out);
+  badge_cover_sync();
 
   if (out.menu_foreground) {
     torget_settings_set_address(key3_address);

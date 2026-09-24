@@ -1135,6 +1135,20 @@ void tk_agent_monitor_needs_you_press(tk_needs_you_verdict verdict) {
   needs_you_resolve(verdict);
 }
 
+/* Shown = the object and every ancestor lack LV_OBJ_FLAG_HIDDEN. Walks the
+ * flags only, so it answers before the first layout pass too. */
+static bool shown_on_glass(const lv_obj_t *obj) {
+  if (!obj) return false;
+  for (; obj; obj = lv_obj_get_parent(obj))
+    if (lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return false;
+  return true;
+}
+
+bool tk_agent_monitor_takeover_visible(void) {
+  return shown_on_glass(mon.needs_you.root) ||
+         shown_on_glass(mon.completion.root);
+}
+
 void tk_agent_monitor_create(lv_obj_t *app_root) {
   memset(&mon, 0, sizeof mon);
   tk_ir_policy_init(&mon.interaction_policy);
