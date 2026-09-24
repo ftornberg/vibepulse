@@ -50,6 +50,8 @@
 #include "button_arbitration.h"
 #include "settings_menu.h"
 #include "wifi_slots.h"
+#include "../platform/battery_badge.h"
+#include "../components/torget_power/battery_policy.h"
 
 /* VibePulse är det här repots app och ligger ALLTID först i registret, så
  * launchern och den obevakade rundan pekar på samma index oavsett vilka
@@ -456,6 +458,36 @@ static void apply_max_tracker_fixture(int idx) {
   feed_max_tracker_file(MAX_TRACKER_FIXTURES[max_tracker_fixture_idx]);
 }
 
+/* Key B: steg genom batteritillstånd med riktiga policybeslut på
+ * låtsasmätningar — samma policy som firmware, så bilden är sann. */
+static int battery_fixture_idx = -1;
+static tg_batt_policy battery_policy;
+static void apply_battery_fixture(int idx) {
+  static const tg_batt_sample fixtures[] = {
+    { .valid = false },
+    { .valid = true, .present = true, .vbus = true, .charging = true, .percent = 71, .mv = 4020 },
+    { .valid = true, .present = true, .vbus = true, .charge_done = true, .percent = 100, .mv = 4180 },
+    { .valid = true, .present = true, .percent = 64, .mv = 3900 },
+    { .valid = true, .present = true, .percent = 18, .mv = 3650 },
+    { .valid = true, .present = true, .percent = 4, .mv = 3400 },
+  };
+  const int count = (int)(sizeof fixtures / sizeof fixtures[0]);
+  battery_fixture_idx = ((idx % count) + count) % count;
+  const tg_batt_sample *s = &fixtures[battery_fixture_idx];
+  int64_t now = torget_now_us();
+  tg_batt_verdict v = tg_batt_update(&battery_policy, s, now);
+  if (battery_fixture_idx == 0) {
+    /* tre ogiltiga i rad ger UNKNOWN, som på glaset */
+    tg_batt_update(&battery_policy, s, now);
+    v = tg_batt_update(&battery_policy, s, now);
+  }
+  if (battery_fixture_idx == 5) {
+    /* fördröjningen: 30 s på <= 5 % innan CRITICAL */
+    v = tg_batt_update(&battery_policy, s, now + 31 * 1000000LL);
+  }
+  torget_battery_badge_set(v.state, v.percent);
+}
+
 static void apply_github_file(const char *file, bool unique_event) {
   size_t len = 0;
   char *json = read_fixture(file, &len);
@@ -760,13 +792,14 @@ static void qa_key3_tap(void) {
 /* Tangent 1-4: Solelkollen-fixtur. T: mata VibePulse. S: nästa agentläge.
  * L: launchern. [ och ] bläddrar VibePulse-sidor; N byter app (KEY3:s
  * appväxling utan gest). M: nästa Max Tracker-fixtur. G: simulera en ny
- * GitHub-stjärna. K är KEY3 självt, U och W fingrar på menyns rader.
+ * GitHub-stjärna. B: nästa batterifixtur. K är KEY3 självt, U och W fingrar
+ * på menyns rader.
  * LVGL:s SDL-drivrutin
  * pumpar eventen, så ren tangentbordspollning räcker — ingen indev-
  * rördragning för ett bänkverktyg. */
 static void poll_keys(lv_timer_t *t) {
   (void)t;
-  static bool held[12];
+  static bool held[13];
   const Uint8 *ks = SDL_GetKeyboardState(NULL);
 
   /* KEY3 pollas RÅTT, inte på flank: hållet är en tidsgest och tidsreglerna
@@ -775,13 +808,14 @@ static void poll_keys(lv_timer_t *t) {
    * släpp före tre sekunder och ett öppet fönster stänger i stället. */
   key3_tick(ks[SDL_SCANCODE_K] != 0, (int64_t)lv_tick_get() * 1000);
 
-  const SDL_Scancode keys[12] = { SDL_SCANCODE_1, SDL_SCANCODE_2,
+  const SDL_Scancode keys[13] = { SDL_SCANCODE_1, SDL_SCANCODE_2,
                                   SDL_SCANCODE_3, SDL_SCANCODE_4,
                                   SDL_SCANCODE_T, SDL_SCANCODE_S,
                                   SDL_SCANCODE_L, SDL_SCANCODE_N,
                                   SDL_SCANCODE_LEFTBRACKET,
                                   SDL_SCANCODE_RIGHTBRACKET,
-                                  SDL_SCANCODE_M, SDL_SCANCODE_G };
+                                  SDL_SCANCODE_M, SDL_SCANCODE_G,
+                                  SDL_SCANCODE_B };
   /* Fingrar på menyns rader. click_row() är samma väg touch-callbacken tar,
    * så avsikten uppstår som den gör på glaset — och konsumeras av key3_tick(),
    * aldrig här. */
@@ -796,7 +830,7 @@ static void poll_keys(lv_timer_t *t) {
     row_held[i] = down;
   }
 
-  for (int i = 0; i < 12; i++) {
+  for (int i = 0; i < 13; i++) {
     bool down = ks[keys[i]];
     if (down && !held[i]) {
       if (i < 4) {
@@ -818,6 +852,7 @@ static void poll_keys(lv_timer_t *t) {
       }
       else if (i == 10)
         apply_max_tracker_fixture(max_tracker_fixture_idx + 1);
+      else if (i == 12) apply_battery_fixture(battery_fixture_idx + 1);
       else {
         torget_app_show(SIM_APP_VIBEPULSE);
         apply_github_file("github-star.json", true);
@@ -1664,6 +1699,14 @@ static int run_vibepulse_static_qa(void) {
   tokens_apply(&value_solo);
   dump_frame("vibepulse-value-solo");
 
+  /* Batteriikonen (design 2026-09-24): laddar, och kritisk. */
+  tokens_show_view(VIEW_CLAUDE_FABLE);
+  apply_battery_fixture(1);
+  dump_frame("vibepulse-battery-charging");
+  apply_battery_fixture(5);
+  dump_frame("vibepulse-battery-critical");
+  apply_battery_fixture(0);
+
   capture_wifi_drift_matrix();
   capture_global_wifi_matrix();
 
@@ -1819,6 +1862,12 @@ int main(int argc, char **argv) {
   /* SETTINGS mellan nätlagret och OTA-ringen — samma ordning som targetet,
    * så READY-takeovern vinner över menyn på båda. */
   torget_settings_create();
+#ifndef TORGET_BOARD_241_V2
+  /* Batteriikonen (design 2026-09-24): "Waveshare ESP32-S3 Touch-AMOLED-2.16
+   * only. The 2.41 V2 has a different PMU wiring and is out of scope until
+   * its registry says otherwise." No badge exists to create on that board. */
+  torget_battery_badge_create();
+#endif
   torget_ota_ui_create();
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-labs-qa") == 0)

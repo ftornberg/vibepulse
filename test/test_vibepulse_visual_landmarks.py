@@ -54,6 +54,14 @@ MT_STAT_VALUE_Y = MT_STAT_LABEL_Y + 34  # 348
 MT_STAT_COL_X = [MT_GRID_X + (i * MT_GRID_W) // 4 for i in range(4)]
 MT_STAT_COL_W = MT_GRID_W // 4  # 104
 PAGER_ROW_Y = 458  # PAGER_Y (456) + 2: inside the 6px-tall dot row
+# The battery badge (Task 4, design 2026-09-24) sits bottom-right on this
+# same row; pager-only scans stop well short of its left edge (x=379).
+PAGER_ROW_SCAN_X_END = 370
+# The badge's own footprint on lv_layer_top() (root pos/size in
+# platform/battery_badge.c: x 379..458, y 454..470 at BADGE_RIGHT_MARGIN 22 /
+# BADGE_Y 456). It lives permanently on that layer, so a check that the top
+# layer is otherwise empty must mask this box out first.
+BATTERY_BADGE_BOX = (379, 454, 458, 470)
 
 # The setup window's QR canvas — mirrors WIFI_OPEN_QR_* in
 # components/torget_wifi/wifi_setup_ui.c (also pinned by
@@ -120,12 +128,18 @@ def codex_stop_rgb(pct):
     return tuple(lerp(lo[1][c], hi[1][c], lo[0], hi[0]) for c in range(3))
 
 
-def dot_runs(image, y):
-    """Contiguous non-black horizontal runs at row `y` — the pager dots are
-    the only content on this row, so this both counts and sizes them."""
+def dot_runs(image, y, x_end=None):
+    """Contiguous non-black horizontal runs at row `y`, up to column
+    `x_end` (exclusive; default the full width). The pager dots are the
+    only content in the left/centre of this row — since the battery badge
+    (Task 4, design 2026-09-24) sits bottom-right on the SAME row (PAGER_Y
+    456), callers that want only the pager pass x_end below the badge's
+    left edge (BADGE_RIGHT_MARGIN 22 from x=480, badge width ~79 -> starts
+    at x=379; 370 leaves margin)."""
+    limit = image.width if x_end is None else x_end
     runs = []
     start = None
-    for x in range(image.width):
+    for x in range(limit):
         active = image.getpixel((x, y)) != (0, 0, 0)
         if active and start is None:
             start = x
@@ -133,7 +147,7 @@ def dot_runs(image, y):
             runs.append((start, x - 1))
             start = None
     if start is not None:
-        runs.append((start, image.width - 1))
+        runs.append((start, limit - 1))
     return runs
 
 
@@ -195,6 +209,8 @@ EXPECTED = {
     "torget-vibepulse-value-both.bmp",
     "torget-vibepulse-value-uneven.bmp",
     "torget-vibepulse-value-solo.bmp",
+    "torget-vibepulse-battery-charging.bmp",
+    "torget-vibepulse-battery-critical.bmp",
     "torget-ota-ring-open.bmp",
     "torget-ota-ring-receiving.bmp",
     "torget-ota-ring-verifying.bmp",
@@ -797,9 +813,14 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
                             "the guard never advanced past STARTING")
 
         # Frame two: the setup window closed. Nothing may be left underneath.
+        # The battery badge (Task 4) lives permanently on this same top
+        # layer, bottom-right, uncovered here — mask its own footprint out
+        # before requiring the rest of the layer to be pure black.
         closed = self.image("torget-settings-wifi-handoff-closed.bmp")
+        masked = closed.copy()
+        masked.paste((0, 0, 0), BATTERY_BADGE_BOX)
         self.assertEqual(
-            set(closed.get_flattened_data()), {(0, 0, 0)},
+            set(masked.get_flattened_data()), {(0, 0, 0)},
             "a stale window was revealed when the setup window closed")
 
     def test_losing_the_address_remutes_update_without_closing(self):
@@ -1345,7 +1366,7 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         for name, active_index in cases:
             with self.subTest(name=name):
                 image = self.image(name)
-                runs = dot_runs(image, PAGER_ROW_Y)
+                runs = dot_runs(image, PAGER_ROW_Y, PAGER_ROW_SCAN_X_END)
                 self.assertEqual(len(runs), SCREEN_VIEWS)
                 widths = [end - start + 1 for start, end in runs]
                 self.assertEqual(widths[active_index], 18)
@@ -1358,7 +1379,7 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         # added; create_pager now derives it. Assert the drawn row really is
         # centred, not just that the arithmetic in the header looks right.
         runs = dot_runs(self.image("torget-vibepulse-value-both.bmp"),
-                        PAGER_ROW_Y)
+                        PAGER_ROW_Y, PAGER_ROW_SCAN_X_END)
         left, right = runs[0][0], runs[-1][1]
         self.assertLessEqual(abs((left + right + 1) - 480), 2)
 
