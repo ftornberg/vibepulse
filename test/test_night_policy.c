@@ -33,6 +33,18 @@ int main(void) {
 
   check("garbage hour never applies", !tg_night_applies(&wrap, true, true, 25, 0));
 
+  check("NULL schedule never applies", !tg_night_applies(NULL, true, true, 2, 0));
+  check("hour 24 never applies", !tg_night_applies(&wrap, true, true, 24, 0));
+  check("minute 60 never applies", !tg_night_applies(&wrap, true, true, 2, 60));
+  check("negative hour never applies", !tg_night_applies(&wrap, true, true, -1, 0));
+  check("negative minute never applies", !tg_night_applies(&wrap, true, true, 2, -1));
+  tg_night_schedule bad_minute = { 2360, 700 };
+  check("start with minute 60 never applies", !tg_night_applies(&bad_minute, true, true, 2, 0));
+  tg_night_schedule bad_negative = { -100, 700 };
+  check("negative start never applies", !tg_night_applies(&bad_negative, true, true, 2, 0));
+  tg_night_schedule bad_end = { 2300, 2400 };
+  check("end 2400 never applies", !tg_night_applies(&bad_end, true, true, 23, 30));
+
   if (failures) { printf("%d failure(s)\n", failures); return 1; }
   printf("night policy: ok\n");
   return 0;

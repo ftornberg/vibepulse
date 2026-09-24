@@ -7,6 +7,7 @@
  * Nattschemat: ren funktion. Lokal tid in, "natt gäller nu" ut. Fönstret
  * anges som HHMM (2300, 700); start > slut betyder över midnatt. Utan
  * giltig klocka gäller aldrig schemat — bara inaktivitetsregeln i main.c.
+ * Ett ogiltigt HHMM-värde i schemat (t.ex. 2360 eller negativt) gör att schemat aldrig gäller.
  */
 
 typedef struct {
