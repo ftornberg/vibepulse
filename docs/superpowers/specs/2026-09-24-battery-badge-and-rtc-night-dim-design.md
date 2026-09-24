@@ -76,9 +76,11 @@ behaviour must be proven on the unit before it is enabled.
   (charging / done / not charging), fuel-gauge percentage (0–100), battery
   voltage in mV. One I2C device on the BSP bus handle from
   `bsp_i2c_get_handle()`, exactly as `main/rotation.c` does for the IMU. No
-  register writes, with one exception behind `CONFIG_TG_POWER_SHUTDOWN`: the
-  PMU power-off command used by the shutdown sequence. Charge current, charge
-  termination voltage and thermal limits are never touched.
+  register writes, with two exceptions: enabling the battery-voltage ADC
+  channel at init (a measurement setting, register `0x30` bit 0), and,
+  behind `CONFIG_TG_POWER_SHUTDOWN`, the PMU power-off command used by the
+  shutdown sequence. Charge current, charge termination voltage and thermal
+  limits are never touched.
 - **`pcf85063.c/.h`** — reads and writes the seven time/date registers and
   reads the oscillator-stop flag (`OS`). No alarm, no timer, no interrupt
   handling in this version.
