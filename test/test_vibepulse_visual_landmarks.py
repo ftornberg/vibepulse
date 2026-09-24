@@ -1391,6 +1391,76 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         left, right = runs[0][0], runs[-1][1]
         self.assertLessEqual(abs((left + right + 1) - 480), 2)
 
+    # -- Battery badge (Task 4/6, design 2026-09-24) -------------------------
+    # BATTERY_BADGE_BOX is the real root box (379..458, 454..470); crop with
+    # 4px slack on every side so anti-aliased edges stay inside the crop.
+    BADGE_CROP = (BATTERY_BADGE_BOX[0] - 4, BATTERY_BADGE_BOX[1] - 4,
+                  BATTERY_BADGE_BOX[2] + 4, BATTERY_BADGE_BOX[3] + 4)
+
+    def test_battery_badge_charging_is_green_bottom_right(self):
+        """The badge lives bottom-right on every page and reads charge as
+        green. Measured on a real capture (/tmp/caps6, this task): the crop
+        has 155 green-classified pixels and 421 total non-black ink (outline
+        + yellow bolt + green fill + white-on-dark percent text); thresholds
+        below sit at roughly half of each so the test survives a 1px shift
+        but fails if the badge disappears or loses its fill colour."""
+        image = self.image("torget-vibepulse-battery-charging.bmp")
+        badge = image.crop(self.BADGE_CROP).get_flattened_data()
+        green = sum(1 for r, g, b in badge if g > 150 and r < 170 and b < 130)
+        self.assertGreater(green, 75, "a charging badge draws a green fill")
+        ink = sum(1 for p in badge if p != (0, 0, 0))
+        self.assertGreater(ink, 210, "the badge draws outline, bolt and percent")
+
+    def test_battery_badge_critical_is_red_and_page_dots_untouched(self):
+        """Measured on a real capture: 55 red-classified pixels in the crop
+        (the fill sliver is only a few pixels wide at 4%, so the percent
+        text itself is tinted red too); threshold is roughly half."""
+        image = self.image("torget-vibepulse-battery-critical.bmp")
+        badge = image.crop(self.BADGE_CROP).get_flattened_data()
+        red = sum(1 for r, g, b in badge if r > 150 and g < 110 and b < 100)
+        self.assertGreater(red, 27, "a critical badge draws a red fill")
+        # The pager stays centred and unaffected (design: PAGER_Y 456); scan
+        # only up to PAGER_ROW_SCAN_X_END so the badge itself (same row)
+        # doesn't get counted as extra dots.
+        charging = self.image("torget-vibepulse-battery-charging.bmp")
+        self.assertEqual(dot_runs(image, PAGER_ROW_Y, PAGER_ROW_SCAN_X_END),
+                         dot_runs(charging, PAGER_ROW_Y, PAGER_ROW_SCAN_X_END),
+                         "the badge must not move the page dots")
+
+    def test_battery_badge_unknown_is_outline_only(self):
+        """torget-vibepulse-claude-fable.bmp is the very first static-QA
+        frame, captured before any battery fixture is applied (Task 4 fixed
+        a bug where the badge drew coloured/garbage state at creation).
+        Measured on a real capture: the crop has 141 exact 0xBBBBBB outline
+        pixels, 16 exact 0x8A8F98 dash pixels, plus anti-aliased blends of
+        those two greys toward black (176/94/55 grey, and blends of
+        0x8A8F98) — no green, red, yellow or white, and no ink left of the
+        icon (leftmost real ink measured at x=429, comfortably right of the
+        x=418 percent-label boundary)."""
+        image = self.image("torget-vibepulse-claude-fable.bmp")
+        x0, y0, x1, y1 = self.BADGE_CROP
+        badge = image.crop(self.BADGE_CROP).get_flattened_data()
+
+        outline_grey = sum(1 for p in badge if p == (0xBB, 0xBB, 0xBB))
+        dash_grey = sum(1 for p in badge if p == (0x8A, 0x8F, 0x98))
+        self.assertGreater(outline_grey, 70, "the outline must actually be drawn")
+        self.assertGreater(dash_grey, 8, "the dash must actually be drawn")
+
+        for p in badge:
+            if p == (0, 0, 0):
+                continue
+            # No colour: brighter than the outline grey, or any chroma
+            # (green/red/yellow/white all trip one of these), is forbidden.
+            self.assertLessEqual(max(p), 0xBB,
+                                  f"unexpected bright/coloured pixel {p}")
+            self.assertLessEqual(max(p) - min(p), 14,
+                                  f"unexpected chromatic pixel {p}")
+
+        for x in range(x0, 418):
+            for y in range(y0, y1):
+                self.assertEqual(image.getpixel((x, y)), (0, 0, 0),
+                                  "no percent text before any fixture is applied")
+
     # -- Needs You v2 takeover: pinned to the approved-direction geometry ----
     NY_CLAUDE = (217, 119, 87)   # #D97757
     NY_CODEX = (111, 120, 255)   # #6F78FF
