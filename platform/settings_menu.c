@@ -44,8 +44,8 @@ extern const lv_font_t plex_ui_21;
 #define SETTINGS_FOOTER_Y       442
 
 #define SETTINGS_ABOUT_FIRST_LINE_Y 100
-#define SETTINGS_ABOUT_LINE_GAP     50
-#define SETTINGS_ABOUT_BACK_Y       320
+#define SETTINGS_ABOUT_LINE_GAP     57
+#define SETTINGS_ABOUT_BACK_Y       340
 
 #define ABOUT_VALUE_CAP 40
 #define ABOUT_ROWS 4

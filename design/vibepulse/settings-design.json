@@ -26,8 +26,8 @@
     "wordY": 24,
     "labelX": 74,
     "firstLineY": 100,
-    "lineGap": 50,
-    "backY": 320,
+    "lineGap": 57,
+    "backY": 340,
     "footerY": 442
   },
   "fonts": {

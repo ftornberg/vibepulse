@@ -187,7 +187,10 @@ is the last physical step below and the reason for the option.
     `NO BATTERY`
   - `CLOCK`: `RTC + NTP`, `RTC ONLY`, `NTP ONLY`, `NOT SET`
   Four rows plus BACK fit by reducing `SETTINGS_ABOUT_LINE_GAP` from 62 to
-  50 px; the simulator frame is the review artifact before any flash.
+  57 px (not the rounder 50: FIRMWARE's git-describe value has a lowercase
+  "g" descender that the simulator capture showed touching the ADDRESS
+  label below it at 50-56 px — 57 is the smallest gap that clears it by
+  >= 6 px); the simulator frame is the review artifact before any flash.
 - **LABS** gains `NIGHT DIM` in the same list as the other switches.
 
 Out of scope, deliberately: a settings page for the schedule, battery

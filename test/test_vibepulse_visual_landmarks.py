@@ -843,20 +843,28 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         fabricated 0.0.0.0."""
         found = self.image("torget-settings-about-found.bmp")
         missing = self.image("torget-settings-about-missing.bmp")
-        # ADDRESS value row (design: firstLineY 100 + lineGap 50 + 24).
+        # ADDRESS value row (design: firstLineY 100 + lineGap 57 + 24 = 181).
+        # lineGap is 57, not the round 50 first tried: FIRMWARE's value is a
+        # git-describe string ("v...-g<hash>") whose lowercase "g" descender
+        # measured 0-5 px clear of the ADDRESS label below it at lineGap 50-56
+        # (checked with the actual simulator capture, not just the nominal
+        # box math) — 57 is the smallest integer that opens that to >= 6 px.
+        # The crop still ends at +32 (a value line's height, same margin as
+        # before) and stays clear of the POWER label that starts at
+        # 100 + 2*57 = 214.
         found_ink = sum(p != (0, 0, 0) for p in
-                        found.crop((74, 174, 406, 206)).get_flattened_data())
+                        found.crop((74, 181, 406, 213)).get_flattened_data())
         missing_ink = sum(p != (0, 0, 0) for p in
-                          missing.crop((74, 174, 406, 206)).get_flattened_data())
+                          missing.crop((74, 181, 406, 213)).get_flattened_data())
         self.assertGreater(found_ink, 400, "a known address must be drawn")
         self.assertGreater(missing_ink, 0, "a missing address must draw a dash")
         self.assertLess(missing_ink, found_ink // 3,
                         "the dash must be far less ink than an address")
         # BACK clears the values: the band just above it stays black.
-        # (design: last value ends 100 + 3*50 + 24 + 27 = 301, backY 320.)
+        # (design: last value ends 100 + 3*57 + 24 + 27 = 322, backY 340.)
         for image in (found, missing):
             with self.subTest(image=image):
-                gap = image.crop((74, 304, 406, 318))
+                gap = image.crop((74, 325, 406, 338))
                 self.assertTrue(
                     all(p == (0, 0, 0) for p in gap.get_flattened_data()),
                     "the last value must clear the BACK control")
