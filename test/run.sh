@@ -285,6 +285,12 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 /tmp/torget-boot-health-policy-test
 
 cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/torget_power/battery_policy.c \
+  test_battery_policy.c \
+  -o /tmp/torget-battery-policy-test
+/tmp/torget-battery-policy-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/torget_net/net_source_policy.c \
   test_net_source_policy.c \
   -lm \
