@@ -5,10 +5,14 @@
 
 typedef enum {
   TK_LABS_BURN_RATE, TK_LABS_TRACKER, TK_LABS_VALUE,
-  TK_LABS_GITHUB, TK_LABS_STAR_POPUP, TK_LABS_COUNT
+  TK_LABS_GITHUB, TK_LABS_STAR_POPUP, TK_LABS_NIGHT_DIM, TK_LABS_COUNT
 } tk_labs_feature;
-#define TK_LABS_ALL 31u
-#define TK_LABS_RECORD_VERSION 0x100u
+#define TK_LABS_ALL 63u
+/* v1 records carried five features; v2 adds NIGHT DIM. A v1 record is
+ * migrated on read (night from its compile-time default) and rewritten as v2
+ * on the next toggle. */
+#define TK_LABS_RECORD_VERSION_V1 0x100u
+#define TK_LABS_RECORD_VERSION 0x200u
 
 /* IDs stay stable; physical tile columns are dense and depend on the boot mask. */
 enum {

@@ -9,19 +9,31 @@ static bool read_only, storage_error;
 static uint8_t defaults(void) {
   return (TK_LABS_ANALYTICS_DEFAULT ? 7u : 0u) |
          (TK_GITHUB_SCREEN_ENABLED ? 8u : 0u) |
-         (TK_GITHUB_NOTIFICATIONS_ENABLED ? 16u : 0u);
+         (TK_GITHUB_NOTIFICATIONS_ENABLED ? 16u : 0u) |
+         (TK_NIGHT_ENABLED_DEFAULT ? 32u : 0u);
 }
 
 void tk_labs_init(void) {
   uint32_t record = 0;
   tk_labs_store_result result = tk_labs_store_read(&record);
+  uint32_t version = record & ~TK_LABS_ALL;
+  /* v1 stored exactly five feature bits (0..30) under its version tag; a
+   * real v1 build could never set bit 5 (NIGHT DIM did not exist), so
+   * requiring an exact match against the 5-bit mask here also refuses a
+   * corrupt record instead of quietly accepting a stray high bit as v1. */
+  bool v1 = result == TK_LABS_STORE_FOUND &&
+            (record & ~31u) == TK_LABS_RECORD_VERSION_V1;
   read_only = result == TK_LABS_STORE_ERROR ||
-      (result == TK_LABS_STORE_FOUND &&
-       (record & ~TK_LABS_ALL) != TK_LABS_RECORD_VERSION);
+      (result == TK_LABS_STORE_FOUND && !v1 && version != TK_LABS_RECORD_VERSION);
   active = selected = defaults();
   storage_error = read_only;
-  if (result == TK_LABS_STORE_FOUND && !read_only)
+  if (result == TK_LABS_STORE_FOUND && !read_only) {
     active = selected = (uint8_t)(record & TK_LABS_ALL);
+    if (v1) {
+      /* Five stored bits are the user's; NIGHT DIM was not a choice yet. */
+      active = selected = (uint8_t)((record & 31u) | (defaults() & 32u));
+    }
+  }
   if (result == TK_LABS_STORE_EMPTY)
     storage_error = !tk_labs_store_write(TK_LABS_RECORD_VERSION | selected);
 }
@@ -48,7 +60,8 @@ bool tk_labs_pending(void) { return active != selected; }
 bool tk_labs_storage_error(void) { return storage_error; }
 const char *tk_labs_name(int feature) {
   static const char *const names[] = {
-    "BURN RATE", "MAX TRACKER", "API VALUE", "GITHUB PAGE", "STAR POPUP"
+    "BURN RATE", "MAX TRACKER", "API VALUE", "GITHUB PAGE", "STAR POPUP",
+    "NIGHT DIM"
   };
   return valid(feature) ? names[feature] : "";
 }

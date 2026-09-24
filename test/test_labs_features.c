@@ -76,7 +76,7 @@ int main(void) {
   assert(!tk_labs_storage_error());
   for (int mode = 0; mode < 3; mode++) {
     result = mode == 0 ? TK_LABS_STORE_ERROR : TK_LABS_STORE_FOUND;
-    saved = mode == 1 ? 0x200u : 0x120u; /* newer version / unknown bit */
+    saved = mode == 1 ? 0x300u : 0x120u; /* newer version / unknown bit */
     int before_writes = writes;
     tk_labs_init();
     assert(tk_labs_storage_error());
@@ -92,5 +92,34 @@ int main(void) {
   int before_writes = writes;
   assert(!tk_labs_toggle(-1) && !tk_labs_toggle(TK_LABS_COUNT));
   assert(writes == before_writes);
-  puts("OK: LABS migration, 32 dense page combinations, restart and storage failures");
+
+  /* NIGHT DIM: sixth feature, defaults from TK_NIGHT_ENABLED_DEFAULT. */
+  result = TK_LABS_STORE_EMPTY;
+  saved = 0;
+  tk_labs_init();
+  assert(tk_labs_active(TK_LABS_NIGHT_DIM) == !!TK_NIGHT_ENABLED_DEFAULT);
+  assert((saved & ~TK_LABS_ALL) == TK_LABS_RECORD_VERSION);
+
+  /* A v1 record (five features) migrates: old bits kept, night from default. */
+  result = TK_LABS_STORE_FOUND;
+  saved = TK_LABS_RECORD_VERSION_V1 | 9u; /* BURN RATE + GITHUB PAGE */
+  tk_labs_init();
+  assert(tk_labs_active(TK_LABS_BURN_RATE));
+  assert(tk_labs_active(TK_LABS_GITHUB));
+  assert(!tk_labs_active(TK_LABS_TRACKER));
+  assert(tk_labs_active(TK_LABS_NIGHT_DIM) == !!TK_NIGHT_ENABLED_DEFAULT);
+  assert(!tk_labs_storage_error());
+  assert(tk_labs_toggle(TK_LABS_NIGHT_DIM));
+  assert((saved & ~TK_LABS_ALL) == TK_LABS_RECORD_VERSION);
+
+  /* An unknown future version stays read-only. */
+  result = TK_LABS_STORE_FOUND;
+  saved = 0x400u | 1u;
+  tk_labs_init();
+  assert(tk_labs_storage_error());
+  assert(!tk_labs_toggle(TK_LABS_NIGHT_DIM));
+
+  assert(tk_labs_name(TK_LABS_NIGHT_DIM)[0] == 'N');
+
+  puts("OK: LABS migration, 64 dense page combinations, restart and storage failures");
 }
