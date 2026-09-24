@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "../components/torget_power/battery_policy.h"
 
@@ -170,6 +171,105 @@ static void test_invalid_sample_stops_dwell(void) {
   check("critical 30 s after restart", v.state == TG_BATT_CRITICAL);
 }
 
+static void test_invalid_gauge_holds_state_off_vbus(void) {
+  tg_batt_policy p = {0};
+  tg_batt_sample s = sample(false, false, false, 4);
+  tg_batt_update(&p, &s, SEC(0));
+  tg_batt_verdict v = tg_batt_update(&p, &s, SEC(31));
+  check("setup: critical", v.state == TG_BATT_CRITICAL);
+  s.percent = -1;
+  v = tg_batt_update(&p, &s, SEC(32));
+  check("invalid gauge keeps critical", v.state == TG_BATT_CRITICAL);
+  check("invalid gauge keeps the cap", v.bright_cap == TG_BATT_NIGHT_CAP);
+  check("invalid gauge stops the dwell", !p.dwell_running);
+
+  tg_batt_policy q = {0};
+  s = sample(false, false, false, 18);
+  v = tg_batt_update(&q, &s, SEC(0));
+  check("setup: low", v.state == TG_BATT_LOW);
+  s.percent = -1;
+  v = tg_batt_update(&q, &s, SEC(5));
+  check("invalid gauge keeps low", v.state == TG_BATT_LOW);
+  check("low keeps the cap", v.bright_cap == TG_BATT_NIGHT_CAP);
+
+  tg_batt_policy r = {0};
+  s = sample(false, false, false, 4);
+  tg_batt_update(&r, &s, SEC(0));
+  s.percent = -1;
+  tg_batt_update(&r, &s, SEC(10));
+  s.percent = 4;
+  v = tg_batt_update(&r, &s, SEC(31));
+  check("invalid gauge restarts the dwell", v.state == TG_BATT_LOW);
+}
+
+static void test_vbus_mid_dwell_restarts_it(void) {
+  tg_batt_policy p = {0};
+  tg_batt_sample s = sample(false, false, false, 4);
+  tg_batt_update(&p, &s, SEC(0));
+  tg_batt_update(&p, &s, SEC(20));
+  s.vbus = true; s.charging = true;
+  tg_batt_verdict v = tg_batt_update(&p, &s, SEC(21));
+  check("vbus mid-dwell is charging", v.state == TG_BATT_CHARGING);
+  s.vbus = false; s.charging = false;
+  v = tg_batt_update(&p, &s, SEC(22));
+  check("unplugged again is low", v.state == TG_BATT_LOW);
+  v = tg_batt_update(&p, &s, SEC(31));
+  check("old dwell start does not count", v.state == TG_BATT_LOW);
+  v = tg_batt_update(&p, &s, SEC(51));
+  check("29 s after unplug still low", v.state == TG_BATT_LOW);
+  v = tg_batt_update(&p, &s, SEC(52));
+  check("critical 30 s after unplug", v.state == TG_BATT_CRITICAL);
+}
+
+static void test_critical_to_on_battery_directly(void) {
+  tg_batt_policy p = {0};
+  tg_batt_sample s = sample(false, false, false, 4);
+  tg_batt_update(&p, &s, SEC(0));
+  tg_batt_update(&p, &s, SEC(31));
+  s.percent = 23;
+  tg_batt_verdict v = tg_batt_update(&p, &s, SEC(32));
+  check("23 leaves critical straight to on battery", v.state == TG_BATT_ON_BATTERY);
+  check("on battery lifts the cap", v.bright_cap == 100);
+}
+
+static void power_text(const tg_batt_sample *s, tg_batt_state st, int pct,
+                       const char *want, const char *what) {
+  tg_batt_verdict v = {0};
+  v.state = st; v.percent = pct;
+  char out[40];
+  tg_batt_power_text(s, &v, out, sizeof out);
+  if (strcmp(out, want) != 0) printf("  got \"%s\" want \"%s\"\n", out, want);
+  check(what, strcmp(out, want) == 0);
+}
+
+static void test_power_text(void) {
+  tg_batt_sample s = sample(false, false, false, 64);
+  s.mv = 4020;
+  tg_batt_sample absent = s; absent.present = false;
+  power_text(&absent, TG_BATT_UNKNOWN, -1, "NO BATTERY", "absent battery");
+  tg_batt_sample bad = {0};
+  power_text(&bad, TG_BATT_UNKNOWN, -1, "", "unreadable pmu is empty");
+  power_text(&bad, TG_BATT_CHARGING, 71, "USB · CHARGING 71 %",
+             "one failed read keeps the charging text");
+  power_text(&s, TG_BATT_FULL, 100, "USB · FULL", "full");
+  power_text(&s, TG_BATT_CHARGING, 71, "USB · CHARGING 71 %", "charging with gauge");
+  power_text(&s, TG_BATT_CHARGING, -1, "USB · CHARGING", "charging without gauge");
+  power_text(&s, TG_BATT_ON_BATTERY, 64, "BATTERY 64 % · 4.02 V", "on battery 4020 mV");
+  s.mv = 4005;
+  power_text(&s, TG_BATT_LOW, 18, "BATTERY 18 % · 4.00 V", "low, 4005 mV truncates");
+  s.mv = 3650;
+  power_text(&s, TG_BATT_CRITICAL, 4, "BATTERY 4 % · 3.65 V", "critical");
+  power_text(&s, TG_BATT_ON_BATTERY, -1, "BATTERY", "on battery without gauge");
+  s.mv = -1;
+  power_text(&s, TG_BATT_ON_BATTERY, 64, "BATTERY", "on battery without voltage");
+  s.mv = 0;
+  power_text(&s, TG_BATT_LOW, 18, "BATTERY", "zero voltage is not a reading");
+  char tiny[4] = "xyz";
+  tg_batt_verdict v = { .state = TG_BATT_FULL, .percent = 100 };
+  tg_batt_power_text(&s, &v, tiny, sizeof tiny);
+  check("small buffer stays terminated", tiny[3] == '\0');
+}
+
 int main(void) {
   test_charging_full_and_on_battery();
   test_low_with_hysteresis();
@@ -182,6 +282,10 @@ int main(void) {
   test_invalid_gauge_hides_number();
   test_single_low_sample_after_gap_is_not_critical();
   test_invalid_sample_stops_dwell();
+  test_invalid_gauge_holds_state_off_vbus();
+  test_vbus_mid_dwell_restarts_it();
+  test_critical_to_on_battery_directly();
+  test_power_text();
   if (failures) { printf("%d failure(s)\n", failures); return 1; }
   printf("battery policy: ok\n");
   return 0;

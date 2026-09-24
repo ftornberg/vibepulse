@@ -1,11 +1,21 @@
 #include "battery_policy.h"
 
+#include <stdio.h>
+
 static tg_batt_state next_state(const tg_batt_policy *p, const tg_batt_sample *s,
                                 int64_t now_us) {
   if (!s->present) return TG_BATT_UNKNOWN;
   if (s->vbus) return s->charge_done ? TG_BATT_FULL : TG_BATT_CHARGING;
   int pct = s->percent;
-  if (pct < 0) return TG_BATT_ON_BATTERY; /* ingen mätare: aldrig larm på gissning */
+  if (pct < 0) {
+    /* Ogiltig mätare utan USB: inget larm på gissning, men heller ingen
+     * friskförklaring — LOW och CRITICAL (och ON_BATTERY) står kvar tills
+     * en riktig procent säger annat. Klockan är redan stoppad ovan. */
+    if (p->state == TG_BATT_LOW || p->state == TG_BATT_CRITICAL ||
+        p->state == TG_BATT_ON_BATTERY)
+      return p->state;
+    return TG_BATT_ON_BATTERY;
+  }
   switch (p->state) {
     case TG_BATT_CRITICAL:
       if (pct >= TG_BATT_CRITICAL_EXIT_PCT)
@@ -65,6 +75,22 @@ tg_batt_verdict tg_batt_update(tg_batt_policy *p, const tg_batt_sample *s,
   }
   v.changed = (p->state != before) || (v.percent != before_pct);
   return v;
+}
+
+void tg_batt_power_text(const tg_batt_sample *s, const tg_batt_verdict *v,
+                        char *out, size_t cap) {
+  if (!out || cap == 0) return;
+  out[0] = '\0';
+  if (s->valid && !s->present) snprintf(out, cap, "NO BATTERY");
+  else if (v->state == TG_BATT_UNKNOWN) out[0] = '\0';
+  else if (v->state == TG_BATT_FULL) snprintf(out, cap, "USB · FULL");
+  else if (v->state == TG_BATT_CHARGING && v->percent >= 0)
+    snprintf(out, cap, "USB · CHARGING %d %%", v->percent);
+  else if (v->state == TG_BATT_CHARGING) snprintf(out, cap, "USB · CHARGING");
+  else if (v->percent >= 0 && s->mv > 0)
+    snprintf(out, cap, "BATTERY %d %% · %d.%02d V", v->percent, s->mv / 1000,
+             (s->mv % 1000) / 10);
+  else snprintf(out, cap, "BATTERY");
 }
 
 const char *tg_batt_state_name(tg_batt_state s) {

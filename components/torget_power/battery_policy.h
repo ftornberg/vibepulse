@@ -2,6 +2,7 @@
 #define TORGET_POWER_BATTERY_POLICY_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /*
@@ -20,7 +21,9 @@
  * -1 betyder "rita ingen siffra". shutdown sätts EN gång, bara i CRITICAL
  * efter hela fördröjningen och bara när värden armerat den.
  * Varje mätning över 5 %, varje USB-anslutning och varje ogiltig mätning
- * stoppar klockan; nästa mätning under 5 % startar om den.
+ * stoppar klockan; nästa mätning på 5 % eller lägre startar om den.
+ * En giltig mätning utan procent (mätaren -1) utan USB håller LOW/CRITICAL
+ * kvar: den stoppar klockan men friskförklarar inget.
  */
 
 typedef enum {
@@ -71,5 +74,12 @@ typedef struct {
 tg_batt_verdict tg_batt_update(tg_batt_policy *p, const tg_batt_sample *s,
                                int64_t now_us);
 const char *tg_batt_state_name(tg_batt_state s);
+
+/* ABOUT-radens POWER-text ur samma mätning och beslut som ikonen. Tom text
+ * (menyn ritar streck) när PMU:n inte går att läsa; NO BATTERY bara när den
+ * faktiskt svarat att inget batteri sitter i. Spänningen visas bara på
+ * cellen, med två decimaler avhuggna (4005 mV -> 4.00 V). */
+void tg_batt_power_text(const tg_batt_sample *s, const tg_batt_verdict *v,
+                        char *out, size_t cap);
 
 #endif

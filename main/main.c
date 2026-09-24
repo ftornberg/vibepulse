@@ -102,6 +102,8 @@ static volatile int s_batt_bright_cap = 100;
 
 #ifndef TORGET_BOARD_241_V2
 static tg_batt_policy s_batt;
+/* Inget tillstånd loggat än: första pollen loggar alltid, även okänd. */
+static int s_batt_logged = -1;
 
 static void power_task(void *arg) {
   (void)arg;
@@ -109,28 +111,20 @@ static void power_task(void *arg) {
     tg_batt_sample s = tg_axp2101_read();
     tg_batt_verdict v = tg_batt_update(&s_batt, &s, esp_timer_get_time());
     s_batt_bright_cap = v.bright_cap;
-    /* Bara övergångar loggas. En saknad mätare skrivs aldrig som 0 %. */
-    if (v.changed) {
-      if (v.percent >= 0)
+    /* Bara tillståndsbyten loggas, inte varje procentsteg. Siffran följer
+     * bara med på batteri och låg; en saknad mätare skrivs aldrig som 0 %. */
+    if ((int)v.state != s_batt_logged) {
+      s_batt_logged = v.state;
+      if ((v.state == TG_BATT_ON_BATTERY || v.state == TG_BATT_LOW) && v.percent >= 0)
         ESP_LOGI(TAG, "batteri: %s %d %%", tg_batt_state_name(v.state), v.percent);
       else
         ESP_LOGI(TAG, "batteri: %s", tg_batt_state_name(v.state));
     }
     /* ABOUT-texten byggs varje poll så spänningen hålls levande; settern
-     * avduplicerar, så en oförändrad text kostar bara låset. NO BATTERY bara
-     * när PMU:n faktiskt svarat att inget batteri sitter i — en läsning som
-     * fallerar blir tom text, som menyn ritar som streck. */
+     * avduplicerar, så en oförändrad text kostar bara låset. Mappningen är
+     * ren policy (tg_batt_power_text), låst i test/test_battery_policy.c. */
     char text[40];
-    if (s.valid && !s.present) snprintf(text, sizeof text, "NO BATTERY");
-    else if (v.state == TG_BATT_UNKNOWN) text[0] = '\0';
-    else if (v.state == TG_BATT_FULL) snprintf(text, sizeof text, "USB · FULL");
-    else if (v.state == TG_BATT_CHARGING && v.percent >= 0)
-      snprintf(text, sizeof text, "USB · CHARGING %d %%", v.percent);
-    else if (v.state == TG_BATT_CHARGING) snprintf(text, sizeof text, "USB · CHARGING");
-    else if (v.percent >= 0 && s.mv > 0)
-      snprintf(text, sizeof text, "BATTERY %d %% · %d.%02d V", v.percent,
-               s.mv / 1000, (s.mv % 1000) / 10);
-    else snprintf(text, sizeof text, "BATTERY");
+    tg_batt_power_text(&s, &v, text, sizeof text);
     torget_ui_lock();
     if (v.changed) torget_battery_badge_set(v.state, v.percent);
     torget_settings_set_power(text);
