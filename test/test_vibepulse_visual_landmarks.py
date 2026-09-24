@@ -55,13 +55,17 @@ MT_STAT_COL_X = [MT_GRID_X + (i * MT_GRID_W) // 4 for i in range(4)]
 MT_STAT_COL_W = MT_GRID_W // 4  # 104
 PAGER_ROW_Y = 458  # PAGER_Y (456) + 2: inside the 6px-tall dot row
 # The battery badge (Task 4, design 2026-09-24) sits bottom-right on this
-# same row; pager-only scans stop well short of its left edge (x=379).
+# same row; pager-only scans stop short of its left edge (x=373).
 PAGER_ROW_SCAN_X_END = 370
 # The badge's own footprint on lv_layer_top() (root pos/size in
-# platform/battery_badge.c: x 379..458, y 454..470 at BADGE_RIGHT_MARGIN 22 /
-# BADGE_Y 456). It lives permanently on that layer, so a check that the top
+# platform/battery_badge.c: x 373..458, y 454..470 at BADGE_RIGHT_MARGIN 22 /
+# BADGE_Y 456; root width PCT_W 40 + 4 + 8 + 4 + 26 + 3 = 85). It lives permanently on that layer, so a check that the top
 # layer is otherwise empty must mask this box out first.
-BATTERY_BADGE_BOX = (379, 454, 458, 470)
+BATTERY_BADGE_BOX = (373, 454, 458, 470)
+# The percent label's own column range: root x 373 to the bolt at
+# 373 + PCT_W 40 + GAP 4 = 417 (exclusive). Widening PCT_W moved the root
+# left, not the bolt or the body, so the icon itself sits where it did.
+BATTERY_PCT_ZONE_X = (373, 417)
 
 # The setup window's QR canvas — mirrors WIFI_OPEN_QR_* in
 # components/torget_wifi/wifi_setup_ui.c (also pinned by
@@ -210,6 +214,7 @@ EXPECTED = {
     "torget-vibepulse-value-uneven.bmp",
     "torget-vibepulse-value-solo.bmp",
     "torget-vibepulse-battery-charging.bmp",
+    "torget-vibepulse-battery-full.bmp",
     "torget-vibepulse-battery-critical.bmp",
     "torget-ota-ring-open.bmp",
     "torget-ota-ring-receiving.bmp",
@@ -860,6 +865,24 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         self.assertGreater(missing_ink, 0, "a missing address must draw a dash")
         self.assertLess(missing_ink, found_ink // 3,
                         "the dash must be far less ink than an address")
+        # POWER and CLOCK value rows, same derivation: label row k sits at
+        # firstLineY 100 + k*lineGap 57 and its value 24 below, cropped one
+        # value-line (32 px) tall. POWER is k=2: 100 + 114 + 24 = 238..270,
+        # ending just before the CLOCK label at 100 + 3*57 = 271. CLOCK is
+        # k=3: 100 + 171 + 24 = 295..327. Measured: found 2736 / 1126 px,
+        # missing 42 / 42 (the dash, no label bleed).
+        for row, box in (("POWER", (74, 238, 406, 270)),
+                         ("CLOCK", (74, 295, 406, 327))):
+            with self.subTest(row=row):
+                row_found = sum(p != (0, 0, 0) for p in
+                                found.crop(box).get_flattened_data())
+                row_missing = sum(p != (0, 0, 0) for p in
+                                  missing.crop(box).get_flattened_data())
+                self.assertGreater(row_found, 400, f"a known {row} must be drawn")
+                self.assertGreater(row_missing, 0,
+                                   f"a missing {row} must draw a dash")
+                self.assertLess(row_missing, row_found // 3,
+                                f"a missing {row} is a dash, not a value")
         # BACK clears the values: the band just above it stays black.
         # (design: last value ends 100 + 3*57 + 24 + 27 = 322, backY 340.)
         for image in (found, missing):
@@ -1392,7 +1415,7 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         self.assertLessEqual(abs((left + right + 1) - 480), 2)
 
     # -- Battery badge (Task 4/6, design 2026-09-24) -------------------------
-    # BATTERY_BADGE_BOX is the real root box (379..458, 454..470); crop with
+    # BATTERY_BADGE_BOX is the real root box (373..458, 454..470); crop with
     # 4px slack on every side so anti-aliased edges stay inside the crop.
     BADGE_CROP = (BATTERY_BADGE_BOX[0] - 4, BATTERY_BADGE_BOX[1] - 4,
                   BATTERY_BADGE_BOX[2] + 4, BATTERY_BADGE_BOX[3] + 4)
@@ -1426,6 +1449,32 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         self.assertEqual(dot_runs(image, PAGER_ROW_Y, PAGER_ROW_SCAN_X_END),
                          dot_runs(charging, PAGER_ROW_Y, PAGER_ROW_SCAN_X_END),
                          "the badge must not move the page dots")
+
+    def test_battery_badge_full_keeps_its_percent_sign(self):
+        """"100%" is the widest number the badge draws. At PCT_W 34 the
+        label wrapped and clipped the "%" onto an invisible second line.
+        Split the percent zone into glyph groups (runs of inked columns); the
+        first three are "1", "0", "0" and the "%" must follow them inside the
+        zone. Measured on a real capture: groups 377-383, 385-391, 393-399,
+        401-411 and 66 px of ink right of the digits (0 with the old width,
+        where the wrapped "100" sat at 390-412); threshold is half."""
+        image = self.image("torget-vibepulse-battery-full.bmp")
+        zx0, zx1 = BATTERY_PCT_ZONE_X
+        y0, y1 = BATTERY_BADGE_BOX[1], BATTERY_BADGE_BOX[3] + 1
+        inked = [any(image.getpixel((x, y)) != (0, 0, 0) for y in range(y0, y1))
+                 for x in range(zx0, zx1)]
+        groups, start = [], None
+        for i, on in enumerate(inked + [False]):
+            if on and start is None:
+                start = zx0 + i
+            elif not on and start is not None:
+                groups.append((start, zx0 + i - 1))
+                start = None
+        self.assertGreaterEqual(len(groups), 3, f"digits of 100 missing: {groups}")
+        digits_end = groups[2][1]
+        sign = sum(image.getpixel((x, y)) != (0, 0, 0)
+                   for x in range(digits_end + 1, zx1) for y in range(y0, y1))
+        self.assertGreater(sign, 33, "the % after 100 must be drawn, not wrapped away")
 
     def _assert_badge_crop_black(self, name, why):
         badge = self.image(name).crop(self.BADGE_CROP).get_flattened_data()
@@ -1475,8 +1524,9 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         pixels, 16 exact 0x8A8F98 dash pixels, plus anti-aliased blends of
         those two greys toward black (176/94/55 grey, and blends of
         0x8A8F98) — no green, red, yellow or white, and no ink left of the
-        icon (leftmost real ink measured at x=429, comfortably right of the
-        x=418 percent-label boundary)."""
+        icon. Re-measured after PCT_W 34 -> 40: the root moved 6 px left but
+        the bolt (x=417) and body did not, so the leftmost real ink is still
+        x=429 and the percent label ends at the bolt, x=417 exclusive."""
         image = self.image("torget-vibepulse-claude-fable.bmp")
         x0, y0, x1, y1 = self.BADGE_CROP
         badge = image.crop(self.BADGE_CROP).get_flattened_data()
@@ -1496,7 +1546,7 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
             self.assertLessEqual(max(p) - min(p), 14,
                                   f"unexpected chromatic pixel {p}")
 
-        for x in range(x0, 418):
+        for x in range(x0, BATTERY_PCT_ZONE_X[1] + 1):
             for y in range(y0, y1):
                 self.assertEqual(image.getpixel((x, y)), (0, 0, 0),
                                   "no percent text before any fixture is applied")

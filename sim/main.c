@@ -467,18 +467,27 @@ static void apply_max_tracker_fixture(int idx) {
  * låtsasmätningar — samma policy som firmware, så bilden är sann. */
 static int battery_fixture_idx = -1;
 static tg_batt_policy battery_policy;
+static const tg_batt_sample BATTERY_FIXTURES[] = {
+  { .valid = false },
+  { .valid = true, .present = true, .vbus = true, .charging = true, .percent = 71, .mv = 4020 },
+  { .valid = true, .present = true, .vbus = true, .charge_done = true, .percent = 100, .mv = 4180 },
+  { .valid = true, .present = true, .percent = 64, .mv = 3900 },
+  { .valid = true, .present = true, .percent = 18, .mv = 3650 },
+  { .valid = true, .present = true, .percent = 4, .mv = 3400 },
+};
+
+/* ABOUT:s POWER-rad för en fixtur, med firmwarens egen formulering: ett
+ * färskt policybeslut på mätningen, sedan samma tg_batt_power_text. */
+static void battery_fixture_power_text(int idx, char *out, size_t cap) {
+  tg_batt_policy fresh = {0};
+  tg_batt_verdict v = tg_batt_update(&fresh, &BATTERY_FIXTURES[idx], 0);
+  tg_batt_power_text(&BATTERY_FIXTURES[idx], &v, out, cap);
+}
+
 static void apply_battery_fixture(int idx) {
-  static const tg_batt_sample fixtures[] = {
-    { .valid = false },
-    { .valid = true, .present = true, .vbus = true, .charging = true, .percent = 71, .mv = 4020 },
-    { .valid = true, .present = true, .vbus = true, .charge_done = true, .percent = 100, .mv = 4180 },
-    { .valid = true, .present = true, .percent = 64, .mv = 3900 },
-    { .valid = true, .present = true, .percent = 18, .mv = 3650 },
-    { .valid = true, .present = true, .percent = 4, .mv = 3400 },
-  };
-  const int count = (int)(sizeof fixtures / sizeof fixtures[0]);
+  const int count = (int)(sizeof BATTERY_FIXTURES / sizeof BATTERY_FIXTURES[0]);
   battery_fixture_idx = ((idx % count) + count) % count;
-  const tg_batt_sample *s = &fixtures[battery_fixture_idx];
+  const tg_batt_sample *s = &BATTERY_FIXTURES[battery_fixture_idx];
   int64_t now = torget_now_us();
   tg_batt_verdict v = tg_batt_update(&battery_policy, s, now);
   if (battery_fixture_idx == 0) {
@@ -491,6 +500,9 @@ static void apply_battery_fixture(int idx) {
     v = tg_batt_update(&battery_policy, s, now + 31 * 1000000LL);
   }
   torget_battery_badge_set(v.state, v.percent);
+  char text[40];
+  tg_batt_power_text(s, &v, text, sizeof text);
+  torget_settings_set_power(text);
 }
 
 static void apply_github_file(const char *file, bool unique_event) {
@@ -1611,7 +1623,11 @@ static int run_vibepulse_static_qa(void) {
   qa_key3_hold();
   dump_overlay_frame("settings-menu");
   torget_settings_click_row(TG_SETTINGS_ROW_ABOUT);
-  torget_settings_set_power("USB · CHARGING 71 %");
+  {
+    char power[40];
+    battery_fixture_power_text(1, power, sizeof power); /* laddar 71 % */
+    torget_settings_set_power(power);
+  }
   torget_settings_set_clock("RTC + NTP");
   dump_overlay_frame("settings-about-found");
   qa_key3_tap();
@@ -1722,10 +1738,13 @@ static int run_vibepulse_static_qa(void) {
   tokens_apply(&value_solo);
   dump_frame("vibepulse-value-solo");
 
-  /* Batteriikonen (design 2026-09-24): laddar, och kritisk. */
+  /* Batteriikonen (design 2026-09-24): laddar, full (100 %, bredaste siffran)
+   * och kritisk. */
   tokens_show_view(VIEW_CLAUDE_FABLE);
   apply_battery_fixture(1);
   dump_frame("vibepulse-battery-charging");
+  apply_battery_fixture(2);
+  dump_frame("vibepulse-battery-full");
   apply_battery_fixture(5);
   dump_frame("vibepulse-battery-critical");
   apply_battery_fixture(0);

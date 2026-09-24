@@ -106,6 +106,7 @@ EXPECTED_BMPS = {
     "torget-vibepulse-value-uneven.bmp",
     "torget-vibepulse-value-solo.bmp",
     "torget-vibepulse-battery-charging.bmp",
+    "torget-vibepulse-battery-full.bmp",
     "torget-vibepulse-battery-critical.bmp",
     "torget-vibepulse-needs-you-attract.bmp",
     "torget-vibepulse-needs-you-question.bmp",

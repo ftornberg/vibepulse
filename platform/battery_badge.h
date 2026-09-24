@@ -7,8 +7,9 @@
 
 /*
  * Batteriikonen: nere till höger i sidfoten, på topplagret så den syns på
- * alla appsidor och i SETTINGS. Vet bara om ett tillstånd och en procent —
- * ingen I2C, ingen policy. Döljs medan ett övertagande äger glaset.
+ * alla appsidor; döljs under SETTINGS, Needs You, klarpulsen och
+ * övertagningarna. Vet bara om ett tillstånd och en procent —
+ * ingen I2C, ingen policy.
  * Alla funktioner kallas under torget_ui_lock().
  */
 void torget_battery_badge_create(void);

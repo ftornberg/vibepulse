@@ -19,7 +19,7 @@ extern const lv_font_t plex_ui_12;
 #define NUB_H 7
 #define BOLT_W 8
 #define GAP 4
-#define PCT_W 34
+#define PCT_W 40 /* "100%" i plex_ui_12 med letter-space 1 får plats */
 
 #define COL_OUTLINE lv_color_hex(0xBBBBBB)
 #define COL_OK      lv_color_hex(0xFFFFFF)
@@ -82,6 +82,8 @@ void torget_battery_badge_create(void) {
   lv_obj_set_style_text_align(ui.pct, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_set_pos(ui.pct, 0, 1);
   lv_obj_set_width(ui.pct, PCT_W);
+  /* Aldrig radbryta: en för smal etikett bröt "100%" och klippte "%". */
+  lv_label_set_long_mode(ui.pct, LV_LABEL_LONG_CLIP);
 
   /* plex_ui_12 is a project glyph set (cmap 32..~8200) without the
    * FontAwesome range LV_SYMBOL_CHARGE lives in (U+F0E7 / 61671) — the
