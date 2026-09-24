@@ -360,8 +360,9 @@ void torget_settings_set_address(const char *ip) {
  * menu is open; the string is still kept so the next open shows it. */
 void torget_settings_set_power(const char *text) {
   if (!ui.overlay) return;
-  const char *next = text ? text : "";
-  if (strncmp(ui.power, next, sizeof ui.power) == 0) return;
+  char next[sizeof ui.power];
+  snprintf(next, sizeof next, "%s", text ? text : "");
+  if (strcmp(next, ui.power) == 0) return;
   snprintf(ui.power, sizeof ui.power, "%s", next);
   ui.about_dirty = true;
   if (ui.open) render();
@@ -369,8 +370,9 @@ void torget_settings_set_power(const char *text) {
 
 void torget_settings_set_clock(const char *text) {
   if (!ui.overlay) return;
-  const char *next = text ? text : "";
-  if (strncmp(ui.clock_text, next, sizeof ui.clock_text) == 0) return;
+  char next[sizeof ui.clock_text];
+  snprintf(next, sizeof next, "%s", text ? text : "");
+  if (strcmp(next, ui.clock_text) == 0) return;
   snprintf(ui.clock_text, sizeof ui.clock_text, "%s", next);
   ui.about_dirty = true;
   if (ui.open) render();
