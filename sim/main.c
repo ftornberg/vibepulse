@@ -1592,6 +1592,8 @@ static int run_vibepulse_static_qa(void) {
   qa_key3_hold();
   dump_overlay_frame("settings-menu");
   torget_settings_click_row(TG_SETTINGS_ROW_ABOUT);
+  torget_settings_set_power("USB · CHARGING 71 %");
+  torget_settings_set_clock("RTC + NTP");
   dump_overlay_frame("settings-about-found");
   qa_key3_tap();
   /* Utan adress: UPDATE tonas ner och ABOUT visar streck. Två frames som
@@ -1609,6 +1611,8 @@ static int run_vibepulse_static_qa(void) {
   qa_key3_hold();
   dump_overlay_frame("settings-menu-no-address");
   torget_settings_click_row(TG_SETTINGS_ROW_ABOUT);
+  torget_settings_set_power(NULL);
+  torget_settings_set_clock(NULL);
   dump_overlay_frame("settings-about-missing");
   qa_key3_tap();
   key3_address = "192.168.1.42";

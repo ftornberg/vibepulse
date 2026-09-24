@@ -43,12 +43,12 @@ extern const lv_font_t plex_ui_21;
 #define SETTINGS_ROW_BORDER_W   2
 #define SETTINGS_FOOTER_Y       442
 
-#define SETTINGS_ABOUT_FIRST_LINE_Y 140
-#define SETTINGS_ABOUT_LINE_GAP     62
-#define SETTINGS_ABOUT_BACK_Y       285
+#define SETTINGS_ABOUT_FIRST_LINE_Y 100
+#define SETTINGS_ABOUT_LINE_GAP     50
+#define SETTINGS_ABOUT_BACK_Y       320
 
 #define ABOUT_VALUE_CAP 40
-#define ABOUT_ROWS 2
+#define ABOUT_ROWS 4
 
 typedef enum {
   VIEW_MENU,
@@ -63,7 +63,7 @@ static struct {
   lv_obj_t *foot;
   lv_obj_t *rows[TG_SETTINGS_ROW_COUNT];
   lv_obj_t *row_labels[TG_SETTINGS_ROW_COUNT];
-  /* ABOUT: två etikett/värde-par plus en BACK-kontroll som återanvänder
+  /* ABOUT: fyra etikett/värde-par plus en BACK-kontroll som återanvänder
    * radgeometrin. Ingen COMPUTER-rad — se headern för varför. */
   lv_obj_t *about_labels[ABOUT_ROWS];
   lv_obj_t *about_values[ABOUT_ROWS];
@@ -74,6 +74,8 @@ static struct {
   tg_settings_intent pending;
   char version[ABOUT_VALUE_CAP];
   char ip[ABOUT_VALUE_CAP];
+  char power[ABOUT_VALUE_CAP];
+  char clock_text[ABOUT_VALUE_CAP];
   bool about_dirty;
   tg_settings_labs labs;
 } ui;
@@ -83,7 +85,7 @@ static const char *const ROW_TEXT[TG_SETTINGS_ROW_COUNT] = {
 };
 
 static const char *const ABOUT_LABEL[ABOUT_ROWS] = {
-  "FIRMWARE", "ADDRESS",
+  "FIRMWARE", "ADDRESS", "POWER", "CLOCK",
 };
 
 static void show(lv_obj_t *obj, bool visible) {
@@ -287,6 +289,9 @@ static void render(void) {
     lv_label_set_text(ui.about_values[0],
                       ui.version[0] ? ui.version : "–");
     lv_label_set_text(ui.about_values[1], ui.ip[0] ? ui.ip : "–");
+    lv_label_set_text(ui.about_values[2], ui.power[0] ? ui.power : "–");
+    lv_label_set_text(ui.about_values[3],
+                      ui.clock_text[0] ? ui.clock_text : "–");
     ui.about_dirty = false;
   }
 
@@ -347,6 +352,28 @@ void torget_settings_set_address(const char *ip) {
   snprintf(ui.ip, sizeof ui.ip, "%s", next);
   ui.about_dirty = true;
   render();
+}
+
+/* POWER and CLOCK: same dedupe-and-redraw rule as ADDRESS, but a no-op
+ * whenever the overlay does not exist yet — the caller may hand values in
+ * before torget_settings_create() has run. Rendering only happens while the
+ * menu is open; the string is still kept so the next open shows it. */
+void torget_settings_set_power(const char *text) {
+  if (!ui.overlay) return;
+  const char *next = text ? text : "";
+  if (strncmp(ui.power, next, sizeof ui.power) == 0) return;
+  snprintf(ui.power, sizeof ui.power, "%s", next);
+  ui.about_dirty = true;
+  if (ui.open) render();
+}
+
+void torget_settings_set_clock(const char *text) {
+  if (!ui.overlay) return;
+  const char *next = text ? text : "";
+  if (strncmp(ui.clock_text, next, sizeof ui.clock_text) == 0) return;
+  snprintf(ui.clock_text, sizeof ui.clock_text, "%s", next);
+  ui.about_dirty = true;
+  if (ui.open) render();
 }
 
 void torget_settings_close(void) {
