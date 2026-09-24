@@ -19,6 +19,8 @@
  * Procenten är PMU:ns bränslemätare avrundad, aldrig något vi räknar fram;
  * -1 betyder "rita ingen siffra". shutdown sätts EN gång, bara i CRITICAL
  * efter hela fördröjningen och bara när värden armerat den.
+ * Varje mätning över 5 %, varje USB-anslutning och varje ogiltig mätning
+ * stoppar klockan; nästa mätning under 5 % startar om den.
  */
 
 typedef enum {
@@ -46,6 +48,7 @@ typedef struct {
   int64_t critical_since_us;
   bool shutdown_armed;
   bool shutdown_sent;
+  bool dwell_running;
   int last_percent;
 } tg_batt_policy;
 

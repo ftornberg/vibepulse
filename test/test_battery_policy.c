@@ -84,6 +84,10 @@ static void test_critical_dwell_resets_when_interrupted(void) {
   tg_batt_verdict v = tg_batt_update(&p, &s, SEC(45));
   check("dwell restarted after the interruption", v.state == TG_BATT_LOW);
   v = tg_batt_update(&p, &s, SEC(51));
+  check("30 s from the old entry is not enough", v.state == TG_BATT_LOW);
+  v = tg_batt_update(&p, &s, SEC(74));
+  check("29 s after the restart is still low", v.state == TG_BATT_LOW);
+  v = tg_batt_update(&p, &s, SEC(75));
   check("critical 30 s after the restart", v.state == TG_BATT_CRITICAL);
 }
 
@@ -138,6 +142,17 @@ static void test_invalid_gauge_hides_number(void) {
   check("charging with no gauge", v.state == TG_BATT_CHARGING && v.percent == -1);
 }
 
+static void test_single_low_sample_after_gap_is_not_critical(void) {
+  tg_batt_policy p = {0};
+  tg_batt_sample s = sample(false, false, false, 4);
+  tg_batt_update(&p, &s, SEC(0));
+  s.percent = 9;
+  tg_batt_update(&p, &s, SEC(1));
+  s.percent = 4;
+  tg_batt_verdict v = tg_batt_update(&p, &s, SEC(31));
+  check("single low sample after gap is not critical", v.state == TG_BATT_LOW && !v.shutdown);
+}
+
 int main(void) {
   test_charging_full_and_on_battery();
   test_low_with_hysteresis();
@@ -148,6 +163,7 @@ int main(void) {
   test_failures_and_recovery();
   test_no_battery_is_unknown();
   test_invalid_gauge_hides_number();
+  test_single_low_sample_after_gap_is_not_critical();
   if (failures) { printf("%d failure(s)\n", failures); return 1; }
   printf("battery policy: ok\n");
   return 0;

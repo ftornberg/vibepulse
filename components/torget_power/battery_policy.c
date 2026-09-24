@@ -13,8 +13,8 @@ static tg_batt_state next_state(const tg_batt_policy *p, const tg_batt_sample *s
       return TG_BATT_CRITICAL;
     case TG_BATT_LOW:
       if (pct >= TG_BATT_LOW_EXIT_PCT) return TG_BATT_ON_BATTERY;
-      if (pct <= TG_BATT_CRITICAL_PCT && p->critical_since_us &&
-          (p->critical_since_us == 1 ? now_us : now_us - p->critical_since_us) >= TG_BATT_CRITICAL_DWELL_US)
+      if (pct <= TG_BATT_CRITICAL_PCT && p->dwell_running &&
+          now_us - p->critical_since_us >= TG_BATT_CRITICAL_DWELL_US)
         return TG_BATT_CRITICAL;
       return TG_BATT_LOW;
     default:
@@ -31,16 +31,19 @@ tg_batt_verdict tg_batt_update(tg_batt_policy *p, const tg_batt_sample *s,
   if (!s->valid) {
     if (++p->failures >= TG_BATT_FAILURES_TO_UNKNOWN) {
       p->state = TG_BATT_UNKNOWN;
-      p->critical_since_us = 0;
+      p->dwell_running = false;
     }
   } else {
     p->failures = 0;
     /* Fördröjningsklockan: går bara medan USB är borta och pct <= 5. */
     if (!s->vbus && s->present && s->percent >= 0 &&
         s->percent <= TG_BATT_CRITICAL_PCT) {
-      if (!p->critical_since_us) p->critical_since_us = now_us ? now_us : 1;
+      if (!p->dwell_running) {
+        p->dwell_running = true;
+        p->critical_since_us = now_us;
+      }
     } else {
-      if (p->critical_since_us) p->critical_since_us = now_us ? now_us : 1;
+      p->dwell_running = false;
     }
     p->state = next_state(p, s, now_us);
     if (p->state != TG_BATT_CRITICAL && p->state != TG_BATT_LOW)
