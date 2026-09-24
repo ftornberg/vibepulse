@@ -38,6 +38,7 @@ install a provider plugin, or configure anything on the computer.
 | API VALUE | API-equivalent value page | Current model prices; plan cost for a multiple | Off |
 | GITHUB PAGE | Repository stars and forks | One public repository in tokenserver | Off |
 | STAR POPUP | New-star moments, independent of the page | The same repository feed | Off |
+| NIGHT DIM | Scheduled night dimming, 23:00–07:00 by default (`TG_NIGHT_START_HHMM` / `TG_NIGHT_END_HHMM` in `secrets.h`) | Nothing on the computer; the panel needs a valid clock (NTP today) | On |
 
 The ON label is a saved display preference, not a claim that its data source
 is ready. Configure the computer first using the linked guides. Missing data
