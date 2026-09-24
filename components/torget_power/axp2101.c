@@ -8,10 +8,10 @@ static const char *TAG = "axp2101";
  * fabriksdemo använder). Verifiera mot databladet innan du litar på ett
  * fält: den första läsningen loggar råbyten just därför. */
 #define REG_STATUS1      0x00 /* bit5 VBUS good, bit3 batteri anslutet */
-#define REG_STATUS2      0x01 /* bit6:5 strömriktning 01=laddar 10=urladdar; bit4:2 laddstatus, 4=klar */
+#define REG_STATUS2      0x01 /* bit6:5 riktning, bit4 påslagen, bit3 VINDPM, bit2:0 laddstatus (4=klar, 5=laddar inte) */
 #define REG_IC_TYPE      0x03 /* (v & 0xCF) == 0x4A */
 #define REG_ADC_ENABLE   0x30 /* bit0 VBAT-ADC */
-#define REG_VBAT_H       0x34 /* 14 bitar, 1 mV/LSB, high i [5:0] */
+#define REG_VBAT_H       0x34 /* H5L8 som XPowersLib: 13 bitar, 1 mV/LSB, high i [4:0] */
 #define REG_VBAT_L       0x35
 #define REG_BAT_PERCENT  0xA4 /* 0..100 */
 
@@ -68,6 +68,10 @@ tg_batt_sample tg_axp2101_read(void) {
   if (rd(REG_STATUS1, st, 2) != ESP_OK) return s;
   if (rd(REG_VBAT_H, v, 2) != ESP_OK) return s;
   if (rd(REG_BAT_PERCENT, &pct, 1) != ESP_OK) return s;
+  /* Råbyteloggen är beviset på glaset: fältavkodningen nedan följer
+   * XPowersLib, inte en egen mätning. VBUS närvarande med laddstatus 5
+   * (laddaren stoppad) klassas ändå som CHARGING; noterat, att bedömas
+   * på glaset. */
   if (!s_logged_raw) {
     s_logged_raw = true;
     ESP_LOGI(TAG, "råbyten: status 0x%02x 0x%02x vbat 0x%02x 0x%02x pct %u",
@@ -77,10 +81,10 @@ tg_batt_sample tg_axp2101_read(void) {
   s.present = (st[0] & 0x08) != 0;
   s.vbus = (st[0] & 0x20) != 0;
   unsigned dir = (st[1] >> 5) & 0x03;
-  unsigned chg = (st[1] >> 2) & 0x07;
+  unsigned chg = st[1] & 0x07;
   s.charging = dir == 1;
   s.charge_done = chg == 4;
-  s.mv = (int)(((v[0] & 0x3F) << 8) | v[1]);
+  s.mv = (int)(((v[0] & 0x1F) << 8) | v[1]);
   s.percent = pct <= 100 ? (int)pct : -1;
   return s;
 }
