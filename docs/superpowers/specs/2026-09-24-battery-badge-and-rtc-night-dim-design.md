@@ -124,7 +124,8 @@ every tick. It redraws only on a state change.
 
 Builds `battery_policy`, `night_policy` and `battery_badge`. Key `B` steps a
 fake sample through: unknown → charging 71 % → full → on battery 64 % → low
-18 % → critical 4 %. Key `N` toggles the night schedule as active. The static
+18 % → critical 4 %. Key `N` is already taken (the app switch), so the
+night-schedule toggle key is deferred to part B with a free key. The static
 QA matrix gains four frames (badge charging, badge critical, ABOUT with the
 new rows, LABS with NIGHT DIM). The hardware drivers are not built on the
 host.
@@ -166,7 +167,7 @@ is the last physical step below and the reason for the option.
 - Default window **23:00–07:00 local time**, level `BRIGHT_NIGHT`.
 - Three `#define`s in `secrets.h` with defaults in the code:
   `TG_NIGHT_START_HHMM` (2300), `TG_NIGHT_END_HHMM` (0700),
-  `TG_NIGHT_ENABLED_DEFAULT` (1). An unchanged `secrets.h` gives the default.
+  `TK_NIGHT_ENABLED_DEFAULT` (1). An unchanged `secrets.h` gives the default.
 - LABS row **NIGHT DIM** toggles it; the choice persists through the existing
   `labs_store` NVS path with the other LABS switches. Default on for new
   installs, as the owner chose.

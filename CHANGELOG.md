@@ -27,7 +27,8 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 - **Battery badge.** With the optional cell fitted, the 2.16 panel shows
   charge state and the PMU's own percentage bottom-right on every page,
   caps brightness at the night level below 20 %, and lists power in
-  SETTINGS → ABOUT. Read-only: the AXP2101 charge profile is untouched.
+  SETTINGS → ABOUT. The AXP2101 charge profile is untouched; the only
+  write enables the voltage measurement.
   A NIGHT DIM row in LABS lands with it; the schedule it controls ships
   in the next step.
 - Owner photographs of the working 2.41 V2, disclosed Waveshare affiliate
