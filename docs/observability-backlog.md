@@ -971,3 +971,18 @@ level compiles `ESP_LOGD` out — so this is a *latent* leak that OBS-28's
 on a relay-enabled build, clamp the `HTTP_CLIENT` tag
 (`esp_log_level_set("HTTP_CLIENT", ESP_LOG_INFO)`) rather than trusting
 the operator to remember.
+
+### OBS-41 · Startup mDNS tracebacks on a host with two interfaces on one subnet
+`tokenserver · S · open` — observed 2026-09-24 on a fresh macOS install
+(first `vibepulse_macos_service.py install`, zeroconf 0.150.0): within
+three seconds of `starting:` the log carries two full Python tracebacks,
+`Error with socket N ((<addr>, 5353))): [Errno 65] No route to host`,
+one per LAN address (WiFi `en0` and wired `en6`, both on `192.168.1.0/24`).
+Two seconds later `local VibePulse discovery advertised via mDNS` and the
+panel-facing endpoints are fine, so the advertiser recovered by itself,
+yet `smoke.py` counts the two tracebacks for the life of the log and warns
+on every run. A healthy first start therefore looks like an incident.
+**Fix:** treat zeroconf's transient `sendto` failure at start as a
+one-line WARNING transition (interface, address, errno) instead of letting
+its traceback reach the log, or exclude zeroconf's own socket errors from
+the smoke test's traceback count. Verify against a two-interface host.
