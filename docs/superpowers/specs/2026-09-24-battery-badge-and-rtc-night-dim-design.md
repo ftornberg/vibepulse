@@ -46,7 +46,7 @@ The owner's decisions, in order of the brainstorm:
 ## Hardware status (from `spec/hardware-capabilities.yaml`)
 
 | Capability | Silicon | Board wired | BSP | Firmware today | Unit verified |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | `power.axp2101` | yes | yes, I2C 0x34 | no | no | unknown |
 | `power.battery-connector` | yes | yes | no | no | unknown |
 | `rtc.pcf85063atl` | yes | yes, I2C 0x51, INT on GPIO13 | no | no | unknown |
@@ -58,7 +58,7 @@ behaviour must be proven on the unit before it is enabled.
 
 ## Architecture
 
-```
+```text
  components/torget_power/                platform/                 main/main.c
  ┌───────────────────────────┐            ┌────────────────────┐   ┌──────────────────┐
  │ axp2101.c   (I2C 0x34)    │──sample──► │                    │   │ power_task (5 s) │
@@ -129,7 +129,7 @@ host.
 ## Battery policy
 
 | State | Condition | Badge | Brightness cap | Log (on transition only) |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `UNKNOWN` | no battery present, or 3 consecutive read failures | outline with a dash, no percent | none | `batteri: okänd` |
 | `CHARGING` | VBUS present, PMU reports charging | green fill, bolt | none | `batteri: laddar` |
 | `FULL` | VBUS present, PMU reports charge done | green fill, bolt | none | `batteri: full` |
@@ -150,7 +150,7 @@ host.
 ### Shutdown sequence (gated)
 
 1. Persist LABS choices and the boot ledger to NVS.
-2. Show `BATTERI SLUT` centred for 2 s.
+2. Show `BATTERY EMPTY` centred for 2 s.
 3. Brightness 0, panel off.
 4. AXP2101 power-off command.
 
