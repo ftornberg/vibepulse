@@ -126,7 +126,7 @@ Builds `battery_policy`, `night_policy` and `battery_badge`. Key `B` steps a
 fake sample through: unknown → charging 71 % → full → on battery 64 % → low
 18 % → critical 4 %. Key `N` is already taken (the app switch), so the
 night-schedule toggle key is deferred to part B with a free key. The static
-QA matrix gains four frames (badge charging, badge critical, ABOUT with the
+QA matrix gains five frames (badge charging, badge full, badge critical, ABOUT with the
 new rows, LABS with NIGHT DIM). The hardware drivers are not built on the
 host.
 
