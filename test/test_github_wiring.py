@@ -30,7 +30,7 @@ class GitHubWiringTests(unittest.TestCase):
 
     def test_github_is_one_optional_seventh_view(self):
         ui = read("components/app_tokens/usage_screen.c")
-        # Semantic IDs are stable. The pure C test exhausts all 32 dense maps.
+        # Semantic IDs are stable. The pure C test exhausts all 64 dense maps.
         policy = read("components/app_tokens/labs_features.h")
         self.assertIn("VIEW_GITHUB = 6", policy)
         self.assertIn("VIEW_VALUE = 7", policy)

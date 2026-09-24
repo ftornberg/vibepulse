@@ -17,10 +17,11 @@ void tk_labs_init(void) {
   uint32_t record = 0;
   tk_labs_store_result result = tk_labs_store_read(&record);
   uint32_t version = record & ~TK_LABS_ALL;
-  /* v1 stored exactly five feature bits (0..30) under its version tag; a
-   * real v1 build could never set bit 5 (NIGHT DIM did not exist), so
-   * requiring an exact match against the 5-bit mask here also refuses a
-   * corrupt record instead of quietly accepting a stray high bit as v1. */
+  /* v1 stored exactly five feature bits (bit positions 0..4, values 0..31)
+   * under its version tag; a real v1 build could never set bit 5 (NIGHT DIM
+   * did not exist), so requiring an exact match against the 5-bit mask here
+   * also refuses a corrupt record instead of quietly accepting a stray high
+   * bit as v1. */
   bool v1 = result == TK_LABS_STORE_FOUND &&
             (record & ~31u) == TK_LABS_RECORD_VERSION_V1;
   read_only = result == TK_LABS_STORE_ERROR ||

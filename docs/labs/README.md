@@ -22,8 +22,9 @@ using quotas.
 ## Add features on the display
 
 Hold KEY3 for three seconds, then tap **LABS**. Tap a row to switch it ON or
-OFF. **MORE** opens the GitHub choices; **BACK** returns to analytics and
-**SETTINGS** returns to the main menu. KEY3 closes any of these pages.
+OFF. **MORE** opens the GitHub choices; **SETTINGS** returns to the main
+menu, and LABS from SETTINGS reopens the analytics choices. KEY3 closes any
+of these pages.
 
 Choices are saved immediately. **RESTART TO APPLY** means the saved choices
 differ from the currently running pages: power-cycle the display when ready.
@@ -51,6 +52,9 @@ burn rate, Max Tracker and Value enabled on their first upgrade. The fresh
 sample explicitly sets this default to `0`. The existing GitHub macros seed
 their two independent choices. Copying a new sample over an old configuration
 is a new seed, not a migration; retain your existing `secrets.h` when upgrading.
+A panel upgraded from a five-switch firmware keeps its saved choices for those
+five and gets NIGHT DIM from the compiled default (On, unless
+`TK_NIGHT_ENABLED_DEFAULT 0`) until it is toggled on the panel.
 
 After the first successful save, the versioned `vp_labs` NVS record overrides
 all these defaults in both directions and survives firmware updates. Full NVS

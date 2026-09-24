@@ -103,7 +103,9 @@ int main(void) {
   /* A v1 record (five features) migrates: old bits kept, night from default. */
   result = TK_LABS_STORE_FOUND;
   saved = TK_LABS_RECORD_VERSION_V1 | 9u; /* BURN RATE + GITHUB PAGE */
+  before_writes = writes;
   tk_labs_init();
+  assert(writes == before_writes); /* migrating on read must not write */
   assert(tk_labs_active(TK_LABS_BURN_RATE));
   assert(tk_labs_active(TK_LABS_GITHUB));
   assert(!tk_labs_active(TK_LABS_TRACKER));
@@ -111,11 +113,15 @@ int main(void) {
   assert(!tk_labs_storage_error());
   assert(tk_labs_toggle(TK_LABS_NIGHT_DIM));
   assert((saved & ~TK_LABS_ALL) == TK_LABS_RECORD_VERSION);
+  assert((saved & TK_LABS_ALL) ==
+         ((9u | (TK_NIGHT_ENABLED_DEFAULT ? 32u : 0u)) ^ 32u));
 
   /* An unknown future version stays read-only. */
   result = TK_LABS_STORE_FOUND;
   saved = 0x400u | 1u;
+  before_writes = writes;
   tk_labs_init();
+  assert(writes == before_writes); /* don't clobber unreadable/future state */
   assert(tk_labs_storage_error());
   assert(!tk_labs_toggle(TK_LABS_NIGHT_DIM));
 
