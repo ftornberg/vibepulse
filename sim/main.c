@@ -1862,12 +1862,7 @@ int main(int argc, char **argv) {
   /* SETTINGS mellan nätlagret och OTA-ringen — samma ordning som targetet,
    * så READY-takeovern vinner över menyn på båda. */
   torget_settings_create();
-#ifndef TORGET_BOARD_241_V2
-  /* Batteriikonen (design 2026-09-24): "Waveshare ESP32-S3 Touch-AMOLED-2.16
-   * only. The 2.41 V2 has a different PMU wiring and is out of scope until
-   * its registry says otherwise." No badge exists to create on that board. */
   torget_battery_badge_create();
-#endif
   torget_ota_ui_create();
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-labs-qa") == 0)

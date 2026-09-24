@@ -52,6 +52,18 @@ static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, lv_color_t c)
 }
 
 void torget_battery_badge_create(void) {
+#ifdef TORGET_BOARD_241_V2
+  /* Board scope (docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-
+   * night-dim-design.md): "Waveshare ESP32-S3 Touch-AMOLED-2.16 only. The
+   * 2.41 V2 has a different PMU wiring and is out of scope until its
+   * registry says otherwise." No badge exists to create on that board —
+   * set()/set_covered() below already no-op on an uncreated badge. Also,
+   * this geometry (BADGE_RIGHT_MARGIN/BADGE_Y against TG_DISPLAY_WIDTH)
+   * assumes the 2.16 board, where the viewport and the physical display
+   * are the same size; on 241 V2 the 480 px content tile is centred inside
+   * a wider 600 px physical display, so this math would misplace it. */
+  return;
+#endif
   if (ui.created) return;
   ui.root = lv_obj_create(lv_layer_top());
   lv_obj_remove_style_all(ui.root);
@@ -103,6 +115,11 @@ static void apply(void) {
   else if (ui.state == TG_BATT_LOW) fill = COL_LOW;
   else if (ui.state == TG_BATT_CRITICAL) fill = COL_CRIT;
   lv_obj_set_style_bg_color(ui.fill, fill, 0);
+  /* The percent number carries the state colour too: at low percentages the
+   * fill sliver itself is only 1-2 px wide (proportional, correctly so —
+   * it must not overstate the charge) and easy to miss, so LOW/CRITICAL
+   * need the number itself to read as coloured, not just outline-grey. */
+  lv_obj_set_style_text_color(ui.pct, unknown ? COL_OUTLINE : fill, 0);
 
   int pct = ui.percent;
   int inner = BODY_W - 6;
