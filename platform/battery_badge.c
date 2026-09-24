@@ -51,6 +51,8 @@ static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, lv_color_t c)
   return o;
 }
 
+static void apply(void);
+
 void torget_battery_badge_create(void) {
 #ifdef TORGET_BOARD_241_V2
   /* Board scope (docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-
@@ -98,10 +100,15 @@ void torget_battery_badge_create(void) {
   ui.dash = box(ui.root, bx + 9, 7, BODY_W - 18, 2, COL_MUTED);
   ui.nub = box(ui.root, bx + BODY_W, 4, NUB_W, NUB_H, COL_OUTLINE);
 
+  /* No placeholder can ever show, even for a frame: LVGL seeds a fresh
+   * label with the literal text "Text", and torget_battery_badge_set()'s
+   * dedupe guard would otherwise skip the very first apply() below (state
+   * and percent already match the UNKNOWN/-1 it's about to be told). */
+  lv_label_set_text(ui.pct, "");
   ui.state = TG_BATT_UNKNOWN;
   ui.percent = -1;
   ui.created = true;
-  torget_battery_badge_set(TG_BATT_UNKNOWN, -1);
+  apply();
 }
 
 static void apply(void) {

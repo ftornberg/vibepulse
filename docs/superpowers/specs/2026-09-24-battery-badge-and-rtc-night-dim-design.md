@@ -99,10 +99,11 @@ compile them unchanged.
 
 An LVGL widget on `lv_layer_top()` anchored bottom-right at the footer
 baseline with the same right margin as the "TO RESET" label. It knows only a
-badge state and an optional percentage. It hides itself while a takeover
-owns the glass (UPDATE READY, Needs You, WiFi setup, OTA transfer) and while
-SETTINGS shows a sub-view that draws over the footer. It redraws only on a
-state change.
+badge state and an optional percentage. It is seen on every app page; it
+hides itself while a takeover owns the glass (UPDATE READY, Needs You, WiFi
+setup, OTA transfer), and it is covered by the SETTINGS overlay for as long
+as the menu is open, since `settings_menu.c` keeps itself in the foreground
+every tick. It redraws only on a state change.
 
 ### `main/main.c`
 
