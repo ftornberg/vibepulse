@@ -301,6 +301,12 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 /tmp/torget-night-policy-test
 
 cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/app_time/time_core.c \
+  test_time_core.c \
+  -o /tmp/torget-time-core-test
+/tmp/torget-time-core-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/torget_power/clock_policy.c \
   test_clock_policy.c \
   -o /tmp/torget-clock-policy-test
