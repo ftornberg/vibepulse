@@ -169,4 +169,5 @@ SHA, the version line names the incoming image.
 | Upload gets 400 "not a torget esp32s3 image" | Wrong file (bootloader? another project?) | Send `build*/torget.bin`, nothing else |
 | 202 but the old version still runs after reboot | Health gate rolled the image back | The new build is broken on-device; check it on USB with the console |
 | UPDATE READY never appears | Same version already running, or tokenserver older than the feature | `curl localhost:8737/api/tokens \| grep otaAvailable` |
+| UPDATE READY appears for a version you never sent, often `-dirty` | A branch or scratch firmware build sits in a repo-root `build*/` directory (`build-time/`, `build-241/`, ...); the tokenserver announces the NEWEST `build*/torget.bin`, whatever its origin | `curl localhost:8737/api/tokens \| grep otaAvailable`, then delete that directory or build outside the repo root (`idf.py -B /tmp/<name> ...`); the notice clears at the next quota poll |
 | Takeover shows but UPDATE does nothing | No pusher waiting on the Mac | Start `tools/ota-flash.sh <ip>` — the tap opens the window; the Mac must deliver |
