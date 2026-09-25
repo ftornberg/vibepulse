@@ -775,10 +775,14 @@ stays at the PMU's defaults; see the design in
 > **Evidence, honestly:** these frames come from the shared LVGL
 > renderer in the simulator; the policy (states, hysteresis, dwell, cap)
 > and the ABOUT texts are host-tested, and the frames are pinned. The
-> feature is in source and simulator-reviewed; it has not been
-> physically verified on a panel with a cell fitted. The RTC boot time
-> and the night schedule are likewise host-tested and unverified on the
-> panel. The RTC only ever sets the clock on a true power-on boot: system
+> feature is in source and simulator-reviewed. On 2026-09-25 the owner's
+> 2.16 unit with a cell fitted confirmed the PMU decode (charging, 88–95 %,
+> 4.1 V) and the RTC boot time: a PMU power cycle logged `tid från RTC`
+> seven seconds before WiFi; without the cell the RTC loses its oscillator
+> and the clock waits for NTP, as designed
+> ([review](docs/superpowers/reviews/2026-09-25-rtc-boot-time-physical.md)).
+> The night schedule and the badge's on-battery states are still
+> unverified on the panel. The RTC only ever sets the clock on a true power-on boot: system
 > time survives soft restarts (OTA, panic, watchdog), so those boots log
 > `klockan behållen över omstarten` and leave the RTC alone. The first
 > power-on boot on this firmware logs `RTC opålitlig` (a fresh chip says
