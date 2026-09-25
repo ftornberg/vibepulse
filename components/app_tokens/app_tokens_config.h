@@ -67,6 +67,18 @@
 #error "TK_GITHUB_SOUND_ENABLED must be 0 or 1"
 #endif
 
+/* The Codex pages (CODEX · WEEKLY and, with MAX TRACKER, the Codex
+ * tracker). 1 shows them as before; 0 hides them for a Claude-only desk.
+ * Compile-time on purpose: LABS switches are for things a fresh panel may
+ * want to try, this is "I don't use that provider". Needs You, the Codex
+ * agent feed and the tokenserver's Codex route are unaffected. */
+#ifndef TK_CODEX_PAGES
+#define TK_CODEX_PAGES 1
+#endif
+#if TK_CODEX_PAGES != 0 && TK_CODEX_PAGES != 1
+#error "TK_CODEX_PAGES must be 0 or 1"
+#endif
+
 /* Scheduled night dimming (design 2026-09-24). The LABS row NIGHT DIM
  * toggles it; these are the compiled defaults an unchanged secrets.h gets. */
 #ifndef TK_NIGHT_ENABLED_DEFAULT

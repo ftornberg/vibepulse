@@ -37,6 +37,10 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Added
 
+- `TK_CODEX_PAGES 0` in `secrets.h` hides the Codex pages (CODEX · WEEKLY
+  and the Codex Max Tracker page) for a Claude-only desk. Compile-time;
+  Needs You and the Codex agent feed are unaffected. Default 1, nothing
+  changes for existing installs.
 - **Battery badge.** With the optional cell fitted, the 2.16 panel shows
   charge state and the PMU's own percentage bottom-right on every page,
   caps brightness at the night level below 20 %, and lists power in

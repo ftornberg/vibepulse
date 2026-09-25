@@ -61,7 +61,12 @@ class GitHubWiringTests(unittest.TestCase):
         self.assertIn("for (unsigned mask = 0; mask <= TK_LABS_ALL; mask++)", test)
         self.assertIn("assert(at == pos++);", test)
         self.assertIn("assert(tk_labs_next_view(previous, 1) == view);", test)
-        self.assertIn("assert(tk_labs_view_position(VIEW_VALUE) == 3);", test)
+        self.assertIn("assert(tk_labs_view_position(VIEW_VALUE) == base);", test)
+        # The Codex pages are compile-time (TK_CODEX_PAGES); the gate runs
+        # the view policy both with and without them.
+        self.assertIn("for codex_pages in 0 1; do", run)
+        self.assertIn("-DTK_CODEX_PAGES=$codex_pages", run)
+        self.assertIn("const int base = 2 + TK_CODEX_PAGES;", test)
 
     def test_popup_is_app_local_static_and_below_agent_attention(self):
         ui = read("components/app_tokens/usage_screen.c")
