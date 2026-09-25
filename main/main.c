@@ -43,6 +43,9 @@
 #include "esp_lv_adapter.h"
 #include "lvgl.h"
 
+#include "axp2101.h"
+#include "battery_badge.h"
+#include "battery_policy.h"
 #include "boot_health.h"
 #include "boot_screen.h"
 #include "button_arbitration.h"
@@ -91,8 +94,71 @@ static int     s_brightness;         /* faktisk nivå just nu, rampad av tick_cb
 static int     s_bright_target = -1; /* mål; loggas bara när det byter */
 static lv_indev_t *s_touch;
 
+/* Batteriet: pollas var 5 s av en låg task; policyn körs där, resultatet
+ * publiceras till LVGL-tasken under UI-låset. Ljustaket läses av tick_cb
+ * som ett tak — det kan bara sänka ljusmålet, aldrig lyfta det. */
+#define POWER_POLL_MS 5000
+static volatile int s_batt_bright_cap = 100;
+
+#ifndef TORGET_BOARD_241_V2
+static tg_batt_policy s_batt;
+/* Inget tillstånd loggat än: första pollen loggar alltid, även okänd. */
+static int s_batt_logged = -1;
+
+static void power_task(void *arg) {
+  (void)arg;
+  for (;;) {
+    tg_batt_sample s = tg_axp2101_read();
+    tg_batt_verdict v = tg_batt_update(&s_batt, &s, esp_timer_get_time());
+    s_batt_bright_cap = v.bright_cap;
+    /* Bara tillståndsbyten loggas, inte varje procentsteg. Siffran följer
+     * bara med på batteri och låg; en saknad mätare skrivs aldrig som 0 %. */
+    if ((int)v.state != s_batt_logged) {
+      s_batt_logged = v.state;
+      if ((v.state == TG_BATT_ON_BATTERY || v.state == TG_BATT_LOW) && v.percent >= 0)
+        ESP_LOGI(TAG, "batteri: %s %d %%", tg_batt_state_name(v.state), v.percent);
+      else
+        ESP_LOGI(TAG, "batteri: %s", tg_batt_state_name(v.state));
+    }
+    /* ABOUT-texten byggs varje poll så spänningen hålls levande; settern
+     * avduplicerar, så en oförändrad text kostar bara låset. Mappningen är
+     * ren policy (tg_batt_power_text), låst i test/test_battery_policy.c. */
+    char text[40];
+    tg_batt_power_text(&s, &v, text, sizeof text);
+    torget_ui_lock();
+    if (v.changed) torget_battery_badge_set(v.state, v.percent);
+    torget_settings_set_power(text);
+    torget_ui_unlock();
+    /* Del C bygger avstängningen; här bara varningen. */
+    if (v.shutdown)
+      ESP_LOGW(TAG, "batteri: avstängning begärd men inte kompilerad in (del C)");
+    vTaskDelay(pdMS_TO_TICKS(POWER_POLL_MS));
+  }
+}
+#endif
+
+/* Efter UI-bygget (brickan och menyn måste finnas). bsp_i2c_init är
+ * idempotent (BSP:n vaktar med i2c_initialized), så anropet efter
+ * sg_rotation_start återanvänder samma buss. 2.41 V2 har en annan
+ * PMU-koppling och ingen batteripolicy än: ingen task, taket står kvar på
+ * 100 och brickan skapas inte. */
+static void power_start(void) {
+#ifndef TORGET_BOARD_241_V2
+  if (bsp_i2c_init() != ESP_OK || tg_axp2101_init(bsp_i2c_get_handle()) != ESP_OK) {
+    /* ABOUT POWER lämnas tom: menyn ritar streck, det ärliga för "ingen
+     * PMU att läsa". */
+    ESP_LOGW(TAG, "ingen PMU att läsa, batteriikonen visar okänd");
+    return;
+  }
+  if (xTaskCreate(power_task, "power", 3072, NULL, 2, NULL) != pdPASS)
+    ESP_LOGW(TAG, "power-tasken kunde inte skapas, batteriikonen visar okänd");
+#endif
+}
+
 static EventGroupHandle_t s_net_events;
 #define WIFI_GOT_IP BIT0
+/* Satt av net_task när SNTP svarat; läses av LVGL-tasken för ABOUT CLOCK. */
+static volatile bool s_time_synced;
 
 /* Senaste tilldelade IPv4-adressen som text, för SETTINGS ABOUT.
  * Tom sträng = ingen adress; menyn visar då streck och tonar ner
@@ -579,10 +645,12 @@ static void wifi_start(void) {
 static void time_sync(void) {
   esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
   ESP_ERROR_CHECK(esp_netif_sntp_init(&cfg));
-  if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(20000)) != ESP_OK)
+  if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(20000)) != ESP_OK) {
     ESP_LOGW(TAG, "ingen tid från SNTP ännu, apparnas hämtningar får vänta på den");
-  else
+  } else {
+    s_time_synced = true;
     ESP_LOGI(TAG, "tid synkad");
+  }
 }
 
 /* Plattformens nättask: koppla upp, synka tid, släpp fram apparna
@@ -710,6 +778,13 @@ static void tick_cb(lv_timer_t *t) {
   };
   tg_button_outputs key3_out;
   tg_button_arbitrate(&key3_in, &key3_out);
+  /* Brickan göms när en övertagning äger glaset. Needs You och
+   * klarpulsen bor i appträdet UNDER topplagret, så de måste frågas
+   * uttryckligen; SETTINGS lyfter sig själv över brickan varje tick. */
+  torget_battery_badge_set_covered(key3_in.notice_visible ||
+                                   key3_in.maintenance_open ||
+                                   key3_in.setup_owns_input ||
+                                   tk_agent_monitor_takeover_visible());
 
   /* Verkställandet följer skiljedomens ordning: menyns lyft FÖRE dess
    * stängning, och båda före knappkedjans utdata. */
@@ -746,6 +821,8 @@ static void tick_cb(lv_timer_t *t) {
     char ip[16];
     bool have_ip = ip_text_copy(ip, sizeof ip);
     torget_settings_open(desc ? desc->version : NULL, have_ip ? ip : NULL);
+    /* Platshållare tills del B läser RTC:n. */
+    torget_settings_set_clock(s_time_synced ? "NTP ONLY" : "NOT SET");
   }
 
   /* Menyns val, utfört av den som äger fönsterordningen. Menyn rör aldrig
@@ -765,6 +842,9 @@ static void tick_cb(lv_timer_t *t) {
   int target = ((now - s_last_activity_us) > NIGHT_AFTER_US
                 && (now - s_last_touch_us) > WAKE_HOLD_US)
                ? BRIGHT_NIGHT : BRIGHT_DAY;
+  /* Ljustaket från batteripolicyn: lägsta källan vinner, ingen kan lyfta. */
+  int cap = s_batt_bright_cap;
+  if (cap < target) target = cap;
   if (target != s_bright_target) {
     s_bright_target = target;
     ESP_LOGI(TAG, "ljusmål: %d %%", target);
@@ -1126,6 +1206,13 @@ void app_main(void) {
   s_last_activity_us = esp_timer_get_time();
 
   torget_ui_lock();
+  /* Batteribrickan FÖRST på topplagret: allt som skapas där efter den —
+   * bootskärmen, nätlagret, SETTINGS, OTA — ritas över den. Bootskärmen
+   * täcker den alltså tills den river sig. Needs You bor i appträdet under
+   * topplagret och göms i stället via tick_cb:s täckpredikat. */
+  overlay_cost_mark();
+  torget_battery_badge_create();
+  overlay_cost_report("battery");
   /* Bootskärmen FÖRE apparna och FÖRE OTA-overlayn: apparnas halvbyggda
    * NO DATA-vyer göms bakom den, och READY-ringen vinner alltid över den
    * i lagerordningen. */
@@ -1156,6 +1243,10 @@ void app_main(void) {
   overlay_cost_report("ota");
   lv_timer_create(tick_cb, TICK_EVERY_MS, NULL);
   torget_ui_unlock();
+  /* Batteripollningen EFTER brickan och menyn: tasken (prio 2) går före
+   * app_main (prio 1), och en första övergång publicerad innan widgetarna
+   * fanns hade tappats — brickan hade stått på okänd till nästa ändring. */
+  power_start();
 
   /* Fysisk sanning i loggen: KEY3:s råa nivå vid boot. Låg utan finger =
    * pinnen är inte att lita på förrän knappolicyns väpning släppt igenom

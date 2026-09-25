@@ -21,6 +21,11 @@ void tk_agent_monitor_apply_status_relay(
 void tk_agent_monitor_apply_relay(const tk_pending_interaction *pending,
                                   int64_t now_us);
 void tk_agent_monitor_tick(int64_t now_us);
+/* True while the Needs You takeover or the DONE/NEEDS-YOU completion pulse is
+ * actually on the glass: its root is shown and no ancestor (the VibePulse app
+ * root, when another app is in front) hides it. Read-only; the caller holds
+ * torget_ui_lock (the LVGL task already does). */
+bool tk_agent_monitor_takeover_visible(void);
 
 /* Content-free render diagnostics. Safe to log: counters contain no prompt,
  * command, project, provider, or request identifier. */

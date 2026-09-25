@@ -67,4 +67,19 @@
 #error "TK_GITHUB_SOUND_ENABLED must be 0 or 1"
 #endif
 
+/* Scheduled night dimming (design 2026-09-24). The LABS row NIGHT DIM
+ * toggles it; these are the compiled defaults an unchanged secrets.h gets. */
+#ifndef TK_NIGHT_ENABLED_DEFAULT
+#define TK_NIGHT_ENABLED_DEFAULT 1
+#endif
+#if TK_NIGHT_ENABLED_DEFAULT != 0 && TK_NIGHT_ENABLED_DEFAULT != 1
+#error "TK_NIGHT_ENABLED_DEFAULT must be 0 or 1"
+#endif
+#ifndef TG_NIGHT_START_HHMM
+#define TG_NIGHT_START_HHMM 2300
+#endif
+#ifndef TG_NIGHT_END_HHMM
+#define TG_NIGHT_END_HHMM 700
+#endif
+
 #endif

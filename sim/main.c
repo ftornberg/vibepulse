@@ -50,6 +50,8 @@
 #include "button_arbitration.h"
 #include "settings_menu.h"
 #include "wifi_slots.h"
+#include "../platform/battery_badge.h"
+#include "../components/torget_power/battery_policy.h"
 
 /* VibePulse är det här repots app och ligger ALLTID först i registret, så
  * launchern och den obevakade rundan pekar på samma index oavsett vilka
@@ -221,7 +223,11 @@ static void dump_draw_buf_frame(lv_draw_buf_t *buf, const char *tag) {
   else printf("snapshot: %s\n", path);
 }
 
+/* Batteribrickans täckpredikat, definierat vid key3_tick. */
+static void badge_cover_sync(void);
+
 static void dump_obj_frame(lv_obj_t *root, const char *tag) {
+  badge_cover_sync();
   /* QA-dumpar får inte bero på var SDL:s nästa refresh råkar ligga. Tvinga
    * layout + redraw före snapshot så ett helt tillstånd fångas atomiskt. */
   lv_obj_update_layout(root);
@@ -236,6 +242,7 @@ static void dump_obj_frame(lv_obj_t *root, const char *tag) {
  * one shared Wi-Fi mark lives.  Snapshotting only lv_screen_active() silently
  * omitted it even though the physical display composites both layers. */
 static void dump_frame(const char *tag) {
+  badge_cover_sync();
   lv_obj_t *screen = lv_screen_active();
   lv_obj_t *top = lv_layer_top();
   lv_obj_update_layout(screen);
@@ -456,6 +463,48 @@ static void apply_max_tracker_fixture(int idx) {
   feed_max_tracker_file(MAX_TRACKER_FIXTURES[max_tracker_fixture_idx]);
 }
 
+/* Key B: steg genom batteritillstånd med riktiga policybeslut på
+ * låtsasmätningar — samma policy som firmware, så bilden är sann. */
+static int battery_fixture_idx = -1;
+static tg_batt_policy battery_policy;
+static const tg_batt_sample BATTERY_FIXTURES[] = {
+  { .valid = false },
+  { .valid = true, .present = true, .vbus = true, .charging = true, .percent = 71, .mv = 4020 },
+  { .valid = true, .present = true, .vbus = true, .charge_done = true, .percent = 100, .mv = 4180 },
+  { .valid = true, .present = true, .percent = 64, .mv = 3900 },
+  { .valid = true, .present = true, .percent = 18, .mv = 3650 },
+  { .valid = true, .present = true, .percent = 4, .mv = 3400 },
+};
+
+/* ABOUT:s POWER-rad för en fixtur, med firmwarens egen formulering: ett
+ * färskt policybeslut på mätningen, sedan samma tg_batt_power_text. */
+static void battery_fixture_power_text(int idx, char *out, size_t cap) {
+  tg_batt_policy fresh = {0};
+  tg_batt_verdict v = tg_batt_update(&fresh, &BATTERY_FIXTURES[idx], 0);
+  tg_batt_power_text(&BATTERY_FIXTURES[idx], &v, out, cap);
+}
+
+static void apply_battery_fixture(int idx) {
+  const int count = (int)(sizeof BATTERY_FIXTURES / sizeof BATTERY_FIXTURES[0]);
+  battery_fixture_idx = ((idx % count) + count) % count;
+  const tg_batt_sample *s = &BATTERY_FIXTURES[battery_fixture_idx];
+  int64_t now = torget_now_us();
+  tg_batt_verdict v = tg_batt_update(&battery_policy, s, now);
+  if (battery_fixture_idx == 0) {
+    /* tre ogiltiga i rad ger UNKNOWN, som på glaset */
+    tg_batt_update(&battery_policy, s, now);
+    v = tg_batt_update(&battery_policy, s, now);
+  }
+  if (battery_fixture_idx == 5) {
+    /* fördröjningen: 30 s på <= 5 % innan CRITICAL */
+    v = tg_batt_update(&battery_policy, s, now + 31 * 1000000LL);
+  }
+  torget_battery_badge_set(v.state, v.percent);
+  char text[40];
+  tg_batt_power_text(s, &v, text, sizeof text);
+  torget_settings_set_power(text);
+}
+
 static void apply_github_file(const char *file, bool unique_event) {
   size_t len = 0;
   char *json = read_fixture(file, &len);
@@ -671,6 +720,19 @@ static void key3_open_maintenance_window(void) {
   torget_ota_ui_set(TG_OTA_UI_OPEN, 0, 600);
 }
 
+/* Batteribrickan göms när en övertagning äger glaset — samma fyra termer som
+ * targetets tick_cb, läst ur bänkens egna motsvarigheter. Kallas varje tick
+ * OCH före varje statisk QA-dump: på glaset utvärderas predikatet var
+ * 100 ms, så varje ram panelen visar har redan gått genom det; de statiska
+ * dumparna tickar inte, och utan anropet här fotograferades brickan ovanpå
+ * Needs You. */
+static void badge_cover_sync(void) {
+  torget_battery_badge_set_covered(torget_ota_ui_notice_visible() ||
+                                   key3_maintenance_open ||
+                                   tg_wifi_setup_owns_input(key3_setup_phase) ||
+                                   tk_agent_monitor_takeover_visible());
+}
+
 /* En tick av värdlagret. `down` är knappens råa nivå, `now_us` bänkens klocka. */
 static void key3_tick(bool down, int64_t now_us) {
   static tg_button_policy policy;
@@ -694,6 +756,7 @@ static void key3_tick(bool down, int64_t now_us) {
   };
   tg_button_outputs out;
   tg_button_arbitrate(&in, &out);
+  badge_cover_sync();
 
   if (out.menu_foreground) {
     torget_settings_set_address(key3_address);
@@ -760,13 +823,14 @@ static void qa_key3_tap(void) {
 /* Tangent 1-4: Solelkollen-fixtur. T: mata VibePulse. S: nästa agentläge.
  * L: launchern. [ och ] bläddrar VibePulse-sidor; N byter app (KEY3:s
  * appväxling utan gest). M: nästa Max Tracker-fixtur. G: simulera en ny
- * GitHub-stjärna. K är KEY3 självt, U och W fingrar på menyns rader.
+ * GitHub-stjärna. B: nästa batterifixtur. K är KEY3 självt, U och W fingrar
+ * på menyns rader.
  * LVGL:s SDL-drivrutin
  * pumpar eventen, så ren tangentbordspollning räcker — ingen indev-
  * rördragning för ett bänkverktyg. */
 static void poll_keys(lv_timer_t *t) {
   (void)t;
-  static bool held[12];
+  static bool held[13];
   const Uint8 *ks = SDL_GetKeyboardState(NULL);
 
   /* KEY3 pollas RÅTT, inte på flank: hållet är en tidsgest och tidsreglerna
@@ -775,13 +839,14 @@ static void poll_keys(lv_timer_t *t) {
    * släpp före tre sekunder och ett öppet fönster stänger i stället. */
   key3_tick(ks[SDL_SCANCODE_K] != 0, (int64_t)lv_tick_get() * 1000);
 
-  const SDL_Scancode keys[12] = { SDL_SCANCODE_1, SDL_SCANCODE_2,
+  const SDL_Scancode keys[13] = { SDL_SCANCODE_1, SDL_SCANCODE_2,
                                   SDL_SCANCODE_3, SDL_SCANCODE_4,
                                   SDL_SCANCODE_T, SDL_SCANCODE_S,
                                   SDL_SCANCODE_L, SDL_SCANCODE_N,
                                   SDL_SCANCODE_LEFTBRACKET,
                                   SDL_SCANCODE_RIGHTBRACKET,
-                                  SDL_SCANCODE_M, SDL_SCANCODE_G };
+                                  SDL_SCANCODE_M, SDL_SCANCODE_G,
+                                  SDL_SCANCODE_B };
   /* Fingrar på menyns rader. click_row() är samma väg touch-callbacken tar,
    * så avsikten uppstår som den gör på glaset — och konsumeras av key3_tick(),
    * aldrig här. */
@@ -796,7 +861,7 @@ static void poll_keys(lv_timer_t *t) {
     row_held[i] = down;
   }
 
-  for (int i = 0; i < 12; i++) {
+  for (int i = 0; i < 13; i++) {
     bool down = ks[keys[i]];
     if (down && !held[i]) {
       if (i < 4) {
@@ -818,6 +883,7 @@ static void poll_keys(lv_timer_t *t) {
       }
       else if (i == 10)
         apply_max_tracker_fixture(max_tracker_fixture_idx + 1);
+      else if (i == 12) apply_battery_fixture(battery_fixture_idx + 1);
       else {
         torget_app_show(SIM_APP_VIBEPULSE);
         apply_github_file("github-star.json", true);
@@ -1557,6 +1623,12 @@ static int run_vibepulse_static_qa(void) {
   qa_key3_hold();
   dump_overlay_frame("settings-menu");
   torget_settings_click_row(TG_SETTINGS_ROW_ABOUT);
+  {
+    char power[40];
+    battery_fixture_power_text(1, power, sizeof power); /* laddar 71 % */
+    torget_settings_set_power(power);
+  }
+  torget_settings_set_clock("RTC + NTP");
   dump_overlay_frame("settings-about-found");
   qa_key3_tap();
   /* Utan adress: UPDATE tonas ner och ABOUT visar streck. Två frames som
@@ -1574,6 +1646,8 @@ static int run_vibepulse_static_qa(void) {
   qa_key3_hold();
   dump_overlay_frame("settings-menu-no-address");
   torget_settings_click_row(TG_SETTINGS_ROW_ABOUT);
+  torget_settings_set_power(NULL);
+  torget_settings_set_clock(NULL);
   dump_overlay_frame("settings-about-missing");
   qa_key3_tap();
   key3_address = "192.168.1.42";
@@ -1663,6 +1737,17 @@ static int run_vibepulse_static_qa(void) {
   value_solo.value.multiple = 1.40;
   tokens_apply(&value_solo);
   dump_frame("vibepulse-value-solo");
+
+  /* Batteriikonen (design 2026-09-24): laddar, full (100 %, bredaste siffran)
+   * och kritisk. */
+  tokens_show_view(VIEW_CLAUDE_FABLE);
+  apply_battery_fixture(1);
+  dump_frame("vibepulse-battery-charging");
+  apply_battery_fixture(2);
+  dump_frame("vibepulse-battery-full");
+  apply_battery_fixture(5);
+  dump_frame("vibepulse-battery-critical");
+  apply_battery_fixture(0);
 
   capture_wifi_drift_matrix();
   capture_global_wifi_matrix();
@@ -1819,6 +1904,7 @@ int main(int argc, char **argv) {
   /* SETTINGS mellan nätlagret och OTA-ringen — samma ordning som targetet,
    * så READY-takeovern vinner över menyn på båda. */
   torget_settings_create();
+  torget_battery_badge_create();
   torget_ota_ui_create();
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-labs-qa") == 0)

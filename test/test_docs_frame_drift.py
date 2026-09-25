@@ -101,6 +101,8 @@ WIFI_BOX = (426, 28, 426 + 20, 28 + 18)
 
 # Frames the simulator reproduces exactly. Byte-for-byte or the test fails.
 PINNED = {
+    "vibepulse-battery-charging.png": "torget-vibepulse-battery-charging.bmp",
+    "vibepulse-battery-critical.png": "torget-vibepulse-battery-critical.bmp",
     "vibepulse-labs-analytics.png": "torget-settings-labs-analytics.bmp",
     "vibepulse-labs-github.png": "torget-settings-labs-github.bmp",
     "vibepulse-labs-pending.png": "torget-settings-labs-pending.bmp",

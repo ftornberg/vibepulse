@@ -54,6 +54,18 @@ MT_STAT_VALUE_Y = MT_STAT_LABEL_Y + 34  # 348
 MT_STAT_COL_X = [MT_GRID_X + (i * MT_GRID_W) // 4 for i in range(4)]
 MT_STAT_COL_W = MT_GRID_W // 4  # 104
 PAGER_ROW_Y = 458  # PAGER_Y (456) + 2: inside the 6px-tall dot row
+# The battery badge (Task 4, design 2026-09-24) sits bottom-right on this
+# same row; pager-only scans stop short of its left edge (x=373).
+PAGER_ROW_SCAN_X_END = 370
+# The badge's own footprint on lv_layer_top() (root pos/size in
+# platform/battery_badge.c: x 373..458, y 454..470 at BADGE_RIGHT_MARGIN 22 /
+# BADGE_Y 456; root width PCT_W 40 + 4 + 8 + 4 + 26 + 3 = 85). It lives permanently on that layer, so a check that the top
+# layer is otherwise empty must mask this box out first.
+BATTERY_BADGE_BOX = (373, 454, 458, 470)
+# The percent label's own column range: root x 373 to the bolt at
+# 373 + PCT_W 40 + GAP 4 = 417 (exclusive). Widening PCT_W moved the root
+# left, not the bolt or the body, so the icon itself sits where it did.
+BATTERY_PCT_ZONE_X = (373, 417)
 
 # The setup window's QR canvas — mirrors WIFI_OPEN_QR_* in
 # components/torget_wifi/wifi_setup_ui.c (also pinned by
@@ -120,12 +132,18 @@ def codex_stop_rgb(pct):
     return tuple(lerp(lo[1][c], hi[1][c], lo[0], hi[0]) for c in range(3))
 
 
-def dot_runs(image, y):
-    """Contiguous non-black horizontal runs at row `y` — the pager dots are
-    the only content on this row, so this both counts and sizes them."""
+def dot_runs(image, y, x_end=None):
+    """Contiguous non-black horizontal runs at row `y`, up to column
+    `x_end` (exclusive; default the full width). The pager dots are the
+    only content in the left/centre of this row — since the battery badge
+    (Task 4, design 2026-09-24) sits bottom-right on the SAME row (PAGER_Y
+    456), callers that want only the pager pass x_end below the badge's
+    left edge (BADGE_RIGHT_MARGIN 22 from x=480, badge width ~79 -> starts
+    at x=379; 370 leaves margin)."""
+    limit = image.width if x_end is None else x_end
     runs = []
     start = None
-    for x in range(image.width):
+    for x in range(limit):
         active = image.getpixel((x, y)) != (0, 0, 0)
         if active and start is None:
             start = x
@@ -133,7 +151,7 @@ def dot_runs(image, y):
             runs.append((start, x - 1))
             start = None
     if start is not None:
-        runs.append((start, image.width - 1))
+        runs.append((start, limit - 1))
     return runs
 
 
@@ -195,6 +213,9 @@ EXPECTED = {
     "torget-vibepulse-value-both.bmp",
     "torget-vibepulse-value-uneven.bmp",
     "torget-vibepulse-value-solo.bmp",
+    "torget-vibepulse-battery-charging.bmp",
+    "torget-vibepulse-battery-full.bmp",
+    "torget-vibepulse-battery-critical.bmp",
     "torget-ota-ring-open.bmp",
     "torget-ota-ring-receiving.bmp",
     "torget-ota-ring-verifying.bmp",
@@ -797,9 +818,14 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
                             "the guard never advanced past STARTING")
 
         # Frame two: the setup window closed. Nothing may be left underneath.
+        # The battery badge (Task 4) lives permanently on this same top
+        # layer, bottom-right, uncovered here — mask its own footprint out
+        # before requiring the rest of the layer to be pure black.
         closed = self.image("torget-settings-wifi-handoff-closed.bmp")
+        masked = closed.copy()
+        masked.paste((0, 0, 0), BATTERY_BADGE_BOX)
         self.assertEqual(
-            set(closed.get_flattened_data()), {(0, 0, 0)},
+            set(masked.get_flattened_data()), {(0, 0, 0)},
             "a stale window was revealed when the setup window closed")
 
     def test_losing_the_address_remutes_update_without_closing(self):
@@ -822,20 +848,46 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         fabricated 0.0.0.0."""
         found = self.image("torget-settings-about-found.bmp")
         missing = self.image("torget-settings-about-missing.bmp")
-        # ADDRESS value row (design: firstLineY 140 + lineGap 62 + 24).
+        # ADDRESS value row (design: firstLineY 100 + lineGap 57 + 24 = 181).
+        # lineGap is 57, not the round 50 first tried: FIRMWARE's value is a
+        # git-describe string ("v...-g<hash>") whose lowercase "g" descender
+        # measured 0-5 px clear of the ADDRESS label below it at lineGap 50-56
+        # (checked with the actual simulator capture, not just the nominal
+        # box math) — 57 is the smallest integer that opens that to >= 6 px.
+        # The crop still ends at +32 (a value line's height, same margin as
+        # before) and stays clear of the POWER label that starts at
+        # 100 + 2*57 = 214.
         found_ink = sum(p != (0, 0, 0) for p in
-                        found.crop((74, 226, 406, 258)).get_flattened_data())
+                        found.crop((74, 181, 406, 213)).get_flattened_data())
         missing_ink = sum(p != (0, 0, 0) for p in
-                          missing.crop((74, 226, 406, 258)).get_flattened_data())
+                          missing.crop((74, 181, 406, 213)).get_flattened_data())
         self.assertGreater(found_ink, 400, "a known address must be drawn")
         self.assertGreater(missing_ink, 0, "a missing address must draw a dash")
         self.assertLess(missing_ink, found_ink // 3,
                         "the dash must be far less ink than an address")
+        # POWER and CLOCK value rows, same derivation: label row k sits at
+        # firstLineY 100 + k*lineGap 57 and its value 24 below, cropped one
+        # value-line (32 px) tall. POWER is k=2: 100 + 114 + 24 = 238..270,
+        # ending just before the CLOCK label at 100 + 3*57 = 271. CLOCK is
+        # k=3: 100 + 171 + 24 = 295..327. Measured: found 2736 / 1126 px,
+        # missing 42 / 42 (the dash, no label bleed).
+        for row, box in (("POWER", (74, 238, 406, 270)),
+                         ("CLOCK", (74, 295, 406, 327))):
+            with self.subTest(row=row):
+                row_found = sum(p != (0, 0, 0) for p in
+                                found.crop(box).get_flattened_data())
+                row_missing = sum(p != (0, 0, 0) for p in
+                                  missing.crop(box).get_flattened_data())
+                self.assertGreater(row_found, 400, f"a known {row} must be drawn")
+                self.assertGreater(row_missing, 0,
+                                   f"a missing {row} must draw a dash")
+                self.assertLess(row_missing, row_found // 3,
+                                f"a missing {row} is a dash, not a value")
         # BACK clears the values: the band just above it stays black.
-        # (design: last value ends ~258, backY 285.)
+        # (design: last value ends 100 + 3*57 + 24 + 27 = 322, backY 340.)
         for image in (found, missing):
             with self.subTest(image=image):
-                gap = image.crop((74, 262, 406, 282))
+                gap = image.crop((74, 325, 406, 338))
                 self.assertTrue(
                     all(p == (0, 0, 0) for p in gap.get_flattened_data()),
                     "the last value must clear the BACK control")
@@ -1345,7 +1397,7 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         for name, active_index in cases:
             with self.subTest(name=name):
                 image = self.image(name)
-                runs = dot_runs(image, PAGER_ROW_Y)
+                runs = dot_runs(image, PAGER_ROW_Y, PAGER_ROW_SCAN_X_END)
                 self.assertEqual(len(runs), SCREEN_VIEWS)
                 widths = [end - start + 1 for start, end in runs]
                 self.assertEqual(widths[active_index], 18)
@@ -1358,9 +1410,146 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         # added; create_pager now derives it. Assert the drawn row really is
         # centred, not just that the arithmetic in the header looks right.
         runs = dot_runs(self.image("torget-vibepulse-value-both.bmp"),
-                        PAGER_ROW_Y)
+                        PAGER_ROW_Y, PAGER_ROW_SCAN_X_END)
         left, right = runs[0][0], runs[-1][1]
         self.assertLessEqual(abs((left + right + 1) - 480), 2)
+
+    # -- Battery badge (Task 4/6, design 2026-09-24) -------------------------
+    # BATTERY_BADGE_BOX is the real root box (373..458, 454..470); crop with
+    # 4px slack on every side so anti-aliased edges stay inside the crop.
+    BADGE_CROP = (BATTERY_BADGE_BOX[0] - 4, BATTERY_BADGE_BOX[1] - 4,
+                  BATTERY_BADGE_BOX[2] + 4, BATTERY_BADGE_BOX[3] + 4)
+
+    def test_battery_badge_charging_is_green_bottom_right(self):
+        """The badge lives bottom-right on every page and reads charge as
+        green. Measured on a real capture (/tmp/caps6, this task): the crop
+        has 155 green-classified pixels and 421 total non-black ink (outline
+        + yellow bolt + green fill + white-on-dark percent text); thresholds
+        below sit at roughly half of each so the test survives a 1px shift
+        but fails if the badge disappears or loses its fill colour."""
+        image = self.image("torget-vibepulse-battery-charging.bmp")
+        badge = image.crop(self.BADGE_CROP).get_flattened_data()
+        green = sum(1 for r, g, b in badge if g > 150 and r < 170 and b < 130)
+        self.assertGreater(green, 75, "a charging badge draws a green fill")
+        ink = sum(1 for p in badge if p != (0, 0, 0))
+        self.assertGreater(ink, 210, "the badge draws outline, bolt and percent")
+
+    def test_battery_badge_critical_is_red_and_page_dots_untouched(self):
+        """Measured on a real capture: 55 red-classified pixels in the crop
+        (the fill sliver is only a few pixels wide at 4%, so the percent
+        text itself is tinted red too); threshold is roughly half."""
+        image = self.image("torget-vibepulse-battery-critical.bmp")
+        badge = image.crop(self.BADGE_CROP).get_flattened_data()
+        red = sum(1 for r, g, b in badge if r > 150 and g < 110 and b < 100)
+        self.assertGreater(red, 27, "a critical badge draws a red fill")
+        # The pager stays centred and unaffected (design: PAGER_Y 456); scan
+        # only up to PAGER_ROW_SCAN_X_END so the badge itself (same row)
+        # doesn't get counted as extra dots.
+        charging = self.image("torget-vibepulse-battery-charging.bmp")
+        self.assertEqual(dot_runs(image, PAGER_ROW_Y, PAGER_ROW_SCAN_X_END),
+                         dot_runs(charging, PAGER_ROW_Y, PAGER_ROW_SCAN_X_END),
+                         "the badge must not move the page dots")
+
+    def test_battery_badge_full_keeps_its_percent_sign(self):
+        """"100%" is the widest number the badge draws. At PCT_W 34 the
+        label wrapped and clipped the "%" onto an invisible second line.
+        Split the percent zone into glyph groups (runs of inked columns); the
+        first three are "1", "0", "0" and the "%" must follow them inside the
+        zone. Measured on a real capture: groups 377-383, 385-391, 393-399,
+        401-411 and 66 px of ink right of the digits (0 with the old width,
+        where the wrapped "100" sat at 390-412); threshold is half."""
+        image = self.image("torget-vibepulse-battery-full.bmp")
+        zx0, zx1 = BATTERY_PCT_ZONE_X
+        y0, y1 = BATTERY_BADGE_BOX[1], BATTERY_BADGE_BOX[3] + 1
+        inked = [any(image.getpixel((x, y)) != (0, 0, 0) for y in range(y0, y1))
+                 for x in range(zx0, zx1)]
+        groups, start = [], None
+        for i, on in enumerate(inked + [False]):
+            if on and start is None:
+                start = zx0 + i
+            elif not on and start is not None:
+                groups.append((start, zx0 + i - 1))
+                start = None
+        self.assertGreaterEqual(len(groups), 3, f"digits of 100 missing: {groups}")
+        digits_end = groups[2][1]
+        sign = sum(image.getpixel((x, y)) != (0, 0, 0)
+                   for x in range(digits_end + 1, zx1) for y in range(y0, y1))
+        self.assertGreater(sign, 33, "the % after 100 must be drawn, not wrapped away")
+
+    def _assert_badge_crop_black(self, name, why):
+        badge = self.image(name).crop(self.BADGE_CROP).get_flattened_data()
+        ink = sum(1 for p in badge if p != (0, 0, 0))
+        self.assertEqual(ink, 0, f"{name}: {why} ({ink} non-black px)")
+
+    def test_battery_badge_hidden_under_needs_you(self):
+        """Needs You lives in the app tree, BELOW the top layer the badge is
+        on, so z-order alone paints the badge over the takeover. The host
+        must cover it (tk_agent_monitor_takeover_visible in the predicate).
+
+        The takeover's own rounded Claude frame (inset 14) crosses the badge
+        box, so the crop is not all black: measured 205 accent px with the
+        badge hidden, 308 with it drawn. Every non-black pixel must therefore
+        be the accent #D97757 blended over black; the badge's grey outline,
+        yellow bolt and green/red fill all break that ratio."""
+        accent = (217, 119, 87)
+        name = "torget-vibepulse-needs-you-question.bmp"
+        badge = self.image(name).crop(self.BADGE_CROP).get_flattened_data()
+        foreign = []
+        for p in badge:
+            if max(p) < 24:
+                continue  # the faintest anti-aliased edge carries no hue
+            if p[0] == 0:
+                foreign.append(p)  # no red at all: cannot be the accent
+                continue
+            if (abs(p[1] / p[0] - accent[1] / accent[0]) > 0.08
+                    or abs(p[2] / p[0] - accent[2] / accent[0]) > 0.08):
+                foreign.append(p)
+        self.assertEqual(
+            foreign, [],
+            f"{name}: the badge must hide while Needs You owns the glass")
+
+    def test_battery_badge_hidden_under_boot_screen(self):
+        """The badge is created first on the top layer, so the boot overlay
+        (created later on the same layer) paints over it until it tears
+        itself down."""
+        self._assert_badge_crop_black(
+            "torget-boot-cold.bmp",
+            "the boot screen must sit above the badge")
+
+    def test_battery_badge_unknown_is_outline_only(self):
+        """torget-vibepulse-claude-fable.bmp is the very first static-QA
+        frame, captured before any battery fixture is applied (Task 4 fixed
+        a bug where the badge drew coloured/garbage state at creation).
+        Measured on a real capture: the crop has 141 exact 0xBBBBBB outline
+        pixels, 16 exact 0x8A8F98 dash pixels, plus anti-aliased blends of
+        those two greys toward black (176/94/55 grey, and blends of
+        0x8A8F98) — no green, red, yellow or white, and no ink left of the
+        icon. Re-measured after PCT_W 34 -> 40: the root moved 6 px left but
+        the bolt (x=417) and body did not, so the leftmost real ink is still
+        x=429 and the percent label ends at the bolt, x=417 exclusive."""
+        image = self.image("torget-vibepulse-claude-fable.bmp")
+        x0, y0, x1, y1 = self.BADGE_CROP
+        badge = image.crop(self.BADGE_CROP).get_flattened_data()
+
+        outline_grey = sum(1 for p in badge if p == (0xBB, 0xBB, 0xBB))
+        dash_grey = sum(1 for p in badge if p == (0x8A, 0x8F, 0x98))
+        self.assertGreater(outline_grey, 70, "the outline must actually be drawn")
+        self.assertGreater(dash_grey, 8, "the dash must actually be drawn")
+
+        for p in badge:
+            if p == (0, 0, 0):
+                continue
+            # No colour: brighter than the outline grey, or any chroma
+            # (green/red/yellow/white all trip one of these), is forbidden.
+            self.assertLessEqual(max(p), 0xBB,
+                                  f"unexpected bright/coloured pixel {p}")
+            self.assertLessEqual(max(p) - min(p), 14,
+                                  f"unexpected chromatic pixel {p}")
+
+        for x in range(x0, BATTERY_PCT_ZONE_X[1] + 1):
+            for y in range(y0, y1):
+                self.assertEqual(image.getpixel((x, y)), (0, 0, 0),
+                                  "no percent text before any fixture is applied")
 
     # -- Needs You v2 takeover: pinned to the approved-direction geometry ----
     NY_CLAUDE = (217, 119, 87)   # #D97757

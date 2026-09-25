@@ -8,7 +8,7 @@
 # torget_ota: bootens hälsogrind (boot_health.h) och KEY3:s underhållshåll.
 # torget_wifi: nätverkslistan i NVS + setupfönstret som lägger till en ny
 # plats utan ombygge (docs/wifi.md).
-set(TORGET_MAIN_REQUIRES torget_app app_tokens torget_ota torget_wifi torget_board)
+set(TORGET_MAIN_REQUIRES torget_app app_tokens torget_ota torget_wifi torget_board torget_power)
 # OBS $ENV{}: den här filen körs TVÅ gånger — en gång i ESP-IDF:s
 # early-expansion (då REQUIRES läses ut) och en gång i det riktiga bygget. I
 # expansionspasset syns INTE cache-/normalvariablerna som rot-CMakeLists.txt
@@ -32,6 +32,7 @@ idf_component_register(
        "../platform/wifi_status_assets.c"
        "../platform/boot_screen.c"
        "../platform/settings_menu.c"
+       "../platform/battery_badge.c"
        "../platform/button_arbitration.c"
   # ".." ger `#include "secrets.h"` (gitignorad, kopieras ur secrets.h.example)
   INCLUDE_DIRS "." ".." "../platform"

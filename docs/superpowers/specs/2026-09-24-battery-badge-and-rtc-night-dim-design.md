@@ -99,10 +99,11 @@ compile them unchanged.
 
 An LVGL widget on `lv_layer_top()` anchored bottom-right at the footer
 baseline with the same right margin as the "TO RESET" label. It knows only a
-badge state and an optional percentage. It hides itself while a takeover
-owns the glass (UPDATE READY, Needs You, WiFi setup, OTA transfer) and while
-SETTINGS shows a sub-view that draws over the footer. It redraws only on a
-state change.
+badge state and an optional percentage. It is seen on every app page; it
+hides itself while a takeover owns the glass (UPDATE READY, Needs You, WiFi
+setup, OTA transfer, the completion pulse), and it is covered by the SETTINGS overlay for as long
+as the menu is open, since `settings_menu.c` keeps itself in the foreground
+every tick. It redraws only on a state change.
 
 ### `main/main.c`
 
@@ -123,8 +124,9 @@ state change.
 
 Builds `battery_policy`, `night_policy` and `battery_badge`. Key `B` steps a
 fake sample through: unknown → charging 71 % → full → on battery 64 % → low
-18 % → critical 4 %. Key `N` toggles the night schedule as active. The static
-QA matrix gains four frames (badge charging, badge critical, ABOUT with the
+18 % → critical 4 %. Key `N` is already taken (the app switch), so the
+night-schedule toggle key is deferred to part B with a free key. The static
+QA matrix gains five frames (badge charging, badge full, badge critical, ABOUT with the
 new rows, LABS with NIGHT DIM). The hardware drivers are not built on the
 host.
 
@@ -165,7 +167,7 @@ is the last physical step below and the reason for the option.
 - Default window **23:00–07:00 local time**, level `BRIGHT_NIGHT`.
 - Three `#define`s in `secrets.h` with defaults in the code:
   `TG_NIGHT_START_HHMM` (2300), `TG_NIGHT_END_HHMM` (0700),
-  `TG_NIGHT_ENABLED_DEFAULT` (1). An unchanged `secrets.h` gives the default.
+  `TK_NIGHT_ENABLED_DEFAULT` (1). An unchanged `secrets.h` gives the default.
 - LABS row **NIGHT DIM** toggles it; the choice persists through the existing
   `labs_store` NVS path with the other LABS switches. Default on for new
   installs, as the owner chose.
@@ -186,7 +188,10 @@ is the last physical step below and the reason for the option.
     `NO BATTERY`
   - `CLOCK`: `RTC + NTP`, `RTC ONLY`, `NTP ONLY`, `NOT SET`
   Four rows plus BACK fit by reducing `SETTINGS_ABOUT_LINE_GAP` from 62 to
-  50 px; the simulator frame is the review artifact before any flash.
+  57 px (not the rounder 50: FIRMWARE's git-describe value has a lowercase
+  "g" descender that the simulator capture showed touching the ADDRESS
+  label below it at 50-56 px — 57 is the smallest gap that clears it by
+  >= 6 px); the simulator frame is the review artifact before any flash.
 - **LABS** gains `NIGHT DIM` in the same list as the other switches.
 
 Out of scope, deliberately: a settings page for the schedule, battery

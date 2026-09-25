@@ -688,7 +688,7 @@ controls, not part of normal use. Hold KEY3 for three seconds and
   &nbsp;
   <img src="docs/img/vibepulse-settings-no-address.png" width="31%" alt="The same menu on a panel with no network: UPDATE is greyed out while WIFI, LABS and ABOUT stay lit">
   &nbsp;
-  <img src="docs/img/vibepulse-settings-about.png" width="31%" alt="The ABOUT page showing only the firmware version and the panel address, with a BACK control">
+  <img src="docs/img/vibepulse-settings-about.png" width="31%" alt="The ABOUT page showing the firmware version, the panel address, POWER and CLOCK, with a BACK control">
 </p>
 <p align="center"><em>Real 480×480 frames from the shared LVGL firmware renderer: the menu, the same menu on a panel with no network, and ABOUT.</em></p>
 
@@ -698,9 +698,9 @@ controls, not part of normal use. Hold KEY3 for three seconds and
   [Take it with you](#take-it-with-you).
 - **LABS** saves optional display features; restart to apply them. See
   [Vibe Labs](#vibe-labs-start-small-add-later).
-- **ABOUT** shows the firmware version and the panel's address, and nothing
-  else. No token, no device key, no password: every line on it is already in
-  the logs or on the glass somewhere else.
+- **ABOUT** shows the firmware version, the panel's address, and POWER and
+  CLOCK rows. No token, no device key, no password: every line on it is
+  already in the logs or on the glass somewhere else.
 
 **The menu replaced a guess.** The same hold used to open one window or the
 other depending on whether the panel happened to have an address. The panel
@@ -740,6 +740,35 @@ cannot keep.
 > (`v1.0.0-67-ge51b79f`), but the static on-panel review — §3 of the manual
 > test — has not been run, so nothing here is a physical verification; that
 > review is the next gate.
+
+### Battery badge
+
+A 2.16 panel with the optional 3.7 V cell fitted shows it bottom-right
+on every page: green with a bolt on USB, white by percentage on the
+cell, yellow at 20 %, red and pulsing at 5 %. The percentage is the
+PMU's own fuel gauge, never an estimate; when the PMU cannot be read or
+reports no battery, the badge draws only its outline with a dash; a
+missing gauge value on the cell draws the outline without a number.
+SETTINGS → ABOUT carries the same reading live — state, percentage, and
+voltage while on the cell. Brightness is already capped at the night
+level below 20 % battery, and a NIGHT DIM row lands in LABS alongside
+it, but the schedule that row will control is not wired yet — it ships
+in the next step. The charge profile stays at the PMU's defaults; see
+the design in
+[`docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-night-dim-design.md`](docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-night-dim-design.md).
+
+<p align="center">
+  <img src="docs/img/vibepulse-battery-charging.png" width="31%" alt="Week page with a green charging badge and 71 % bottom-right">
+  &nbsp;
+  <img src="docs/img/vibepulse-battery-critical.png" width="31%" alt="Week page with a red pulsing critical badge and 4 % bottom-right">
+</p>
+<p align="center"><em>Real 480×480 simulator frames: charging on USB at 71 %, and critical at 4 %.</em></p>
+
+> **Evidence, honestly:** these frames come from the shared LVGL
+> renderer in the simulator; the policy (states, hysteresis, dwell, cap)
+> and the ABOUT texts are host-tested, and the frames are pinned. The
+> feature is in source and simulator-reviewed; it has not been
+> physically verified on a panel with a cell fitted.
 
 ## Over-the-air updates
 
@@ -926,8 +955,9 @@ that build and remain CI-built and **not flashed**.
 
 Keys: `[` / `]` change VibePulse page, `S` cycles agent status, `M` cycles
 Max Tracker fixtures, `T` re-feeds tokens, `G` simulates a new GitHub star,
-`N` moves to the next app, `L` opens the launcher, and `1`-`4` pick a
-Solelkollen fixture when that companion is checked out.
+`N` moves to the next app, `L` opens the launcher, `B` steps the battery
+badge through unknown, charging, full, on battery, low and critical, and
+`1`-`4` pick a Solelkollen fixture when that companion is checked out.
 
 `K` is KEY3 itself, polled raw rather than on an edge, so the bench drives
 the real time gesture: hold `K` for three seconds and SETTINGS opens, release
