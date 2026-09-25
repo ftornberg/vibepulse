@@ -750,11 +750,16 @@ PMU's own fuel gauge, never an estimate; when the PMU cannot be read or
 reports no battery, the badge draws only its outline with a dash; a
 missing gauge value on the cell draws the outline without a number.
 SETTINGS → ABOUT carries the same reading live — state, percentage, and
-voltage while on the cell. Brightness is already capped at the night
-level below 20 % battery, and a NIGHT DIM row lands in LABS alongside
-it, but the schedule that row will control is not wired yet — it ships
-in the next step. The charge profile stays at the PMU's defaults; see
-the design in
+voltage while on the cell. Brightness is capped at the night level below
+20 % battery, and the LABS row NIGHT DIM dims the glass to that level on a
+schedule, 23:00–07:00 local by default, whenever the panel has a valid
+clock. That clock now comes from the battery-backed RTC at boot when its
+reading is trustworthy, and from NTP once the network is up; every NTP
+sync is written back to the RTC, and ABOUT's CLOCK row names the source
+(`RTC + NTP`, `RTC ONLY`, `NTP ONLY`, `NOT SET`). Local time follows
+`TG_TIMEZONE` in `secrets.h` (Europe/Stockholm rules by default), which
+also makes the RUNS OUT line local rather than UTC. The charge profile
+stays at the PMU's defaults; see the design in
 [`docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-night-dim-design.md`](docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-night-dim-design.md).
 
 <p align="center">
@@ -768,7 +773,10 @@ the design in
 > renderer in the simulator; the policy (states, hysteresis, dwell, cap)
 > and the ABOUT texts are host-tested, and the frames are pinned. The
 > feature is in source and simulator-reviewed; it has not been
-> physically verified on a panel with a cell fitted.
+> physically verified on a panel with a cell fitted. The RTC boot time
+> and the night schedule are likewise host-tested and unverified on the
+> panel: the first boot on this firmware logs `RTC opålitlig` until the
+> first NTP write-back, and the second boot is the real test.
 
 ## Over-the-air updates
 
