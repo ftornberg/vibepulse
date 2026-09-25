@@ -1891,6 +1891,62 @@ static int run_vibepulse_labs_qa(bool catalogue) {
   return capture_failures == 0 ? 0 : 1;
 }
 
+#ifdef TORGET_HAVE_TIME
+#include "app_time.h"
+#include "time_core.h"
+
+static int sim_app_index(const char *name) {
+  for (int i = 0; i < torget_app_count; i++)
+    if (strcmp(torget_apps[i]->name, name) == 0) return i;
+  return -1;
+}
+
+static void time_frame(int rot, const char *tag) {
+  sim_orientation = rot;
+  time_app_qa_refresh();
+  dump_frame(tag);
+}
+
+/* TID i varje tillstånd som specen listar. Allt går genom samma vägar som en
+ * touch och tickern: orienteringen är tangent R:s variabel, trycken är
+ * on_tap/on_preset, och klockan skjuts fram i stället för att vänta ut 25
+ * minuter. Exakta 480 x 480-ramar. */
+static int run_time_app_captures(void) {
+  int idx = sim_app_index("TID");
+  if (idx < 0) return 2;
+  sim_wifi_signal_bars = 3;
+  torget_wifi_status_set_mode(TG_WIFI_STATUS_NORMAL);
+  torget_wifi_status_foreground();
+  torget_app_show(idx);
+
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock");
+  time_app_qa_time_unset(true);
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock-unset");
+  time_app_qa_time_unset(false);
+
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-idle");
+  time_app_qa_tap();
+  time_app_qa_advance(3LL * 60 * 1000000 + 12LL * 1000000);
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-running");
+  time_app_qa_tap();
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-paused");
+  time_app_qa_tap();
+  time_app_qa_advance(30LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-done");
+  time_frame(TG_TIME_ROT_CLOCK, "time-done-over-clock");
+  time_app_qa_tap();
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-break");
+
+  time_frame(TG_TIME_ROT_TIMER, "time-timer-select");
+  time_app_qa_preset(1);
+  time_app_qa_advance(7LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_TIMER, "time-timer-running");
+  time_app_qa_advance(40LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_TIMER, "time-timer-done");
+  return capture_failures == 0 ? 0 : 1;
+}
+#endif
+
 int main(int argc, char **argv) {
   /* Radbuffrat även vid pipe: fixtureloggen ska överleva en kill. */
   setvbuf(stdout, NULL, _IOLBF, 0);
@@ -1918,6 +1974,11 @@ int main(int argc, char **argv) {
   torget_settings_create();
   torget_battery_badge_create();
   torget_ota_ui_create();
+
+#ifdef TORGET_HAVE_TIME
+  if (argc == 2 && strcmp(argv[1], "--time-app-captures") == 0)
+    return run_time_app_captures();
+#endif
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-labs-qa") == 0)
     return run_vibepulse_labs_qa(false);

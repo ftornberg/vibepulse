@@ -24,9 +24,9 @@ extern const lv_font_t plex_ui_21;
 /* Läget innanför ringen. Förvalen kräver plats: siffran flyttar upp och
  * uppmaningen hamnar mellan siffran och förvalen. */
 #define BIG_OFFSET_Y          (-8)
-#define BIG_OFFSET_Y_PRESETS  (-70)
+#define BIG_OFFSET_Y_PRESETS  (-54)
 #define HINT_Y                300
-#define HINT_Y_PRESETS        236
+#define HINT_Y_PRESETS        232
 
 static struct {
   tg_time_view_actions actions;
@@ -189,15 +189,16 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
   lv_obj_remove_flag(reset_text, LV_OBJ_FLAG_CLICKABLE);
   touchable(v.reset, on_reset, NULL);
 
-  /* KLAR: ett helskärmslager (fångar trycket) med en indragen ram — den
-   * rundade kåpan klipper en kantnära ram, jämför batteribrickans marginal. */
+  /* KLAR: ett helskärmslager (fångar trycket) med en full cirkel i ringens
+   * läge — en rund ram klipps inte av den rundade kåpan och krockar inte med
+   * batteribrickan i hörnet, som en rektangulär ram gjorde. */
   v.done_layer = plain(root, 480, 480);
   lv_obj_set_pos(v.done_layer, 0, 0);
   lv_obj_set_style_bg_color(v.done_layer, COL_BLACK, 0);
   lv_obj_set_style_bg_opa(v.done_layer, LV_OPA_COVER, 0);
   lv_obj_t *frame = plain(v.done_layer, 448, 448);
   lv_obj_set_pos(frame, 16, 16);
-  lv_obj_set_style_radius(frame, 32, 0);
+  lv_obj_set_style_radius(frame, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_border_width(frame, 4, 0);
   lv_obj_set_style_border_color(frame, COL_ACCENT, 0);
   v.done_caption = label(v.done_layer, &plex_headline_48, COL_MUTED, 130);

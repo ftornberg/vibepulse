@@ -414,6 +414,7 @@ cd ..
 "$PYTHON_BIN" test/test_vibepulse_studio_wiring.py
 "$PYTHON_BIN" test/test_vibepulse_visual_landmarks.py
 "$PYTHON_BIN" test/test_labs_render.py
+"$PYTHON_BIN" test/test_time_app_sim.py
 "$PYTHON_BIN" test/test_docs_frame_drift.py
 "$PYTHON_BIN" test/test_board_profiles.py
 "$PYTHON_BIN" test/test_shared_amoled_skill.py
