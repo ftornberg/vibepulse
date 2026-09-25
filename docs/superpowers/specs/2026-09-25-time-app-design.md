@@ -103,6 +103,23 @@ time source the platform already provides.
 - **Brightness.** The app never calls `torget_keep_awake`. The platform dims as
   usual, so the clock becomes a quiet night light, and touch wakes the glass.
 
+## Ring (owner request, 2026-09-25)
+
+The digital time sits in the middle of the glass and a thin ring runs around
+it in every mode (an `lv_arc`, 10 px wide, inset 16 px, drawn clockwise from
+12 o'clock; no transform layer or canvas):
+
+- **Clock:** the ring shows the seconds of the current minute. It is never
+  empty while the time is valid (`(second + 1) / 60`, full at :59) and is
+  hidden while the time is invalid.
+- **Pomodoro and timer:** the ring shows the remaining fraction of the run,
+  full at the start and shrinking to nothing, rounded up so a running timer
+  never shows an empty ring. It is hidden while idle and under the DONE marker.
+
+Everything else on the face stays inside the ring's inner edge (radius about
+214 px), because the rounded bezel clips edge-near graphics. This adds no
+network, no sound and no hardware claim.
+
 ## Step 2: sound (separate spec and plan)
 
 Playing a signal at the end of a timer is a platform task, not an app change.
