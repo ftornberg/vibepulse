@@ -307,6 +307,13 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 /tmp/torget-time-core-test
 
 cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/app_time/time_core.c \
+  ../components/app_time/time_present.c \
+  test_time_present.c \
+  -o /tmp/torget-time-present-test
+/tmp/torget-time-present-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/torget_power/clock_policy.c \
   test_clock_policy.c \
   -o /tmp/torget-clock-policy-test
