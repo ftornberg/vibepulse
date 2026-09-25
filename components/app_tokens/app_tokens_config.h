@@ -82,4 +82,11 @@
 #define TG_NIGHT_END_HHMM 700
 #endif
 
+/* The firmware's local time, as a POSIX TZ string. The RTC and SNTP keep
+ * UTC; this only decides what "23:00" means for the night schedule and
+ * what the RUNS OUT line prints. Default: Europe/Stockholm rules. */
+#ifndef TG_TIMEZONE
+#define TG_TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3"
+#endif
+
 #endif

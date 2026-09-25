@@ -29,8 +29,22 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   caps brightness at the night level below 20 %, and lists power in
   SETTINGS → ABOUT. The AXP2101 charge profile is untouched; the only
   write enables the voltage measurement.
-  A NIGHT DIM row in LABS lands with it; the schedule it controls ships
-  in the next step.
+  A NIGHT DIM row in LABS lands with it; the schedule follows below.
+- **RTC clock and scheduled night dimming.** The 2.16 panel takes its time
+  from the onboard PCF85063 on a power-on boot when the reading is
+  trustworthy — oscillator flag clear, year 2026 or later, and the chip's
+  RAM byte marked by this firmware, so a vendor demo's local-time value is
+  never applied as UTC (its backup supply is on the schematic, not yet
+  verified through a power loss) — keeps a clock and its source over a
+  soft restart, writes
+  NTP time back to the RTC after every sync including the hourly resyncs,
+  and shows the clock source in SETTINGS → ABOUT. The LABS row NIGHT DIM now
+  dims the glass to the night level between `TG_NIGHT_START_HHMM` and
+  `TG_NIGHT_END_HHMM` (23:00–07:00 by default) whenever the clock is valid.
+  Local time comes from the new `TG_TIMEZONE` (Europe/Stockholm rules by
+  default), which also makes the RUNS OUT line local instead of UTC. The
+  schedule and the local RUNS OUT time apply on the 2.41 V2 too, once NTP
+  has synced: its NIGHT DIM row is the same switch. The V2 has no RTC path.
 - Owner photographs of the working 2.41 V2, disclosed Waveshare affiliate
   product links, and a [coming-soon hardware list](README.md#coming-soon--hardware-on-the-workbench).
   AMOLED 1.75/1.8/1.91 ports are planned; RGB matrix hardware is experimental.

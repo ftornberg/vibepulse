@@ -750,11 +750,17 @@ PMU's own fuel gauge, never an estimate; when the PMU cannot be read or
 reports no battery, the badge draws only its outline with a dash; a
 missing gauge value on the cell draws the outline without a number.
 SETTINGS → ABOUT carries the same reading live — state, percentage, and
-voltage while on the cell. Brightness is already capped at the night
-level below 20 % battery, and a NIGHT DIM row lands in LABS alongside
-it, but the schedule that row will control is not wired yet — it ships
-in the next step. The charge profile stays at the PMU's defaults; see
-the design in
+voltage while on the cell. Brightness is capped at the night level below
+20 % battery, and the LABS row NIGHT DIM dims the glass to that level on a
+schedule, 23:00–07:00 local by default, whenever the panel has a valid
+clock. That clock now comes from the onboard RTC at boot when its reading
+is trustworthy (the chip has a backup supply on the schematic, not yet
+verified through a power loss), and from NTP once the network is up; every
+NTP sync is written back to the RTC, and ABOUT's CLOCK row names the source
+(`RTC + NTP`, `RTC ONLY`, `NTP ONLY`, `NOT SET`). Local time follows
+`TG_TIMEZONE` in `secrets.h` (Europe/Stockholm rules by default), which
+also makes the RUNS OUT line local rather than UTC. The charge profile
+stays at the PMU's defaults; see the design in
 [`docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-night-dim-design.md`](docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-night-dim-design.md).
 
 <p align="center">
@@ -768,7 +774,16 @@ the design in
 > renderer in the simulator; the policy (states, hysteresis, dwell, cap)
 > and the ABOUT texts are host-tested, and the frames are pinned. The
 > feature is in source and simulator-reviewed; it has not been
-> physically verified on a panel with a cell fitted.
+> physically verified on a panel with a cell fitted. The RTC boot time
+> and the night schedule are likewise host-tested and unverified on the
+> panel. The RTC only ever sets the clock on a true power-on boot: system
+> time survives soft restarts (OTA, panic, watchdog), so those boots log
+> `klockan behållen över omstarten` and leave the RTC alone. The first
+> power-on boot on this firmware logs `RTC opålitlig` (a fresh chip says
+> year 2000) until the first NTP write-back; the real test is a later
+> power-on boot with no network, which must log `tid från RTC`. The
+> schedule and the local RUNS OUT time also apply on the 2.41 V2 once NTP
+> has synced; that board has no RTC path.
 
 ## Over-the-air updates
 

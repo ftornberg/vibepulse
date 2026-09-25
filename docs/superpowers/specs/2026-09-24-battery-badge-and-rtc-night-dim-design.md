@@ -82,8 +82,11 @@ behaviour must be proven on the unit before it is enabled.
   shutdown sequence. Charge current, charge termination voltage and thermal
   limits are never touched.
 - **`pcf85063.c/.h`** — reads and writes the seven time/date registers and
-  reads the oscillator-stop flag (`OS`). No alarm, no timer, no interrupt
-  handling in this version.
+  reads the oscillator-stop flag (`OS`), together with the chip's RAM byte,
+  which carries a "written by this firmware, in UTC" mark. The only
+  configuration writes clear `STOP` and the 12-hour bit if either is set
+  (and then blank the mark). No alarm, no timer, no interrupt handling in
+  this version.
 - **`battery_policy.c/.h`** — pure, host-tested. Input: a sample
   (`present`, `vbus`, `charging`, `percent`, `mv`, `valid`) and monotonic
   time. Output: badge state, brightness cap, and a `shutdown` decision. All
@@ -110,9 +113,13 @@ every tick. It redraws only on a state change.
 - **`power_task`** (low priority, 5 s period): read AXP2101, feed
   `battery_policy`, publish the badge state to the LVGL task through the
   existing tick path, and fold the brightness cap into the brightness target.
-- **Boot:** before WiFi, read the RTC. If `OS` is clear and the year is 2026
-  or later, call `settimeofday` and log `tid från RTC`. Otherwise log
-  `RTC opålitlig` once and proceed exactly as today.
+- **Boot:** before WiFi, read the RTC. If `OS` is clear, the year is 2026
+  or later and the RAM byte carries the UTC mark (so the time was written by
+  this firmware, not by a vendor demo in local time), call `settimeofday`
+  and log `tid från RTC`. Otherwise log `RTC opålitlig` once and proceed
+  exactly as today. A soft restart keeps the system clock and the clock's
+  provenance (in RTC no-init memory), so ABOUT and the schedule see the same
+  clock as before the restart.
 - **After each successful SNTP sync:** write the system time to the RTC once
   and log `RTC uppdaterad`. The comment claiming the RTC has no backup is
   replaced.
@@ -122,13 +129,15 @@ every tick. It redraws only on a state change.
 
 ### `sim/`
 
-Builds `battery_policy`, `night_policy` and `battery_badge`. Key `B` steps a
-fake sample through: unknown → charging 71 % → full → on battery 64 % → low
-18 % → critical 4 %. Key `N` is already taken (the app switch), so the
-night-schedule toggle key is deferred to part B with a free key. The static
-QA matrix gains five frames (badge charging, badge full, badge critical, ABOUT with the
-new rows, LABS with NIGHT DIM). The hardware drivers are not built on the
-host.
+Builds `battery_policy`, `night_policy`, `clock_policy` and `battery_badge`.
+Key `B` steps a fake sample through: unknown → charging 71 % → full → on
+battery 64 % → low 18 % → critical 4 %. The bench does not model panel
+brightness, so there is no night-schedule key; the schedule is pinned by the
+host tests of `night_policy` and by the transition log on the panel. The
+ABOUT frame's CLOCK row comes from `tg_clock_text`, the same pure function
+the panel uses. The static QA matrix gains five frames (badge charging,
+badge full, badge critical, ABOUT with the new rows, LABS with NIGHT DIM).
+The hardware drivers are not built on the host.
 
 ## Battery policy
 
@@ -177,6 +186,9 @@ is the last physical step below and the reason for the option.
 - A touch still raises brightness to `BRIGHT_DAY` for `WAKE_HOLD_US` (30 s)
   and it settles back while the window applies, matching today's wake
   behaviour.
+- Local time comes from `TG_TIMEZONE`, a POSIX TZ string defaulting to
+  Europe/Stockholm rules (`"CET-1CEST,M3.5.0,M10.5.0/3"`); the RTC and SNTP
+  keep UTC. Setting it also makes `RUNS OUT DDD HH:MM` local on the panel.
 
 ## Glass
 
@@ -213,7 +225,7 @@ history, and any battery field in `/api/*` or the relays.
   voltage or thermal registers. The registry names this as a constraint.
 - **The RTC can never move the clock backwards.** RTC time is applied only at
   boot while the system clock is unset. After SNTP the network always wins.
-  An RTC with `OS` set or a year before 2026 is ignored.
+  An RTC with `OS` set, a year before 2026, or no UTC mark is ignored.
 - **The simulator does not lie.** It runs the real policies on fake samples,
   so a simulator frame shows the same decision the firmware would make.
 

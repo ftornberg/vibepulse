@@ -67,6 +67,7 @@ add_executable(torget-sim
   ../platform/battery_badge.c
   ../components/torget_power/battery_policy.c
   ../components/torget_power/night_policy.c
+  ../components/torget_power/clock_policy.c
   ../main/registry.c
   ../components/app_tokens/app.c
   ../components/app_tokens/labs_features.c
