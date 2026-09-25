@@ -55,17 +55,20 @@ MT_STAT_COL_X = [MT_GRID_X + (i * MT_GRID_W) // 4 for i in range(4)]
 MT_STAT_COL_W = MT_GRID_W // 4  # 104
 PAGER_ROW_Y = 458  # PAGER_Y (456) + 2: inside the 6px-tall dot row
 # The battery badge (Task 4, design 2026-09-24) sits bottom-right on this
-# same row; pager-only scans stop short of its left edge (x=373).
-PAGER_ROW_SCAN_X_END = 370
+# same row; pager-only scans stop short of its left edge (x=345).
+PAGER_ROW_SCAN_X_END = 342
 # The badge's own footprint on lv_layer_top() (root pos/size in
-# platform/battery_badge.c: x 373..458, y 454..470 at BADGE_RIGHT_MARGIN 22 /
-# BADGE_Y 456; root width PCT_W 40 + 4 + 8 + 4 + 26 + 3 = 85). It lives permanently on that layer, so a check that the top
+# platform/battery_badge.c: x 345..430, y 454..470 at BADGE_RIGHT_MARGIN 50 /
+# BADGE_Y 456; root width PCT_W 40 + 4 + 8 + 4 + 26 + 3 = 85). The margin
+# was 22 until 2026-09-25, when the glass's rounded corner was seen to clip
+# the body and nub at x 429..458; one badge width (29 px) further in clears
+# it. It lives permanently on that layer, so a check that the top
 # layer is otherwise empty must mask this box out first.
-BATTERY_BADGE_BOX = (373, 454, 458, 470)
-# The percent label's own column range: root x 373 to the bolt at
-# 373 + PCT_W 40 + GAP 4 = 417 (exclusive). Widening PCT_W moved the root
+BATTERY_BADGE_BOX = (345, 454, 430, 470)
+# The percent label's own column range: root x 345 to the bolt at
+# 345 + PCT_W 40 + GAP 4 = 389 (exclusive). Widening PCT_W moved the root
 # left, not the bolt or the body, so the icon itself sits where it did.
-BATTERY_PCT_ZONE_X = (373, 417)
+BATTERY_PCT_ZONE_X = (345, 389)
 
 # The setup window's QR canvas — mirrors WIFI_OPEN_QR_* in
 # components/torget_wifi/wifi_setup_ui.c (also pinned by
@@ -138,8 +141,8 @@ def dot_runs(image, y, x_end=None):
     only content in the left/centre of this row — since the battery badge
     (Task 4, design 2026-09-24) sits bottom-right on the SAME row (PAGER_Y
     456), callers that want only the pager pass x_end below the badge's
-    left edge (BADGE_RIGHT_MARGIN 22 from x=480, badge width ~79 -> starts
-    at x=379; 370 leaves margin)."""
+    left edge (BADGE_RIGHT_MARGIN 50 from x=480, root width 85 -> starts
+    at x=345; 342 leaves margin)."""
     limit = image.width if x_end is None else x_end
     runs = []
     start = None
@@ -1417,8 +1420,7 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
     # -- Battery badge (Task 4/6, design 2026-09-24) -------------------------
     # BATTERY_BADGE_BOX is the real root box (373..458, 454..470); crop with
     # 4px slack on every side so anti-aliased edges stay inside the crop.
-    BADGE_CROP = (BATTERY_BADGE_BOX[0] - 4, BATTERY_BADGE_BOX[1] - 4,
-                  BATTERY_BADGE_BOX[2] + 4, BATTERY_BADGE_BOX[3] + 4)
+    BADGE_CROP = BATTERY_BADGE_BOX  # root x 345..430, y 454..470 (BADGE_RIGHT_MARGIN 50)
 
     def test_battery_badge_charging_is_green_bottom_right(self):
         """The badge lives bottom-right on every page and reads charge as
@@ -1433,6 +1435,27 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
         self.assertGreater(green, 75, "a charging badge draws a green fill")
         ink = sum(1 for p in badge if p != (0, 0, 0))
         self.assertGreater(ink, 210, "the badge draws outline, bolt and percent")
+
+    def test_battery_badge_clears_the_rounded_corner(self):
+        """The glass has rounded corners, and at BADGE_RIGHT_MARGIN 22 the
+        body and nub (x 429..458 on the pager row) sat inside the corner and
+        were clipped by the bezel — seen on the panel 2026-09-25. The badge
+        now ends one badge width earlier; nothing of it may be drawn in the
+        corner strip right of BATTERY_BADGE_BOX. Measured: the old pinned
+        frame had 235 lit pixels in that strip, the moved one has 0."""
+        for name in ("torget-vibepulse-battery-charging.bmp",
+                     "torget-vibepulse-battery-critical.bmp"):
+            with self.subTest(frame=name):
+                image = self.image(name)
+                x0 = BATTERY_BADGE_BOX[2] + 1
+                strip = image.crop((x0, 454, image.width, 471))
+                lit = [p for p in strip.get_flattened_data() if p != (0, 0, 0)]
+                self.assertEqual(
+                    len(lit), 0,
+                    f"{len(lit)} badge pixels at x>={x0} sit in the rounded corner")
+                ink = [p for p in image.crop(BATTERY_BADGE_BOX).get_flattened_data()
+                       if p != (0, 0, 0)]
+                self.assertGreater(len(ink), 210, "the badge itself still draws")
 
     def test_battery_badge_critical_is_red_and_page_dots_untouched(self):
         """Measured on a real capture: 55 red-classified pixels in the crop
@@ -1488,21 +1511,30 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
 
         The takeover's own rounded Claude frame (inset 14) crosses the badge
         box, so the crop is not all black: measured 205 accent px with the
-        badge hidden, 308 with it drawn. Every non-black pixel must therefore
-        be the accent #D97757 blended over black; the badge's grey outline,
-        yellow bolt and green/red fill all break that ratio."""
+        badge hidden, 308 with it drawn. Since the badge moved one width in
+        (2026-09-25, BADGE_RIGHT_MARGIN 50) the box's first row (y 454) also
+        touches the last row of the takeover's dim footer hint ("…TERMINAL",
+        COL_DIM #5C687B, right edge x 348). Every non-black pixel must
+        therefore be the accent #D97757 or that dim blue-grey, blended over
+        black; the badge's neutral grey outline, white percent, yellow bolt
+        and green/red fill all break both ratios."""
         accent = (217, 119, 87)
+        dim = (92, 104, 123)
         name = "torget-vibepulse-needs-you-question.bmp"
         badge = self.image(name).crop(self.BADGE_CROP).get_flattened_data()
+
+        def is_blend_of(p, ref):
+            return (abs(p[1] / p[0] - ref[1] / ref[0]) <= 0.08
+                    and abs(p[2] / p[0] - ref[2] / ref[0]) <= 0.08)
+
         foreign = []
         for p in badge:
             if max(p) < 24:
                 continue  # the faintest anti-aliased edge carries no hue
             if p[0] == 0:
-                foreign.append(p)  # no red at all: cannot be the accent
+                foreign.append(p)  # no red at all: neither accent nor dim
                 continue
-            if (abs(p[1] / p[0] - accent[1] / accent[0]) > 0.08
-                    or abs(p[2] / p[0] - accent[2] / accent[0]) > 0.08):
+            if not (is_blend_of(p, accent) or is_blend_of(p, dim)):
                 foreign.append(p)
         self.assertEqual(
             foreign, [],
