@@ -87,10 +87,10 @@ wrong value shows as a constant wrong face and is one number to change.
   on the glass is seen when TID is next opened. A beep needs a platform audio
   path (a codec backend, a physical speaker test and a display-DMA budget) and is
   a separate piece of work.
-- **Needs You is invisible while TID is showing.** The Needs You takeover is
-  built inside the VibePulse app's own page tree, so an alert from an agent does
-  not appear while TID is on the glass. Leave the panel on VibePulse while you
-  wait for an agent. Making it a platform-level overlay is a separate decision.
+- **Needs You takes the glass from TID.** When an agent needs you, the panel
+  switches to VibePulse so the question is seen, and returns to TID after the
+  answer, unless you switched app yourself meanwhile. A running TID timer keeps
+  counting underneath. (Simulator-verified; not yet seen on the glass.)
 - **With the buttons down the picture is garbled in every app.** Seen on the
   owner's 2.16 unit on 2026-09-25, VibePulse included: one of the auto-rotation's
   four MADCTL modes renders a distorted frame. That is a platform rotation
