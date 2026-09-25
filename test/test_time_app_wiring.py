@@ -64,4 +64,23 @@ main_cmake = (root / "main/CMakeLists.txt").read_text(encoding="utf-8")
 assert '"$ENV{TORGET_APP_TIME}" STREQUAL "1"' in main_cmake
 assert "app_time" in main_cmake and "TORGET_HAVE_TIME" in main_cmake
 
+# A component manifest changes dependencies.lock's manifest_hash, so EVERY firmware
+# build (also the default one) would re-solve the lock and bump unrelated drivers
+# (final review: espressif/esp_lcd_co5300 2.1.0 -> 2.2.0), dirty the tree and make
+# the OTA sender refuse the build. app_time gets LVGL from the graph instead.
+assert not (root / "components/app_time/idf_component.yml").exists(), (
+    "components/app_time must not carry an idf_component.yml (it re-solves "
+    "dependencies.lock); require lvgl__lvgl in its CMakeLists instead"
+)
+app_cmake = (root / "components/app_time/CMakeLists.txt").read_text(encoding="utf-8")
+assert "lvgl__lvgl" in app_cmake
+
+# The rotation constants are plain #defines in time_core.h; nothing forwards a
+# -D from idf.py/CMake to the compiler, so the docs must not promise it.
+docs = (root / "docs/time-app.md").read_text(encoding="utf-8")
+header = (root / "components/app_time/time_core.h").read_text(encoding="utf-8")
+assert "pass `-D`" not in docs and "-D vid bygget" not in header, (
+    "the TG_TIME_ROT_* override is a source edit, not a build flag"
+)
+
 print("OK: TID is opt-in, 2.16-only and taps are short clicks")

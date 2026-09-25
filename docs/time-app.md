@@ -70,7 +70,7 @@ build, so commit before any install.
 (`torget_orientation()`, quarter turns from boot) to a face:
 `TG_TIME_ROT_CLOCK`, `TG_TIME_ROT_POMODORO` and `TG_TIME_ROT_TIMER`. The
 defaults are a guess. After a first install, stand the panel on each side, note
-which face appears, and set the three values (or pass `-D` at build time). A
+which face appears, and edit the three `#define` values. A
 wrong value shows as a constant wrong face and is one number to change.
 
 ## Limits

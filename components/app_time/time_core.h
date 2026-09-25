@@ -23,7 +23,7 @@ typedef enum {
 
 /* Kvartsvarv från boot som auto-rotationen mäter (torget_orientation()).
  * Värdena är PROVISORISKA tills de mätts på enheten: ett fel visar sig som
- * konstant fel läge och rättas här (eller med -D vid bygget). Rotation 2
+ * konstant fel läge och rättas här (redigera de tre #define-raderna nedan). Rotation 2
  * (knappkanten nedåt) har inget eget läge och behåller det senaste. */
 #ifndef TG_TIME_ROT_CLOCK
 #define TG_TIME_ROT_CLOCK 0

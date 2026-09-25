@@ -4,6 +4,8 @@
 idf_component_register(
   SRCS "time_core.c" "time_present.c" "time_views.c" "app_time.c"
   INCLUDE_DIRS "."
-  REQUIRES torget_app)
+  # Ingen egen idf_component.yml: ett manifest ändrar dependencies.lock:s
+  # manifest_hash och får varje bygge att lösa om låset. LVGL finns redan i grafen.
+  REQUIRES torget_app lvgl__lvgl)
 
 target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_LVGL_H_INCLUDE_SIMPLE)
