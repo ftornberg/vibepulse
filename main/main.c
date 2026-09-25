@@ -51,6 +51,8 @@
 #include "battery_policy.h"
 #include "boot_health.h"
 #include "clock_policy.h"
+#include "labs_features.h"
+#include "night_policy.h"
 #include "boot_screen.h"
 #include "button_arbitration.h"
 #include "settings_menu.h"
@@ -90,6 +92,12 @@ static const char *TAG = "torget";
 #define BRIGHT_NIGHT     20
 #define BRIGHT_STEP_UP   8   /* per 100 ms-tick: 0→100 på 1,3 s */
 #define BRIGHT_STEP_DOWN 1   /* per 100 ms-tick: 100→20 på 8 s */
+
+/* Nattschemat (del B): en tredje källa till ljusmålet, bredvid
+ * inaktivitetsregeln och batteritaket. Lägsta källan vinner. */
+static const tg_night_schedule s_night_schedule = { TG_NIGHT_START_HHMM, TG_NIGHT_END_HHMM };
+static bool s_night_active;
+static bool s_night_logged_once;
 
 /* Delat tillstånd. Skrivs av apptaskarna (via torget_keep_awake under
  * UI-låset), läses av LVGL-tasken. */
@@ -908,6 +916,31 @@ static void tick_cb(lv_timer_t *t) {
   int target = ((now - s_last_activity_us) > NIGHT_AFTER_US
                 && (now - s_last_touch_us) > WAKE_HOLD_US)
                ? BRIGHT_NIGHT : BRIGHT_DAY;
+
+  /* Nattschemat: utvärderas på hel sekund, aldrig varje tick. Utan giltig
+   * klocka (varken RTC eller NTP) gäller det inte alls. */
+  static int64_t s_night_checked_us;
+  if (now - s_night_checked_us >= 1000000LL) {
+    s_night_checked_us = now;
+    time_t now_s = time(NULL);
+    struct tm lt;
+    localtime_r(&now_s, &lt);
+    bool time_valid = s_time_synced || s_rtc_applied;
+    bool night = tg_night_applies(&s_night_schedule,
+                                  tk_labs_active(TK_LABS_NIGHT_DIM),
+                                  time_valid, lt.tm_hour, lt.tm_min);
+    if (night != s_night_active || !s_night_logged_once) {
+      s_night_active = night;
+      s_night_logged_once = true;
+      ESP_LOGI(TAG, "natt: %s (%02d:%02d, schema %04d–%04d, %s)",
+               night ? "dimmar" : "dag", lt.tm_hour, lt.tm_min,
+               TG_NIGHT_START_HHMM, TG_NIGHT_END_HHMM,
+               time_valid ? "klocka giltig" : "klocka saknas");
+    }
+  }
+  if (s_night_active && (now - s_last_touch_us) > WAKE_HOLD_US && target > BRIGHT_NIGHT)
+    target = BRIGHT_NIGHT;
+
   /* Ljustaket från batteripolicyn: lägsta källan vinner, ingen kan lyfta. */
   int cap = s_batt_bright_cap;
   if (cap < target) target = cap;
