@@ -85,6 +85,8 @@ tg_batt_sample tg_axp2101_read(void) {
   s.charging = dir == 1;
   s.charge_done = chg == 4;
   s.mv = (int)(((v[0] & 0x1F) << 8) | v[1]);
-  s.percent = pct <= 100 ? (int)pct : -1;
+  /* Rimlighet mot spänningen är ren policy (tg_batt_gauge_percent), låst i
+   * test/test_battery_policy.c: 0 % på en cell över 3,5 V är ingen siffra. */
+  s.percent = tg_batt_gauge_percent((int)pct, s.mv);
   return s;
 }

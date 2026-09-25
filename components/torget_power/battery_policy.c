@@ -2,6 +2,12 @@
 
 #include <stdio.h>
 
+int tg_batt_gauge_percent(int raw_percent, int mv) {
+  if (raw_percent < 0 || raw_percent > 100) return -1;
+  if (raw_percent == 0 && mv >= TG_BATT_GAUGE_ZERO_IMPLAUSIBLE_MV) return -1;
+  return raw_percent;
+}
+
 static tg_batt_state next_state(const tg_batt_policy *p, const tg_batt_sample *s,
                                 int64_t now_us) {
   if (!s->present) return TG_BATT_UNKNOWN;

@@ -5,6 +5,14 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ## Unreleased
 
+### Fixed
+
+- A fuel gauge reading 0 % while the cell measures 3.5 V or more is treated
+  as "no number" instead of an empty battery. An unconfigured or disabled
+  gauge could otherwise walk the panel to LOW and, after 30 s, CRITICAL on a
+  full cell; with the shutdown of part C that would have powered it off.
+  Found in the owner's review of the part A plan (#5, point 2).
+
 ### Changed
 
 - **Claude and Codex approvals now share one shell-command classifier.**
