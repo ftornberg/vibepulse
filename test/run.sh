@@ -301,6 +301,19 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 /tmp/torget-night-policy-test
 
 cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/app_time/time_core.c \
+  test_time_core.c \
+  -o /tmp/torget-time-core-test
+/tmp/torget-time-core-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/app_time/time_core.c \
+  ../components/app_time/time_present.c \
+  test_time_present.c \
+  -o /tmp/torget-time-present-test
+/tmp/torget-time-present-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/torget_power/clock_policy.c \
   test_clock_policy.c \
   -o /tmp/torget-clock-policy-test
@@ -360,6 +373,7 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 "$PYTHON_BIN" test_project_star_assets.py
 "$PYTHON_BIN" test_target_tls_memory.py
 "$PYTHON_BIN" test_buddy_opt_in.py
+"$PYTHON_BIN" test_time_app_wiring.py
 "$PYTHON_BIN" test_lvgl_layer_safety.py
 "$PYTHON_BIN" test_lvgl_memory_config.py
 "$PYTHON_BIN" test_overlay_memory_budget.py
@@ -400,6 +414,7 @@ cd ..
 "$PYTHON_BIN" test/test_vibepulse_studio_wiring.py
 "$PYTHON_BIN" test/test_vibepulse_visual_landmarks.py
 "$PYTHON_BIN" test/test_labs_render.py
+"$PYTHON_BIN" test/test_time_app_sim.py
 "$PYTHON_BIN" test/test_docs_frame_drift.py
 "$PYTHON_BIN" test/test_board_profiles.py
 "$PYTHON_BIN" test/test_shared_amoled_skill.py

@@ -85,6 +85,12 @@ void torget_data_alive(void);
  * Kallas under torget_ui_lock(). */
 void torget_keep_awake(void);
 
+/* Panelens läge som auto-rotationen mäter det: kvartsvarv från boot (0-3),
+ * eller -1 när ingen rotation körs (2.41 V2 står fast, eller IMU:n svarade
+ * inte). Skrivskyddad — den ändrar aldrig rotationen. TID väljer läge efter
+ * den. Olika per värld: main/main.c (IMU) och sim/main.c (tangent R). */
+int torget_orientation(void);
+
 /* ---- plattforms-UI:t (delat, platform/torget_ui.c) ---------------------- */
 
 /* Bygg drift-lagret, alla appars rötter (via create i registret) och

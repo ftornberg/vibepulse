@@ -11,6 +11,12 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   `./sim/build/torget-sim --corner-probe` renders it, and
   `TG_CORNER_PROBE_AT_BOOT` in `secrets.h` shows it for two minutes after
   boot on one measuring OTA. Documented in `docs/adding-a-display.md`.
+- **TID, an opt-in launcher app for the 2.16 panel** (`TORGET_WITH_TIME`, off by
+  default): the side the panel stands on chooses a digital clock, a pomodoro
+  timer or a 20/40/50 minute timer, with a ring for the seconds or the time
+  left. Simulator-reviewed only, silent, not yet flashed; see
+  [`docs/time-app.md`](docs/time-app.md). The platform gains one read-only host
+  function, `torget_orientation()`.
 
 ### Fixed
 

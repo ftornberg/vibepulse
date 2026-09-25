@@ -581,6 +581,9 @@ class RepositoryRegistryTests(unittest.TestCase):
             {
                 "solelkollen_app": "TORGET_HAVE_SOLELKOLLEN",
                 "vibbe_app": "TORGET_HAVE_BUDDY",
+                # TID lives in this repository but is opt-in (TORGET_WITH_TIME,
+                # 2.16 only), so it too must stay behind its own guard.
+                "time_app": "TORGET_HAVE_TIME",
             },
         )
 

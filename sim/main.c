@@ -822,6 +822,11 @@ static void qa_key3_tap(void) {
   qa_key3_poll(false, 100000);
 }
 
+/* Bänkens motsvarighet till IMU-kvadranten: tangent R stegar den ett
+ * kvartsvarv. TID läser den genom samma torget_orientation() som panelen. */
+static int sim_orientation;
+int torget_orientation(void) { return sim_orientation; }
+
 /* Tangent 1-4: Solelkollen-fixtur. T: mata VibePulse. S: nästa agentläge.
  * L: launchern. [ och ] bläddrar VibePulse-sidor; N byter app (KEY3:s
  * appväxling utan gest). M: nästa Max Tracker-fixtur. G: simulera en ny
@@ -832,7 +837,7 @@ static void qa_key3_tap(void) {
  * rördragning för ett bänkverktyg. */
 static void poll_keys(lv_timer_t *t) {
   (void)t;
-  static bool held[13];
+  static bool held[14];
   const Uint8 *ks = SDL_GetKeyboardState(NULL);
 
   /* KEY3 pollas RÅTT, inte på flank: hållet är en tidsgest och tidsreglerna
@@ -841,14 +846,14 @@ static void poll_keys(lv_timer_t *t) {
    * släpp före tre sekunder och ett öppet fönster stänger i stället. */
   key3_tick(ks[SDL_SCANCODE_K] != 0, (int64_t)lv_tick_get() * 1000);
 
-  const SDL_Scancode keys[13] = { SDL_SCANCODE_1, SDL_SCANCODE_2,
+  const SDL_Scancode keys[14] = { SDL_SCANCODE_1, SDL_SCANCODE_2,
                                   SDL_SCANCODE_3, SDL_SCANCODE_4,
                                   SDL_SCANCODE_T, SDL_SCANCODE_S,
                                   SDL_SCANCODE_L, SDL_SCANCODE_N,
                                   SDL_SCANCODE_LEFTBRACKET,
                                   SDL_SCANCODE_RIGHTBRACKET,
                                   SDL_SCANCODE_M, SDL_SCANCODE_G,
-                                  SDL_SCANCODE_B };
+                                  SDL_SCANCODE_B, SDL_SCANCODE_R };
   /* Fingrar på menyns rader. click_row() är samma väg touch-callbacken tar,
    * så avsikten uppstår som den gör på glaset — och konsumeras av key3_tick(),
    * aldrig här. */
@@ -863,7 +868,7 @@ static void poll_keys(lv_timer_t *t) {
     row_held[i] = down;
   }
 
-  for (int i = 0; i < 13; i++) {
+  for (int i = 0; i < 14; i++) {
     bool down = ks[keys[i]];
     if (down && !held[i]) {
       if (i < 4) {
@@ -885,6 +890,10 @@ static void poll_keys(lv_timer_t *t) {
       }
       else if (i == 10)
         apply_max_tracker_fixture(max_tracker_fixture_idx + 1);
+      else if (i == 13) {
+        sim_orientation = (sim_orientation + 1) % 4;
+        printf("orientation: %d\n", sim_orientation);
+      }
       else if (i == 12) apply_battery_fixture(battery_fixture_idx + 1);
       else {
         torget_app_show(SIM_APP_VIBEPULSE);
@@ -1882,12 +1891,68 @@ static int run_vibepulse_labs_qa(bool catalogue) {
   return capture_failures == 0 ? 0 : 1;
 }
 
+#ifdef TORGET_HAVE_TIME
+#include "app_time.h"
+#include "time_core.h"
+
+static int sim_app_index(const char *name) {
+  for (int i = 0; i < torget_app_count; i++)
+    if (strcmp(torget_apps[i]->name, name) == 0) return i;
+  return -1;
+}
+
+static void time_frame(int rot, const char *tag) {
+  sim_orientation = rot;
+  time_app_qa_refresh();
+  dump_frame(tag);
+}
+
+/* TID i varje tillstånd som specen listar. Allt går genom samma vägar som en
+ * touch och tickern: orienteringen är tangent R:s variabel, trycken är
+ * on_tap/on_preset, och klockan skjuts fram i stället för att vänta ut 25
+ * minuter. Exakta 480 x 480-ramar. */
+static int run_time_app_captures(void) {
+  int idx = sim_app_index("TID");
+  if (idx < 0) return 2;
+  sim_wifi_signal_bars = 3;
+  torget_wifi_status_set_mode(TG_WIFI_STATUS_NORMAL);
+  torget_wifi_status_foreground();
+  torget_app_show(idx);
+
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock");
+  time_app_qa_time_unset(true);
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock-unset");
+  time_app_qa_time_unset(false);
+
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-idle");
+  time_app_qa_tap();
+  time_app_qa_advance(3LL * 60 * 1000000 + 12LL * 1000000);
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-running");
+  time_app_qa_tap();
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-paused");
+  time_app_qa_tap();
+  time_app_qa_advance(30LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-done");
+  time_frame(TG_TIME_ROT_CLOCK, "time-done-over-clock");
+  time_app_qa_tap();
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-break");
+
+  time_frame(TG_TIME_ROT_TIMER, "time-timer-select");
+  time_app_qa_preset(1);
+  time_app_qa_advance(7LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_TIMER, "time-timer-running");
+  time_app_qa_advance(40LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_TIMER, "time-timer-done");
+  return capture_failures == 0 ? 0 : 1;
+}
+#endif
+
 int main(int argc, char **argv) {
   /* Radbuffrat även vid pipe: fixtureloggen ska överleva en kill. */
   setvbuf(stdout, NULL, _IOLBF, 0);
   lv_init();
   lv_display_t *disp = lv_sdl_window_create(TG_DISPLAY_WIDTH, TG_DISPLAY_HEIGHT);
-  lv_sdl_window_set_title(disp, "Torget — G GitHub-star, S agentstatus, T VibePulse, M Max Tracker, [ och ] vy, N nästa app, L launcher");
+  lv_sdl_window_set_title(disp, "Torget — G GitHub-star, S agentstatus, T VibePulse, M Max Tracker, [ och ] vy, N nästa app, L launcher, R orientering");
   lv_sdl_mouse_create();
 
   const char *labs_mask = getenv("TORGET_LABS_MASK");
@@ -1909,6 +1974,11 @@ int main(int argc, char **argv) {
   torget_settings_create();
   torget_battery_badge_create();
   torget_ota_ui_create();
+
+#ifdef TORGET_HAVE_TIME
+  if (argc == 2 && strcmp(argv[1], "--time-app-captures") == 0)
+    return run_time_app_captures();
+#endif
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-labs-qa") == 0)
     return run_vibepulse_labs_qa(false);

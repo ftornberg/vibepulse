@@ -26,6 +26,11 @@ set(EXTRA_COMPONENT_DIRS third_party)
 # och en medvetet omprövad minnesbudget.
 option(TORGET_WITH_BUDDY "Bygg in Vibbe/Buddy (kräver ~/Buddy och medveten minnesbudget)" OFF)
 
+# TID (components/app_time): klocka, pomodoro och timer, styrd av panelens
+# orientering. Opt-in som Vibbe — en färsk klon bygger exakt en app — och bara
+# på 2.16, där auto-rotationen finns; 2.41 V2 har fast landskap.
+option(TORGET_WITH_TIME "Bygg in TID (klocka, pomodoro, timer) — bara 2.16" OFF)
+
 # Companion-appar bor i sina EGNA repon och är inte del av det här bygget om
 # de inte finns utcheckade. En färsk klon utifrån bygger bara VibePulse —
 # ingen ska få Solelkollen eller Vibbe på skärmen utan att ha bett om det.
@@ -49,6 +54,17 @@ if(TORGET_WITH_BUDDY)
   set(ENV{TORGET_BUDDY_DIR} "${TORGET_BUDDY_DIR}")
 else()
   set(ENV{TORGET_BUDDY_DIR} "")
+endif()
+
+# Samma env-spegel som Buddy: main/CMakeLists.txt läses i två pass och ser bara
+# miljön. En tom sträng gör båda passen eniga om att TID inte är med.
+if(TORGET_WITH_TIME AND TORGET_BOARD STREQUAL "waveshare_216")
+  set(ENV{TORGET_APP_TIME} "1")
+else()
+  set(ENV{TORGET_APP_TIME} "")
+  if(TORGET_WITH_TIME)
+    message(STATUS "Torget: TORGET_WITH_TIME=ON ignoreras — TID stöds bara på waveshare_216")
+  endif()
 endif()
 
 if(EXISTS "${TORGET_SOLELKOLLEN_DIR}/app_solelkollen")

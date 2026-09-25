@@ -383,6 +383,8 @@ uint8_t torget_wifi_signal_bars(void) {
 
 void torget_keep_awake(void) { s_last_activity_us = esp_timer_get_time(); }
 
+int torget_orientation(void) { return sg_rotation_quadrant(); }
+
 void torget_update_available(const char *version) {
   torget_ota_service_update_available(version);
 }

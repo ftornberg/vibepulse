@@ -23,6 +23,9 @@ endif()
 if(EXISTS "$ENV{TORGET_BUDDY_DIR}/app_buddy")
   list(APPEND TORGET_MAIN_REQUIRES app_buddy)
 endif()
+if("$ENV{TORGET_APP_TIME}" STREQUAL "1")
+  list(APPEND TORGET_MAIN_REQUIRES app_time)
+endif()
 
 idf_component_register(
   SRCS "main.c"
@@ -55,6 +58,9 @@ if(EXISTS "$ENV{TORGET_SOLELKOLLEN_DIR}/app_solelkollen")
 endif()
 if(EXISTS "$ENV{TORGET_BUDDY_DIR}/app_buddy")
   target_compile_definitions(${COMPONENT_LIB} PRIVATE TORGET_HAVE_BUDDY)
+endif()
+if("$ENV{TORGET_APP_TIME}" STREQUAL "1")
+  target_compile_definitions(${COMPONENT_LIB} PRIVATE TORGET_HAVE_TIME)
 endif()
 
 # lv_font_conv-fonterna inkluderar "lvgl/lvgl.h" om inte det här är satt.
