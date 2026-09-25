@@ -37,7 +37,7 @@ platform-wide auto-rotation is unchanged and keeps the picture upright.
   switch to a wrong mode.
 - A running timer keeps its correct remaining time across orientation changes
   and across leaving and re-entering the app.
-- No number is invented: the clock shows `--:--` until the time is valid.
+- No number is invented: the clock shows `––:––` (en dashes: the big number font has no ASCII hyphen) until the time is valid.
 - Every state has exact native 480 x 480 simulator frames reviewed before any
   physical install.
 
@@ -50,6 +50,11 @@ platform-wide auto-rotation is unchanged and keeps the picture upright.
   behaviour.
 - Cross-app completion notices. Without sound, a timer that finishes while
   another app is on the glass is seen when TID is next opened.
+- Needs You while TID is showing. The Needs You takeover is created under
+  VibePulse's own page tree (`tk_agent_monitor_create(root)` in
+  `usage_screen.c`), so a NEEDS YOU alert is not visible while TID is on the
+  glass. Making it a platform-level overlay is a separate decision; until then
+  the owner should leave the panel on VibePulse when waiting for an agent.
 
 ## Architecture
 
@@ -115,7 +120,7 @@ record. Safe volume must be set. Sound is out of scope here.
 - **Host tests first (TDD)** in `./test/run.sh`: quadrant to mode for all four
   positions including keep-last; deadline arithmetic, pause and resume; the full
   pomodoro cycle with DONE between phases; independence of the two timers;
-  `--:--` while the time is unset.
+  `––:––` while the time is unset.
 - **Simulator:** a key rotates the quadrant. Exact 480 x 480 frames for clock,
   pomodoro (idle, running, paused, done), timer (selection, running, done) and
   time-not-set. The static frames are reviewed before any motion.
