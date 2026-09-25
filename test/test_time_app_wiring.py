@@ -83,4 +83,18 @@ assert "pass `-D`" not in docs and "-D vid bygget" not in header, (
     "the TG_TIME_ROT_* override is a source edit, not a build flag"
 )
 
+# The tokenserver announces the newest <repo>/build*/torget.bin as an UPDATE READY
+# takeover on the desk panel (docs/ota.md), so a branch or -dirty firmware build
+# into ANY repo-root build*/ directory (build/, build-time/, build-241/...) makes
+# the panel show an update screen for that version. Seen on the owner's unit on
+# 2026-09-25, from `idf.py -B build-time`. Firmware builds for TID go outside the
+# repo root.
+assert "-B build-time" not in docs and "-B build-" not in docs, (
+    "docs/time-app.md must not tell anyone to build firmware into a repo-root "
+    "build*/ directory: the tokenserver announces it to the panel"
+)
+assert "UPDATE READY" in docs and "outside the repository" in docs, (
+    "docs/time-app.md must explain why the firmware build directory lives outside the repo"
+)
+
 print("OK: TID is opt-in, 2.16-only and taps are short clicks")

@@ -55,10 +55,18 @@ ninja -C sim/build-time
 # Exact native frames of every state
 TORGET_CAPTURE_DIR=/tmp/time-frames ./sim/build-time/torget-sim --time-app-captures
 
-# Firmware, build only (never into build/, which the OTA sender trusts)
+# Firmware, build only. The build directory must live OUTSIDE the repository:
 . ~/esp/esp-idf/export.sh
-idf.py -B build-time -DTORGET_WITH_TIME=ON build
+idf.py -B /tmp/torget-time-build -DTORGET_WITH_TIME=ON build
 ```
+
+**Why outside the repository.** The tokenserver announces the newest
+`<repo>/build*/torget.bin` to the panel, which then shows an **UPDATE READY**
+takeover for that version ([`docs/ota.md`](ota.md)). A branch or `-dirty` build
+in `build/`, `build-time/`, `build-241/` or any other repo-root `build*/`
+directory therefore pops an update screen on the desk panel (this happened on
+2026-09-25 with a build directory named `build-time`). Building outside the repository root keeps
+the announcement pointed at the firmware the panel actually runs.
 
 Installing on a panel is a separate step that you ask for explicitly; see
 [`docs/ota.md`](ota.md) and `CLAUDE.md`. The OTA sender refuses a `-dirty`
@@ -83,6 +91,14 @@ wrong value shows as a constant wrong face and is one number to change.
   built inside the VibePulse app's own page tree, so an alert from an agent does
   not appear while TID is on the glass. Leave the panel on VibePulse while you
   wait for an agent. Making it a platform-level overlay is a separate decision.
+- **With the buttons down the picture is garbled in every app.** Seen on the
+  owner's 2.16 unit on 2026-09-25, VibePulse included: one of the auto-rotation's
+  four MADCTL modes renders a distorted frame. That is a platform rotation
+  problem, not a TID one, and it is the position where TID has no face of its
+  own (it keeps the last face). Which of the four quarter turns the unit
+  reports there has not been measured yet, so the provisional
+  `TG_TIME_ROT_*` values are unchecked against it; measure all four on the
+  unit before trusting the mapping.
 - **Without a working IMU the face stays where it was** (the clock after boot);
   the auto-rotation reports no orientation and TID keeps the last face.
 - **Wall-clock time** comes from the RTC or SNTP like the night dimming does. The
