@@ -52,6 +52,7 @@
 #include "wifi_slots.h"
 #include "../platform/battery_badge.h"
 #include "../components/torget_power/battery_policy.h"
+#include "../components/torget_power/clock_policy.h"
 
 /* VibePulse är det här repots app och ligger ALLTID först i registret, så
  * launchern och den obevakade rundan pekar på samma index oavsett vilka
@@ -1628,7 +1629,8 @@ static int run_vibepulse_static_qa(void) {
     battery_fixture_power_text(1, power, sizeof power); /* laddar 71 % */
     torget_settings_set_power(power);
   }
-  torget_settings_set_clock("RTC + NTP");
+  /* Samma rena funktion som panelen: RTC tillämpad och NTP synkad. */
+  torget_settings_set_clock(tg_clock_text(true, true));
   dump_overlay_frame("settings-about-found");
   qa_key3_tap();
   /* Utan adress: UPDATE tonas ner och ABOUT visar streck. Två frames som

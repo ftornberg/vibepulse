@@ -122,13 +122,15 @@ every tick. It redraws only on a state change.
 
 ### `sim/`
 
-Builds `battery_policy`, `night_policy` and `battery_badge`. Key `B` steps a
-fake sample through: unknown → charging 71 % → full → on battery 64 % → low
-18 % → critical 4 %. Key `N` is already taken (the app switch), so the
-night-schedule toggle key is deferred to part B with a free key. The static
-QA matrix gains five frames (badge charging, badge full, badge critical, ABOUT with the
-new rows, LABS with NIGHT DIM). The hardware drivers are not built on the
-host.
+Builds `battery_policy`, `night_policy`, `clock_policy` and `battery_badge`.
+Key `B` steps a fake sample through: unknown → charging 71 % → full → on
+battery 64 % → low 18 % → critical 4 %. The bench does not model panel
+brightness, so there is no night-schedule key; the schedule is pinned by the
+host tests of `night_policy` and by the transition log on the panel. The
+ABOUT frame's CLOCK row comes from `tg_clock_text`, the same pure function
+the panel uses. The static QA matrix gains five frames (badge charging,
+badge full, badge critical, ABOUT with the new rows, LABS with NIGHT DIM).
+The hardware drivers are not built on the host.
 
 ## Battery policy
 
@@ -177,6 +179,9 @@ is the last physical step below and the reason for the option.
 - A touch still raises brightness to `BRIGHT_DAY` for `WAKE_HOLD_US` (30 s)
   and it settles back while the window applies, matching today's wake
   behaviour.
+- Local time comes from `TG_TIMEZONE`, a POSIX TZ string defaulting to
+  Europe/Stockholm rules (`"CET-1CEST,M3.5.0,M10.5.0/3"`); the RTC and SNTP
+  keep UTC. Setting it also makes `RUNS OUT DDD HH:MM` local on the panel.
 
 ## Glass
 
