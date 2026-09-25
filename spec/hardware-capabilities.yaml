@@ -341,13 +341,14 @@ capabilities:
     states:
       soc_capable: "yes"
       board_wired: "yes"
-      bsp_support: "no"
-      firmware_enabled: "no"
+      bsp_support: "yes"
+      firmware_enabled: "yes"
       unit_verified: unknown
     confidence: source_inspected
     resources: ["shared I2C port 1", "I2C address 0x34", "power rails"]
     constraints:
       - "the locked BSP does not configure the PMU during display startup"
+      - "software support is torget_power/axp2101.c over the BSP I2C bus handle, not the BSP itself (as for input.key3)"
       - "battery and charging settings require cell, polarity, current, thermal, and enclosure verification"
       - "vendor example charge-current settings must not be copied to an unknown battery"
     conflicts: ["power-off and sleep behavior must account for display rails and Wi-Fi reconnect time"]
@@ -355,14 +356,15 @@ capabilities:
     sources:
       - waveshare-schematic-2026-08-10
       - waveshare-bsp-2.0.1
-      - torget-main-1fad449
+      - torget-dev-a3c84a3
+      - torget-physical-2026-09-25-rtc-boot-time
       - waveshare-board-docs-2026-08-10
     evidence:
       - {field: soc_capable, value: "yes", source: waveshare-schematic-2026-08-10}
       - {field: board_wired, value: "yes", source: waveshare-schematic-2026-08-10}
-      - {field: bsp_support, value: "no", source: waveshare-bsp-2.0.1}
-      - {field: firmware_enabled, value: "no", source: torget-main-1fad449}
-    last_verified: "2026-08-10"
+      - {field: bsp_support, value: "yes", source: torget-dev-a3c84a3}
+      - {field: firmware_enabled, value: "yes", source: torget-dev-a3c84a3}
+    last_verified: "2026-09-25"
 
   - id: power.battery-connector
     name: 3.7 V lithium-battery connector and charging path
@@ -397,28 +399,30 @@ capabilities:
     states:
       soc_capable: "yes"
       board_wired: "yes"
-      bsp_support: "no"
-      firmware_enabled: "no"
+      bsp_support: "yes"
+      firmware_enabled: "yes"
       unit_verified: unknown
     confidence: schematic
     resources: ["shared I2C port 1", "I2C address 0x51", "GPIO13 RTC interrupt"]
     constraints:
-      - "battery backup is not physically verified"
+      - "battery backup through a full power loss is not verified: with the cell disconnected the oscillator stops (OS=1) within seconds; with the cell fitted the clock survived a PMU power cycle on 2026-09-25"
       - "correct time through complete power loss must not be promised before unit testing"
       - "sleep and wake behavior must distinguish light sleep, deep sleep, and PMU power-off"
+      - "software support is torget_power/pcf85063.c over the BSP I2C bus handle, not the BSP itself"
     conflicts: ["network time and RTC persistence have different failure modes"]
     opportunities: ["persistent time", "alarms", "scheduled wake", "network-independent reset timing"]
     sources:
       - waveshare-schematic-2026-08-10
       - waveshare-bsp-2.0.1
-      - torget-main-1fad449
+      - torget-dev-a3c84a3
+      - torget-physical-2026-09-25-rtc-boot-time
       - waveshare-board-docs-2026-08-10
     evidence:
       - {field: soc_capable, value: "yes", source: waveshare-schematic-2026-08-10}
       - {field: board_wired, value: "yes", source: waveshare-schematic-2026-08-10}
-      - {field: bsp_support, value: "no", source: waveshare-bsp-2.0.1}
-      - {field: firmware_enabled, value: "no", source: torget-main-1fad449}
-    last_verified: "2026-08-10"
+      - {field: bsp_support, value: "yes", source: torget-dev-a3c84a3}
+      - {field: firmware_enabled, value: "yes", source: torget-dev-a3c84a3}
+    last_verified: "2026-09-25"
 
   - id: storage.microsd
     name: TF/microSD slot

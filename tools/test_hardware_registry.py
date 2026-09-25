@@ -1030,7 +1030,7 @@ class RepositoryRegistryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout,
-            "OK: 30 capabilities, 13 sources, 1 units\n",
+            "OK: 30 capabilities, 15 sources, 2 units\n",
         )
 
     def test_repository_registry_loads(self):
@@ -1098,6 +1098,12 @@ class RepositoryRegistryTests(unittest.TestCase):
                 self.assertTrue(expected_fields.issubset(evidenced_fields))
 
         expected_sources = {
+            "torget-physical-2026-09-25-rtc-boot-time": (
+                "physical-test", 1,
+                "findings-2026-09-25; unit=torget-216-02; "
+                "firmware=v1.1.0-26-ga3c84a3",
+            ),
+            "torget-dev-a3c84a3": ("source-code", 3, "a3c84a3"),
             "torget-physical-2026-08-30-vibepulse-stale-recovery": (
                 "physical-test", 1,
                 "findings-2026-08-30; unit=torget-home-01; "
@@ -1178,7 +1184,19 @@ class RepositoryRegistryTests(unittest.TestCase):
         )
         self.assertEqual(
             registry.capabilities["rtc.pcf85063atl"]["constraints"][0],
-            "battery backup is not physically verified",
+            "battery backup through a full power loss is not verified: "
+            "with the cell disconnected the oscillator stops (OS=1) within "
+            "seconds; with the cell fitted the clock survived a PMU power "
+            "cycle on 2026-09-25",
+        )
+        self.assertEqual(
+            registry.capabilities["rtc.pcf85063atl"]["states"][
+                "firmware_enabled"
+            ],
+            "yes",
+        )
+        self.assertEqual(
+            registry.units["torget-216-02"]["battery"], "fitted",
         )
         self.assertEqual(
             registry.capabilities["usb.host"]["states"]["soc_capable"],
