@@ -48,4 +48,20 @@ assert "-" not in no_value[0], (
     "the en dash U+2013 the font carries"
 )
 
+root_cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+assert 'option(TORGET_WITH_TIME' in root_cmake and "OFF)" in root_cmake.split(
+    "option(TORGET_WITH_TIME", 1)[1].split("\n", 1)[0], (
+    "TID must be an explicit firmware option, default OFF"
+)
+assert 'TORGET_WITH_TIME AND TORGET_BOARD STREQUAL "waveshare_216"' in root_cmake, (
+    "the firmware must not build TID for the 2.41 V2"
+)
+assert 'set(ENV{TORGET_APP_TIME} "")' in root_cmake, (
+    "an unselected TID must mirror an EMPTY env value so main/ never sees a "
+    "stale shell export (ESP-IDF expands main/CMakeLists.txt twice)"
+)
+main_cmake = (root / "main/CMakeLists.txt").read_text(encoding="utf-8")
+assert '"$ENV{TORGET_APP_TIME}" STREQUAL "1"' in main_cmake
+assert "app_time" in main_cmake and "TORGET_HAVE_TIME" in main_cmake
+
 print("OK: TID is opt-in, 2.16-only and taps are short clicks")
