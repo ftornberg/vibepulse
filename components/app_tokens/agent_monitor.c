@@ -141,6 +141,7 @@ static struct {
   tk_ir_policy interaction_policy;
   needs_you_key needs_you_rendered;
   bool needs_you_visible; /* read by render_completion to yield the screen */
+  bool glass_claimed;     /* Needs You holds the platform's glass claim */
   ny_stage stage;
   char stage_id[TK_PENDING_ID_CAP]; /* the interaction the stage belongs to */
   char echo[TK_PENDING_TITLE_CAP];  /* the approved item, for the payoff beat */
@@ -897,7 +898,7 @@ static void ny_set_provider(needs_you_view *v, bool codex,
 /* Paint the stage the policy and the human's tap put us in. Reads
  * tk_needs_you_view_of; decides nothing. Repaints only when what is on the
  * glass actually changes, so ticks between polls are free. */
-static void render_needs_you(void) {
+static void render_needs_you_view(void) {
   needs_you_view *v = &mon.needs_you;
   const tk_pending_interaction *p = &mon.snapshot.pending;
   int64_t now_us = mon.rendered_at_us;
@@ -1128,6 +1129,27 @@ void tk_agent_monitor_needs_you_tap(void) {
     if (mon.stage == NY_DECISION && fit.private_fallback) {
       needs_you_resolve(TK_NEEDS_YOU_VERDICT_LEAVE_IT);
     }
+  }
+}
+
+/* VibePulse, the app this monitor paints into. Declared here rather than by
+ * including app_tokens.h, which would pull the whole app into the monitor. */
+extern const torget_app_t tokens_app;
+
+/* Needs You must be SEEN before its timeout, also when another app is on the
+ * glass: its root lives in VibePulse's page tree and would render hidden. The
+ * visible takeover claims the glass (the platform brings VibePulse forward);
+ * when it ends, after the payoff beat, it releases the claim and the platform
+ * returns to what was showing unless the person navigated meanwhile. Only
+ * Needs You claims: the DONE pulse is transient and needs no answer. */
+static void render_needs_you(void) {
+  render_needs_you_view();
+  if (mon.needs_you_visible && !mon.glass_claimed) {
+    mon.glass_claimed = true;
+    torget_glass_claim(&tokens_app);
+  } else if (!mon.needs_you_visible && mon.glass_claimed) {
+    mon.glass_claimed = false;
+    torget_glass_release(&tokens_app);
   }
 }
 

@@ -300,6 +300,14 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
   -o /tmp/torget-night-policy-test
 /tmp/torget-night-policy-test
 
+# Glasets anspråk: Needs You tar fram VibePulse över en annan app och går
+# tillbaka efter svaret. Ren regel, delad byte-identiskt av target och sim.
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../platform/glass_claim.c \
+  test_glass_claim.c \
+  -o /tmp/torget-glass-claim-test
+/tmp/torget-glass-claim-test
+
 cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/app_time/time_core.c \
   test_time_core.c \
@@ -415,6 +423,7 @@ cd ..
 "$PYTHON_BIN" test/test_vibepulse_visual_landmarks.py
 "$PYTHON_BIN" test/test_labs_render.py
 "$PYTHON_BIN" test/test_time_app_sim.py
+"$PYTHON_BIN" test/test_glass_claim_sim.py
 "$PYTHON_BIN" test/test_docs_frame_drift.py
 "$PYTHON_BIN" test/test_board_profiles.py
 "$PYTHON_BIN" test/test_shared_amoled_skill.py

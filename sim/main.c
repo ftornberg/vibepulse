@@ -1819,6 +1819,47 @@ static void run_vibepulse_completion_qa(void) {
  * a human to look at, not for an assertion to pin geometry that is not approved
  * yet. Taps in the sim resolve locally via tk_needs_you_mark_answered because
  * no verdict callback is wired here (that is the app layer's later job). */
+/* Glasets anspråk genom den riktiga renderaren: launchern står framme (samma
+ * läge som när en annan app visas — VibePulse-roten är dold), ett Needs
+ * You-larm kommer och ska SYNAS, svaret ges, payoff-takten löper ut och
+ * glaset ska gå tillbaka till launchern. test/test_glass_claim_sim.py jämför
+ * ramarna: tillbaka-ramen är byte-identisk med före-ramen. */
+static int run_glass_claim_qa(void) {
+  capture_failures = 0;
+  size_t q_len = 0, idle_len = 0;
+  char *q_json = read_fixture("agent-status-needs-you-question.json", &q_len);
+  char *idle_json = read_fixture("agent-status-idle.json", &idle_len);
+  tk_agent_snapshot question, idle;
+  bool ok = q_json && idle_json &&
+            tk_agent_status_parse(q_json, q_len, &question) &&
+            tk_agent_status_parse(idle_json, idle_len, &idle);
+  free(q_json);
+  free(idle_json);
+  if (!ok) return 2;
+
+  sim_wifi_signal_bars = 3;
+  torget_wifi_status_set_mode(TG_WIFI_STATUS_NORMAL);
+  int64_t base_us = torget_now_us() + 1000000LL;
+  torget_app_show(SIM_APP_VIBEPULSE);
+  usage_screen_apply_agent(&idle, base_us);
+  torget_launcher_open();
+  torget_wifi_status_foreground();
+  dump_frame("glass-claim-before");
+
+  usage_screen_apply_agent(&question, base_us + 1000);
+  dump_frame("glass-claim-alert");
+
+  tk_agent_monitor_needs_you_tap();
+  tk_agent_monitor_needs_you_press(TK_NEEDS_YOU_VERDICT_APPROVE);
+  dump_frame("glass-claim-payoff");
+
+  usage_screen_apply_agent(&idle, base_us + 2000);
+  usage_screen_tick(base_us + 10000000LL);
+  torget_wifi_status_foreground();
+  dump_frame("glass-claim-returned");
+  return capture_failures == 0 ? 0 : 1;
+}
+
 static int run_vibepulse_needs_you_qa(void) {
   capture_failures = 0;
   capture_needs_you_v2();
@@ -2020,6 +2061,9 @@ int main(int argc, char **argv) {
     torget_corner_probe_hide();
     return capture_failures ? 1 : 0;
   }
+
+  if (argc == 2 && strcmp(argv[1], "--glass-claim-qa") == 0)
+    return run_glass_claim_qa();
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-needs-you-qa") == 0) {
     return run_vibepulse_needs_you_qa();
