@@ -180,7 +180,8 @@ maxed out.
 Both providers get equal treatment — same pages, same alert, their own
 accent colour:
 
-**Codex weekly quota**
+**Codex weekly quota** (hidden with `TK_CODEX_PAGES 0` in `secrets.h` on a
+Claude-only desk)
 
 ![Codex weekly quota](docs/img/vibepulse-codex-week.png)
 

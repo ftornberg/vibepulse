@@ -12,7 +12,10 @@ firmware installation.
 
 A fresh installation from `secrets.h.example` starts with three quota pages
 and their reset information, local activity when the provider supplies it,
-and SETTINGS. Missing data stays unavailable; it is never a made-up zero.
+and SETTINGS. A Claude-only desk can hide the Codex pages (CODEX · WEEKLY
+and the Codex Max Tracker page) with `#define TK_CODEX_PAGES 0` in
+`secrets.h`; it is compile-time, not a LABS switch, and leaves Needs You
+and the Codex agent feed alone. Missing data stays unavailable; it is never a made-up zero.
 Answering on the panel, cloud relays and sound remain separate opt-ins.
 
 Use the [setup guide](../agent-setup.md) for installation. You do not need

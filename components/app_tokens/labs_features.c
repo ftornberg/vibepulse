@@ -67,11 +67,12 @@ const char *tk_labs_name(int feature) {
   return valid(feature) ? names[feature] : "";
 }
 static bool view_enabled(int view) {
-  if (view >= 0 && view <= VIEW_CODEX_WEEKLY) return true;
+  if (view >= 0 && view <= VIEW_CLAUDE_ALL) return true;
   switch (view) {
+    case VIEW_CODEX_WEEKLY: return TK_CODEX_PAGES;
     case VIEW_BURN_RATE: return tk_labs_active(TK_LABS_BURN_RATE);
-    case VIEW_TRACKER_CLAUDE:
-    case VIEW_TRACKER_CODEX: return tk_labs_active(TK_LABS_TRACKER);
+    case VIEW_TRACKER_CLAUDE: return tk_labs_active(TK_LABS_TRACKER);
+    case VIEW_TRACKER_CODEX: return TK_CODEX_PAGES && tk_labs_active(TK_LABS_TRACKER);
     case VIEW_GITHUB: return tk_labs_active(TK_LABS_GITHUB);
     case VIEW_VALUE: return tk_labs_active(TK_LABS_VALUE);
     default: return false;

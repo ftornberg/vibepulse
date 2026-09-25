@@ -20,8 +20,13 @@ bool tk_labs_store_write(uint32_t record) {
 int main(void) {
   result = TK_LABS_STORE_EMPTY;
   tk_labs_init();
-  assert(tk_labs_view_count() == (TK_LABS_ANALYTICS_DEFAULT ? 7 : 3) +
+  /* The always-on base is the two Claude pages plus Codex Weekly when
+   * TK_CODEX_PAGES is 1; analytics adds burn rate, one tracker per shown
+   * provider, and value. */
+  const int base = 2 + TK_CODEX_PAGES;
+  assert(tk_labs_view_count() == (TK_LABS_ANALYTICS_DEFAULT ? base + 2 + 1 + TK_CODEX_PAGES : base) +
                                 TK_GITHUB_SCREEN_ENABLED);
+  assert(tk_labs_view_position(VIEW_CODEX_WEEKLY) == (TK_CODEX_PAGES ? 2 : -1));
   assert(tk_labs_active(TK_LABS_GITHUB) == !!TK_GITHUB_SCREEN_ENABLED);
   assert(tk_labs_active(TK_LABS_STAR_POPUP) == !!TK_GITHUB_NOTIFICATIONS_ENABLED);
   assert(writes == 1 && !tk_labs_pending());
@@ -30,8 +35,10 @@ int main(void) {
   for (unsigned mask = 0; mask <= TK_LABS_ALL; mask++) {
     saved = TK_LABS_RECORD_VERSION | mask;
     tk_labs_init();
-    int expected_count = 3 + !!(mask & 1) + 2 * !!(mask & 2) +
+    int expected_count = base + !!(mask & 1) + (1 + TK_CODEX_PAGES) * !!(mask & 2) +
                          !!(mask & 4) + !!(mask & 8);
+    assert(tk_labs_view_position(VIEW_TRACKER_CODEX) == -1 ||
+           (TK_CODEX_PAGES && (mask & 2)));
     assert(tk_labs_view_count() == expected_count);
     int pos = 0, previous = -1;
     for (int view = 0; view < TK_USAGE_SCREEN_VIEWS; view++) {
@@ -65,8 +72,8 @@ int main(void) {
   assert(tk_labs_toggle(TK_LABS_VALUE));
   tk_labs_init(); /* reboot: saved choice wins over any template default */
   assert(tk_labs_active(TK_LABS_VALUE) && !tk_labs_pending());
-  assert(tk_labs_view_count() == 4);
-  assert(tk_labs_view_position(VIEW_VALUE) == 3);
+  assert(tk_labs_view_count() == base + 1);
+  assert(tk_labs_view_position(VIEW_VALUE) == base);
   fail_write = true;
   assert(!tk_labs_toggle(TK_LABS_VALUE));
   assert(tk_labs_selected(TK_LABS_VALUE) && tk_labs_storage_error());

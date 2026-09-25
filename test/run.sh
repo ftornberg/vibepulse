@@ -67,16 +67,20 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
   -o /tmp/torget-core-test
 /tmp/torget-core-test
 
-# Both the legacy header fallback and fresh-install template seed.
+# Both the legacy header fallback and fresh-install template seed, with and
+# without the Codex pages (TK_CODEX_PAGES).
 for labs_default in 0 1; do
   for github_default in 0 1 2 3; do
-    cc -std=c11 -Wall -Wextra -Werror -O1 \
-      -DTK_LABS_ANALYTICS_DEFAULT=$labs_default \
-      -DTK_GITHUB_SCREEN_ENABLED=$((github_default & 1)) \
-      -DTK_GITHUB_NOTIFICATIONS_ENABLED=$(((github_default >> 1) & 1)) \
-      ../components/app_tokens/labs_features.c test_labs_features.c \
-      -o /tmp/torget-labs-test
-    /tmp/torget-labs-test
+    for codex_pages in 0 1; do
+      cc -std=c11 -Wall -Wextra -Werror -O1 \
+        -DTK_LABS_ANALYTICS_DEFAULT=$labs_default \
+        -DTK_GITHUB_SCREEN_ENABLED=$((github_default & 1)) \
+        -DTK_GITHUB_NOTIFICATIONS_ENABLED=$(((github_default >> 1) & 1)) \
+        -DTK_CODEX_PAGES=$codex_pages \
+        ../components/app_tokens/labs_features.c test_labs_features.c \
+        -o /tmp/torget-labs-test
+      /tmp/torget-labs-test
+    done
   done
 done
 
