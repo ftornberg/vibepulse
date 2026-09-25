@@ -816,11 +816,13 @@ static void wifi_signal_task(void *arg) {
 
 /* ------------------------------------------------------- LVGL-tasken, 10 Hz */
 
+#ifdef TG_CORNER_PROBE_AT_BOOT
 static void corner_probe_off_cb(lv_timer_t *t) {
   (void)t;
   torget_corner_probe_hide();
   ESP_LOGI(TAG, "hörnsonden nedtagen");
 }
+#endif
 
 static void tick_cb(lv_timer_t *t) {
   (void)t;
@@ -1429,12 +1431,15 @@ void app_main(void) {
   torget_ota_ui_create();
   overlay_cost_report("ota");
   lv_timer_create(tick_cb, TICK_EVERY_MS, NULL);
-  /* TILLFÄLLIGT (gren corner-probe, mergeas inte): hörnsonden visas i två
-   * minuter efter boot så ägaren kan läsa av glasets hörnradie; sedan tas
-   * den bort och panelen är sig lik. */
+#ifdef TG_CORNER_PROBE_AT_BOOT
+  /* Mätläge (docs/adding-a-display.md): hörnsonden visas i två minuter
+   * efter boot så ägaren kan läsa av glasets hörnradie; sedan tas den bort
+   * och panelen är sig lik. Slås på med TG_CORNER_PROBE_AT_BOOT i
+   * secrets.h för EN mätboot, aldrig i ett bygge som ska stå på hyllan. */
   torget_corner_probe_show();
   lv_timer_t *probe_off = lv_timer_create(corner_probe_off_cb, 120 * 1000, NULL);
   lv_timer_set_repeat_count(probe_off, 1);
+#endif
   torget_ui_unlock();
   /* Batteripollningen EFTER brickan och menyn: tasken (prio 2) går före
    * app_main (prio 1), och en första övergång publicerad innan widgetarna
