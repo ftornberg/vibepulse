@@ -60,6 +60,10 @@ void tg_timer_init(tg_timer *t);
 bool tg_timer_start(tg_timer *t, int64_t now_us, int64_t duration_us);
 /* RUNNING -> DONE när now_us >= deadline. Billig att kalla ofta. */
 void tg_timer_tick(tg_timer *t, int64_t now_us);
+/* Som tg_timer_tick, men svarar true om DEN HÄR tickningen flyttade RUNNING ->
+ * DONE. Ett tryck som landar just efter en deadline ska visa KLAR först och
+ * aldrig kvittera eller avbryta en markering användaren inte hunnit se. */
+bool tg_timer_tick_expired(tg_timer *t, int64_t now_us);
 /* RUNNING <-> PAUSED. Tickar först: en körning som redan gått ut blir DONE,
  * aldrig PAUSED med negativ tid. IDLE och DONE ändras inte. */
 void tg_timer_toggle(tg_timer *t, int64_t now_us);

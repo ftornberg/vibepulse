@@ -85,8 +85,13 @@ static void on_tap(void) {
 }
 
 static void on_reset(void) {
-  if (app.mode == TG_TIME_MODE_POMODORO) tg_pomo_reset(&app.pomo);
-  else if (app.mode == TG_TIME_MODE_TIMER) tg_countdown_reset(&app.count);
+  /* Samma regel som on_tap: en löpning som gick ut inom senaste tick visar
+   * KLAR först i stället för att försvinna osedd i ett avbryt. */
+  if (app.mode == TG_TIME_MODE_POMODORO) {
+    if (!tg_timer_tick_expired(&app.pomo.timer, now_us())) tg_pomo_reset(&app.pomo);
+  } else if (app.mode == TG_TIME_MODE_TIMER) {
+    if (!tg_timer_tick_expired(&app.count.timer, now_us())) tg_countdown_reset(&app.count);
+  }
   refresh();
 }
 

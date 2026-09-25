@@ -34,9 +34,16 @@ bool tg_timer_start(tg_timer *t, int64_t now_us, int64_t duration_us) {
   return true;
 }
 
-void tg_timer_tick(tg_timer *t, int64_t now_us) {
-  if (t->state == TG_TIMER_RUNNING && now_us >= t->deadline_us)
+bool tg_timer_tick_expired(tg_timer *t, int64_t now_us) {
+  if (t->state == TG_TIMER_RUNNING && now_us >= t->deadline_us) {
     t->state = TG_TIMER_DONE;
+    return true;
+  }
+  return false;
+}
+
+void tg_timer_tick(tg_timer *t, int64_t now_us) {
+  (void)tg_timer_tick_expired(t, now_us);
 }
 
 void tg_timer_toggle(tg_timer *t, int64_t now_us) {
@@ -82,11 +89,9 @@ int64_t tg_pomo_phase_us(const tg_pomo *p) {
 }
 
 void tg_pomo_tap(tg_pomo *p, int64_t now_us) {
-  tg_timer_state before = p->timer.state;
-  tg_timer_tick(&p->timer, now_us);
   /* Löpet gick ut just under trycket: visa KLAR först, kvittera aldrig en
    * markering användaren inte hunnit se. */
-  if (before == TG_TIMER_RUNNING && p->timer.state == TG_TIMER_DONE) return;
+  if (tg_timer_tick_expired(&p->timer, now_us)) return;
   switch (p->timer.state) {
     case TG_TIMER_IDLE:
       tg_timer_start(&p->timer, now_us, tg_pomo_phase_us(p));
@@ -126,9 +131,7 @@ bool tg_countdown_start(tg_countdown *c, int preset, int64_t now_us) {
 }
 
 void tg_countdown_tap(tg_countdown *c, int64_t now_us) {
-  tg_timer_state before = c->timer.state;
-  tg_timer_tick(&c->timer, now_us);
-  if (before == TG_TIMER_RUNNING && c->timer.state == TG_TIMER_DONE) return;
+  if (tg_timer_tick_expired(&c->timer, now_us)) return;
   switch (c->timer.state) {
     case TG_TIMER_RUNNING:
     case TG_TIMER_PAUSED:

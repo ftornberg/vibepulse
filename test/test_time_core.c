@@ -250,8 +250,26 @@ static void test_ring(void) {
   check("done timer has no ring", tg_ring_remaining(&t, SEC_US(999) + MIN_US(5)) == -1);
 }
 
+static void test_tick_expired(void) {
+  tg_timer t;
+  tg_timer_init(&t);
+  check("idle never expires", !tg_timer_tick_expired(&t, MIN_US(99)));
+  tg_timer_start(&t, 0, MIN_US(1));
+  check("running before the deadline does not expire", !tg_timer_tick_expired(&t, MIN_US(1) - 1));
+  check("still running", t.state == TG_TIMER_RUNNING);
+  check("reports the RUNNING -> DONE transition", tg_timer_tick_expired(&t, MIN_US(1)));
+  check("...and moved to done", t.state == TG_TIMER_DONE);
+  check("only once: already done is not a new expiry", !tg_timer_tick_expired(&t, MIN_US(2)));
+  tg_timer_cancel(&t);
+  tg_timer_start(&t, 0, MIN_US(1));
+  tg_timer_toggle(&t, SEC_US(10));
+  check("paused never expires", !tg_timer_tick_expired(&t, MIN_US(99)));
+  check("paused stays paused", t.state == TG_TIMER_PAUSED);
+}
+
 int main(void) {
   test_mode_for();
+  test_tick_expired();
   test_ring();
   test_timer();
   test_pomodoro();

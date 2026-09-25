@@ -22,9 +22,15 @@ FRAMES = [
 
 class TimeAppSimTests(unittest.TestCase):
     def test_every_state_renders_at_native_size(self):
-        subprocess.run(["cmake", "-S", "sim", "-B", BUILD, "-G", "Ninja",
-                        "-DTORGET_WITH_TIME=ON"],
-                       cwd=ROOT, check=True, capture_output=True)
+        configure = ["cmake", "-S", "sim", "-B", BUILD, "-G", "Ninja",
+                     "-DTORGET_WITH_TIME=ON"]
+        # Reuse the LVGL checkout the default simulator already fetched (the
+        # renderer tests above build sim/build first) instead of downloading a
+        # second copy; a cold tree simply falls back to FetchContent.
+        shared_lvgl = ROOT / "sim/build/_deps/lvgl-src"
+        if shared_lvgl.is_dir():
+            configure.append(f"-DFETCHCONTENT_SOURCE_DIR_LVGL={shared_lvgl}")
+        subprocess.run(configure, cwd=ROOT, check=True, capture_output=True)
         subprocess.run(["cmake", "--build", BUILD], cwd=ROOT,
                        check=True, capture_output=True)
         with tempfile.TemporaryDirectory(prefix="vp-time-") as temporary:
