@@ -57,6 +57,20 @@ else()
   set(BUDDY_SRCS "")
   message(STATUS "torget-sim: Vibbe/Buddy är bortvald (TORGET_WITH_BUDDY=OFF)")
 endif()
+# TID (klocka, pomodoro, timer) är opt-in på samma sätt som Vibbe, och bara på
+# 2.16: 2.41 V2 har fast landskap, så en orienteringsstyrd app har inget att
+# läsa där. Bänken ska visa exakt den appuppsättning panelen bygger.
+option(TORGET_WITH_TIME "Bygg in TID (bara 2.16)" OFF)
+if(TORGET_WITH_TIME AND TORGET_BOARD STREQUAL "waveshare_216")
+  set(TIME_SRCS
+    ../components/app_time/time_core.c
+    ../components/app_time/time_present.c
+    ../components/app_time/time_views.c
+    ../components/app_time/app_time.c)
+else()
+  set(TIME_SRCS "")
+  message(STATUS "torget-sim: TID är bortvald (TORGET_WITH_TIME=OFF eller inte 2.16)")
+endif()
 add_executable(torget-sim
   main.c
   ../platform/torget_ui.c
@@ -108,6 +122,7 @@ add_executable(torget-sim
   ../third_party/cjson/cJSON.c
   ${SOLELKOLLEN_SRCS}
   ${BUDDY_SRCS}
+  ${TIME_SRCS}
   ${FONTS})
 
 # Simulatorn läser de riktiga fixture-filerna genom de delade parsrarna.
@@ -135,6 +150,11 @@ if(BUDDY_SRCS)
   target_include_directories(torget-sim PRIVATE
     "${TORGET_BUDDY_DIR}/app_buddy")
   target_compile_definitions(torget-sim PRIVATE TORGET_HAVE_BUDDY)
+endif()
+if(TIME_SRCS)
+  target_include_directories(torget-sim PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../components/app_time")
+  target_compile_definitions(torget-sim PRIVATE TORGET_HAVE_TIME)
 endif()
 # m: presenterarnas lround/llround. På macOS bor libm i libSystem, så detta
 # är en no-op där; på Linux (headless CI) är det länkfel utan.
