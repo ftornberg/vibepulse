@@ -33,6 +33,7 @@ idf_component_register(
        "../platform/boot_screen.c"
        "../platform/settings_menu.c"
        "../platform/battery_badge.c"
+       "../platform/corner_probe.c"
        "../platform/button_arbitration.c"
   # ".." ger `#include "secrets.h"` (gitignorad, kopieras ur secrets.h.example)
   INCLUDE_DIRS "." ".." "../platform"

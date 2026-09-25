@@ -53,6 +53,7 @@
 #include "../platform/battery_badge.h"
 #include "../components/torget_power/battery_policy.h"
 #include "../components/torget_power/clock_policy.h"
+#include "../platform/corner_probe.h"
 
 /* VibePulse är det här repots app och ligger ALLTID först i registret, så
  * launchern och den obevakade rundan pekar på samma index oavsett vilka
@@ -1938,6 +1939,16 @@ int main(int argc, char **argv) {
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-static-qa") == 0) {
     return run_vibepulse_static_qa();
+  }
+
+  /* Hörnsonden: ett mätmönster för glasets rundade hörn (platform/
+   * corner_probe.h). En frame, sedan klart; ingen del av QA-matrisen. */
+  if (argc == 2 && strcmp(argv[1], "--corner-probe") == 0) {
+    capture_failures = 0;
+    torget_corner_probe_show();
+    dump_overlay_frame("corner-probe");
+    torget_corner_probe_hide();
+    return capture_failures ? 1 : 0;
   }
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-needs-you-qa") == 0) {

@@ -34,38 +34,48 @@ capabilities unchanged.
    verify the full flash before overwriting it; keep it private. Identify the
    bootloader entry sequence and record the actual partition/flash arguments.
    Do not erase NVS to solve a host build-configuration error.
-5. **Bring up a static diagnostic.** Start with the vendor's native orientation,
+5. **Measure the glass's rounded corners.** AMOLED active areas have
+   rounded corners that clip content drawn near the edges (the 2.16 clipped
+   its battery badge at a 22 px margin and the Needs You frame, 2026-09-25).
+   `platform/corner_probe` draws quarter arcs tangent to both edges at
+   radius 40–120 and a diagonal ruler in every corner; the first visible
+   ruler square's number `d` gives the radius as `R ≈ 3.4·d`. Preview it with
+   `./sim/build/torget-sim --corner-probe`, then for one measuring boot set
+   `#define TG_CORNER_PROBE_AT_BOOT 1` in `secrets.h`, build, OTA, read the
+   four corners at the glass, and rebuild without the define. Record the
+   radius per unit in the physical review and derive edge insets from it.
+6. **Bring up a static diagnostic.** Start with the vendor's native orientation,
    low brightness, black background, RGB/provider-color swatches and four
    uniquely counted touch corners. Preview that exact UI before flashing.
    The owner must inspect real pixels and touch every corner. A simulator's
    synthetic click does not test touch wiring or coordinate transforms.
-6. **Implement the board boundary.** Add the explicit profile to
+7. **Implement the board boundary.** Add the explicit profile to
    `cmake/torget_board.cmake`, `components/torget_board/` and
    `platform/display_geometry.h`. Keep panel MADCTL, address gaps and touch
    transforms together. Do not turn another board's GPIO18 into a button or
    apply its IMU calibration. Unknown profile names must fail early.
-7. **Budget memory at the new width.** Flush bytes are width × rows × bytes per
+8. **Budget memory at the new width.** Flush bytes are width × rows × bytes per
    pixel. V2 uses 600 × 8 × 2 = 9,600 B, below the original 11,520 B. Keep
    two-pixel dirty-area alignment and sample the largest internal DMA block;
    free PSRAM and summed low-water heap are not substitutes. Extra persistent
    layers or larger buffers require measured budgets and the AMOLED workflow.
-8. **Fit every surface.** Physical raster and app composition are separate.
+9. **Fit every surface.** Physical raster and app composition are separate.
    Preserve native fonts and bitmaps. Inspect live/stale/no-data, widest copy,
    attention, pager, completion borders, settings, Labs, boot and Wi-Fi/QR
    surfaces at the real dimensions. For V2, a centred 480-pixel composition
    loses 15 pixels of vertical margin per side; footers and frames therefore
    needed explicit adjustments. Do not silently change the public app API.
-9. **Build reproducibly.** Pin target and simulator LVGL to the same version.
+10. **Build reproducibly.** Pin target and simulator LVGL to the same version.
    Keep board-specific build and generated SDK-config files. Configure once,
    then use `cmake --build <build-dir> --parallel 2` on small-memory machines.
    A version range can resolve newer libraries; defaults do not migrate an
    old generated SDK config when switching versions back.
-10. **Check and install.** Run the complete host suite, native preview and each
+11. **Check and install.** Run the complete host suite, native preview and each
     supported firmware build. Get explicit permission for the final install.
     Verify all written hashes, boot identity and physical static operation.
     Provision Wi-Fi locally if no credential is available. Confirm the actual
     service-to-panel path; a working radio alone does not establish it.
-11. **Publish the support boundary.** Add the registry, sanitized physical
+12. **Publish the support boundary.** Add the registry, sanitized physical
     report, setup guide, native fixture captures, README row, changelog and CI
     coverage in one PR. State the exact tested build and untested features.
     Do not publish credentials, personalized binaries or flash backups.

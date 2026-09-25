@@ -5,6 +5,13 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ## Unreleased
 
+### Added
+
+- A corner probe for measuring an AMOLED's rounded active-area corners:
+  `./sim/build/torget-sim --corner-probe` renders it, and
+  `TG_CORNER_PROBE_AT_BOOT` in `secrets.h` shows it for two minutes after
+  boot on one measuring OTA. Documented in `docs/adding-a-display.md`.
+
 ### Fixed
 
 - The battery badge sits one badge width further from the right edge
