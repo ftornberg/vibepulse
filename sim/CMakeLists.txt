@@ -65,6 +65,7 @@ add_executable(torget-sim
   ../platform/settings_menu.c
   ../platform/button_arbitration.c
   ../platform/battery_badge.c
+  ../platform/corner_probe.c
   ../components/torget_power/battery_policy.c
   ../components/torget_power/night_policy.c
   ../components/torget_power/clock_policy.c
