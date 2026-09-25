@@ -749,8 +749,8 @@ cell, yellow at 20 %, red and pulsing at 5 %. The percentage is the
 PMU's own fuel gauge, never an estimate; when the PMU cannot be read or
 reports no battery, the badge draws only its outline with a dash; a
 missing gauge value on the cell draws the outline without a number, and a
-gauge that says 0 % while the cell measures 3.5 V or more counts as
-missing rather than empty.
+gauge that says 0 % without a voltage reading below 3.5 V to confirm it
+counts as missing rather than empty.
 SETTINGS → ABOUT carries the same reading live — state, percentage, and
 voltage while on the cell. Brightness is capped at the night level below
 20 % battery, and the LABS row NIGHT DIM dims the glass to that level on a

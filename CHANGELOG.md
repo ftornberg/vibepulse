@@ -7,8 +7,9 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Fixed
 
-- A fuel gauge reading 0 % while the cell measures 3.5 V or more is treated
-  as "no number" instead of an empty battery. An unconfigured or disabled
+- A fuel gauge reading 0 % that no voltage reading below 3.5 V confirms
+  (cell at 3.5 V or more, or the VBAT ADC off) is treated as "no number"
+  instead of an empty battery. An unconfigured or disabled
   gauge could otherwise walk the panel to LOW and, after 30 s, CRITICAL on a
   full cell; with the shutdown of part C that would have powered it off.
   Found in the owner's review of the part A plan (#5, point 2).

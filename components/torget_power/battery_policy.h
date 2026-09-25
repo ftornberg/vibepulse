@@ -74,12 +74,14 @@ typedef struct {
  * säger 0 % är okonfigurerad eller avstängd, inte en tom cell. */
 #define TG_BATT_GAUGE_ZERO_IMPLAUSIBLE_MV 3500
 
-/* Rimlighetskontroll av PMU:ns procentbyte (PR #5-granskningen, punkt 2):
- * ett värde över 100 är skräp, och 0 % med en cell på >= 3,5 V är en
- * mätare som inte mäter — utan den regeln gick en okonfigurerad mätare
- * till LOW och sedan CRITICAL på 30 s, och med del C till avstängning på
- * fullt batteri. Utan spänningsavläsning (mv < 0) tas bytet som det är.
- * -1 betyder "rita ingen siffra", som resten av policyn redan hanterar. */
+/* Rimlighetskontroll av PMU:ns procentbyte (PR #5-granskningen, punkt 2,
+ * skärpt i PR #8): ett värde över 100 är skräp, och 0 % godtas bara när
+ * en spänningsmätning under 3,5 V bekräftar det — en cell på >= 3,5 V är
+ * inte tom, och utan mätning (VBAT-ADC:n av, mv <= 0) är 0 % obekräftat.
+ * Utan regeln gick en okonfigurerad mätare till LOW och sedan CRITICAL på
+ * 30 s, och med del C till avstängning på fullt batteri. Andra värden tas
+ * som de är även utan spänning. -1 betyder "rita ingen siffra", som
+ * resten av policyn redan hanterar. */
 int tg_batt_gauge_percent(int raw_percent, int mv);
 
 tg_batt_verdict tg_batt_update(tg_batt_policy *p, const tg_batt_sample *s,

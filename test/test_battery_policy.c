@@ -278,8 +278,12 @@ static void test_gauge_plausibility(void) {
         tg_batt_gauge_percent(0, 3500) == -1);
   check("0 % at 4.05 V is an unconfigured gauge, no number",
         tg_batt_gauge_percent(0, 4050) == -1);
-  check("0 % without a voltage reading is taken as is",
-        tg_batt_gauge_percent(0, -1) == 0);
+  check("0 % without a voltage reading cannot be confirmed, no number",
+        tg_batt_gauge_percent(0, -1) == -1);
+  check("0 % at 0 mV (VBAT ADC off) cannot be confirmed, no number",
+        tg_batt_gauge_percent(0, 0) == -1);
+  check("71 % without a voltage reading is still taken as is",
+        tg_batt_gauge_percent(71, -1) == 71);
   check("101 is out of range", tg_batt_gauge_percent(101, 3900) == -1);
   check("255 (bus garbage) is out of range", tg_batt_gauge_percent(255, 3900) == -1);
   check("negative raw is no number", tg_batt_gauge_percent(-1, 3900) == -1);
