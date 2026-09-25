@@ -140,6 +140,12 @@ by an older computer installation. Personalized binaries are not release assets.
    live, cached/stale or missing. Visible Claude values do not establish an
    active subscription or current credentials. Diagnose source freshness
    separately from display hardware.
+5. Expect the shared behaviour that is not board-specific: once NTP has
+   synced, the LABS row NIGHT DIM (on by default) dims the glass to the
+   night level 23:00–07:00 local time, and RUNS OUT shows local time per
+   `TG_TIMEZONE` in `secrets.h`. The V2 build has no RTC path, so ABOUT's
+   CLOCK row reads `NTP ONLY` or `NOT SET`. Neither behaviour has been
+   verified on this board.
 
 ![V2 settings with BOOT hint](img/241-v2/settings.png)
 

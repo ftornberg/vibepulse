@@ -31,13 +31,17 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   write enables the voltage measurement.
   A NIGHT DIM row in LABS lands with it; the schedule follows below.
 - **RTC clock and scheduled night dimming.** The 2.16 panel takes its time
-  from the battery-backed PCF85063 at boot when the reading is trustworthy,
-  writes NTP time back after each sync, and shows the clock source in
-  SETTINGS → ABOUT. The LABS row NIGHT DIM now dims the glass to the night
-  level between `TG_NIGHT_START_HHMM` and `TG_NIGHT_END_HHMM` (23:00–07:00
-  by default) whenever the clock is valid. Local time comes from the new
-  `TG_TIMEZONE` (Europe/Stockholm rules by default), which also makes the
-  RUNS OUT line local instead of UTC.
+  from the onboard PCF85063 on a power-on boot when the reading is
+  trustworthy (its backup supply is on the schematic, not yet verified
+  through a power loss), keeps a clock that survived a soft restart, writes
+  NTP time back to the RTC after every sync including the hourly resyncs,
+  and shows the clock source in SETTINGS → ABOUT. The LABS row NIGHT DIM now
+  dims the glass to the night level between `TG_NIGHT_START_HHMM` and
+  `TG_NIGHT_END_HHMM` (23:00–07:00 by default) whenever the clock is valid.
+  Local time comes from the new `TG_TIMEZONE` (Europe/Stockholm rules by
+  default), which also makes the RUNS OUT line local instead of UTC. The
+  schedule and the local RUNS OUT time apply on the 2.41 V2 too, once NTP
+  has synced: its NIGHT DIM row is the same switch. The V2 has no RTC path.
 - Owner photographs of the working 2.41 V2, disclosed Waveshare affiliate
   product links, and a [coming-soon hardware list](README.md#coming-soon--hardware-on-the-workbench).
   AMOLED 1.75/1.8/1.91 ports are planned; RGB matrix hardware is experimental.

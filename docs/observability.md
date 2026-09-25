@@ -67,14 +67,23 @@ blind spots below), `N ihågkomna nät i NVS` and `N nät i jaktlistan`
 the WiFi scan table (deliberately permanent — it is
 the ground truth for "which networks can the 2.4 GHz-only S3 actually
 see"), `WiFi uppe ("...")`, `tid synkad`, then steady-state `hämtning ok`
-lines every 30 s and a `heap:` line every 10 s. On the 2.16 the RTC speaks
+lines every 30 s and a `heap:` line every 10 s. Right after NVS, a boot
+whose system clock survived a soft restart (OTA, panic, watchdog, LABS
+restart — the time syscall runs on the RTC timer) logs `klockan behållen
+över omstarten: …`; a power-on boot does not. On the 2.16 the RTC speaks
 before WiFi: `tid från RTC: …` when its reading was trusted and applied,
-`RTC opålitlig (OS=…, år …)` when it was not (a fresh chip says year 2000,
-so this is normal on the first boot of the RTC firmware), or `ingen RTC
-att läsa` when the chip did not answer — each once. After `tid synkad` the
-power task logs `RTC uppdaterad från SNTP` once per sync. The night
-schedule writes `natt: dimmar (…)` / `natt: dag (…)` once at boot and then
-only when its decision changes.
+`systemklockan är redan satt, RTC:n lämnas orörd` on the soft-restart
+boots above, `RTC opålitlig (OS=…, år …)` when the reading was not trusted
+(a fresh chip says year 2000, so this is normal on the first power-on boot
+of the RTC firmware), `RTC svarar inte` / `RTC gav ett ogiltigt datum`
+when the chip answered badly, or `ingen RTC att läsa` when it did not
+answer — each once. The `pcf85063` tag adds `PCF85063 hittad (Control_1
+0x..)` and, at most once, `12-timmarsläge nollat`. After `tid synkad` the
+power task logs `RTC uppdaterad från SNTP` (or `RTC kunde inte skrivas:
+…`) once per sync, and every later hourly resync logs `tid omsynkad från
+SNTP` first. The night schedule writes `natt: dimmar (…)` / `natt: dag (…)`
+once at boot and then only when its decision or the clock's validity
+changes.
 
 **Blind spots to know about:**
 
@@ -393,7 +402,7 @@ Verbatim strings worth grepping for, and what they mean:
 |-----------|--------|------------------|
 | `WiFi tappat ("…", orsak 201)` | fw `torget` | network invisible: wrong SSID or 5 GHz-only. 15/204 = bad password. |
 | `ingen tid från SNTP ännu` | fw `torget` | clock unset — but fetches proceed anyway and TLS fails as generic transport errors (OBS-15). Treat later cert/transport noise as *this*. Since the RTC firmware a trusted `tid från RTC` earlier in the boot means the clock is set anyway and TLS works; `RTC opålitlig` plus this line is the no-clock case. |
-| `natt: dimmar/dag (HH:MM, schema SSSS–EEEE, klocka giltig/saknas)` | fw `torget` | the night schedule's decision: the local time it judged, the window, and whether a clock (RTC or NTP) backed it. One line at boot and one per change, never per tick. `klocka saknas` means the schedule is not applying and only the inactivity rule dims. |
+| `natt: dimmar/dag (HH:MM, schema SSSS–EEEE, klocka giltig/saknas)` | fw `torget` | the night schedule's decision: the local time it judged, the window, and whether a clock (RTC, NTP, or one kept over a soft restart) backed it. One line at boot and one per change of decision or clock validity, never per tick. `klocka saknas` means the schedule is not applying and only the inactivity rule dims; on a power-on boot the first line may say it before the RTC has been read, and the next line corrects it. |
 | `hämtning misslyckades: ESP_ERR_… (http://<värd>:8737 via LAN)` | fw `torget-http` | transport failure. The target is scheme + host + route only: the relay's path is `/u/<secret>` and *is* its access key, so no fetch log may carry a path (`docs/relay.md`). Wrong hostname and wrong port still show up here; *which* endpoint failed comes from the `tokens`/`github-net` line beside it. `okänd adress via …` means the address had no scheme or host at all. |
 | `oväntad statuskod 404 (https://<värd> via relä)` | fw `torget-http` | the target answered but not with 200. `via relä` says the cloud mailbox answered, `via LAN` the local tokenserver — the two are otherwise indistinguishable now that the path is gone. |
 | `kroppen större än … byte, avvisad` | fw `torget-http` | payload over cap — server-side schema growth. See lessons: the 1058-byte incident. |

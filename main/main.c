@@ -97,6 +97,7 @@ static const char *TAG = "torget";
  * inaktivitetsregeln och batteritaket. Lägsta källan vinner. */
 static const tg_night_schedule s_night_schedule = { TG_NIGHT_START_HHMM, TG_NIGHT_END_HHMM };
 static bool s_night_active;
+static bool s_night_time_valid;
 static bool s_night_logged_once;
 
 /* Delat tillstånd. Skrivs av apptaskarna (via torget_keep_awake under
@@ -114,12 +115,19 @@ static lv_indev_t *s_touch;
 static volatile int s_batt_bright_cap = 100;
 
 /* Klockan: RTC:n läses EN gång vid boot innan nätet, och skrivs tillbaka
- * efter varje lyckad SNTP-synk. Skrivningen görs i power-tasken, som redan
- * äger I2C-trafiken efter boot; net_task flaggar bara. Flaggorna finns på
+ * efter varje lyckad SNTP-synk (SNTP:s synk-callback flaggar, power-tasken
+ * som redan äger I2C-trafiken efter boot skriver). Flaggorna finns på
  * båda korten (ABOUT CLOCK och nattschemat läser dem) men bara 2.16 har en
- * RTC-väg som sätter s_rtc_applied; på V2 står den kvar på false. */
+ * RTC-väg som sätter s_rtc_applied; på V2 står den kvar på false.
+ *
+ * s_clock_kept: systemklockan överlever mjuka omstarter (esp_restart efter
+ * OTA, panik, vakthund, LABS-omstart) eftersom tidssyscallen räknar på
+ * RTC-timern. Då är klockan giltig för nattschemat redan innan SNTP svarat,
+ * och RTC:n lämnas orörd (aldrig bakåt). ABOUT:s fyra texter är specens
+ * och nämner inte fallet: raden säger NOT SET tills första synken. */
 static volatile bool s_rtc_applied;
 static volatile bool s_rtc_write_pending;
+static bool s_clock_kept;
 
 #ifndef TORGET_BOARD_241_V2
 static tg_batt_policy s_batt;
@@ -712,18 +720,31 @@ static void wifi_start(void) {
   }
 }
 
+/* Körs i lwIP-tasken vid VARJE lyckad synk: den första (som sync_wait
+ * nedan väntar på), en sen första synk efter att väntan gett upp, och de
+ * timvisa omsynkerna (CONFIG_LWIP_SNTP_UPDATE_DELAY). Flaggan läses-och-
+ * nollas av power_task; kapplöpningen är godartad — som värst går en
+ * skrivning förlorad och nästa synk tar den. */
+static void time_synced_cb(struct timeval *tv) {
+  (void)tv;
+  bool first = !s_time_synced;
+  s_time_synced = true;
+  s_rtc_write_pending = true;
+  if (!first) ESP_LOGI(TAG, "tid omsynkad från SNTP");
+}
+
 /* TLS kräver en rimlig klocka: utan tid är serverns certifikat "ännu inte
- * giltigt" och varje HTTPS-hämtning faller. RTC:n (batteribackad, del B)
- * kan ge tiden vid boot; SNTP är ändå vägen till en klocka som
- * certifikaten litar på, och varje lyckad synk skrivs tillbaka till RTC:n. */
+ * giltigt" och varje HTTPS-hämtning faller. RTC:n (med reservmatning
+ * enligt schemat, del B) kan ge tiden vid boot; SNTP är ändå vägen till en
+ * klocka som certifikaten litar på, och varje lyckad synk skrivs tillbaka
+ * till RTC:n via time_synced_cb. */
 static void time_sync(void) {
   esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+  cfg.sync_cb = time_synced_cb;
   ESP_ERROR_CHECK(esp_netif_sntp_init(&cfg));
   if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(20000)) != ESP_OK) {
     ESP_LOGW(TAG, "ingen tid från SNTP ännu, apparnas hämtningar får vänta på den");
   } else {
-    s_time_synced = true;
-    s_rtc_write_pending = true;
     ESP_LOGI(TAG, "tid synkad");
   }
 }
@@ -925,12 +946,16 @@ static void tick_cb(lv_timer_t *t) {
     time_t now_s = time(NULL);
     struct tm lt;
     localtime_r(&now_s, &lt);
-    bool time_valid = s_time_synced || s_rtc_applied;
+    bool time_valid = s_time_synced || s_rtc_applied || s_clock_kept;
     bool night = tg_night_applies(&s_night_schedule,
                                   tk_labs_active(TK_LABS_NIGHT_DIM),
                                   time_valid, lt.tm_hour, lt.tm_min);
-    if (night != s_night_active || !s_night_logged_once) {
+    /* Loggas när beslutet ELLER klockans giltighet byter: första ticken kan
+     * gå före clock_start, och en dagtidsboot hade annars lämnat "klocka
+     * saknas" stående i loggen fast RTC:n gav tiden. */
+    if (night != s_night_active || time_valid != s_night_time_valid || !s_night_logged_once) {
       s_night_active = night;
+      s_night_time_valid = time_valid;
       s_night_logged_once = true;
       ESP_LOGI(TAG, "natt: %s (%02d:%02d, schema %04d–%04d, %s)",
                night ? "dimmar" : "dag", lt.tm_hour, lt.tm_min,
@@ -1261,6 +1286,16 @@ void app_main(void) {
   /* Lokal tid för nattschemat och RUNS OUT-raden. Klockan hålls i UTC. */
   setenv("TZ", TG_TIMEZONE, 1);
   tzset();
+  {
+    time_t now = time(NULL);
+    struct tm sys;
+    gmtime_r(&now, &sys);
+    if (sys.tm_year + 1900 >= 2026) {
+      s_clock_kept = true;
+      ESP_LOGI(TAG, "klockan behållen över omstarten: %04d-%02d-%02d %02d:%02d UTC",
+               sys.tm_year + 1900, sys.tm_mon + 1, sys.tm_mday, sys.tm_hour, sys.tm_min);
+    }
+  }
   reboot_ledger_note(rr);
   coredump_note();
 

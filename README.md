@@ -753,9 +753,10 @@ SETTINGS → ABOUT carries the same reading live — state, percentage, and
 voltage while on the cell. Brightness is capped at the night level below
 20 % battery, and the LABS row NIGHT DIM dims the glass to that level on a
 schedule, 23:00–07:00 local by default, whenever the panel has a valid
-clock. That clock now comes from the battery-backed RTC at boot when its
-reading is trustworthy, and from NTP once the network is up; every NTP
-sync is written back to the RTC, and ABOUT's CLOCK row names the source
+clock. That clock now comes from the onboard RTC at boot when its reading
+is trustworthy (the chip has a backup supply on the schematic, not yet
+verified through a power loss), and from NTP once the network is up; every
+NTP sync is written back to the RTC, and ABOUT's CLOCK row names the source
 (`RTC + NTP`, `RTC ONLY`, `NTP ONLY`, `NOT SET`). Local time follows
 `TG_TIMEZONE` in `secrets.h` (Europe/Stockholm rules by default), which
 also makes the RUNS OUT line local rather than UTC. The charge profile
@@ -775,8 +776,14 @@ stays at the PMU's defaults; see the design in
 > feature is in source and simulator-reviewed; it has not been
 > physically verified on a panel with a cell fitted. The RTC boot time
 > and the night schedule are likewise host-tested and unverified on the
-> panel: the first boot on this firmware logs `RTC opålitlig` until the
-> first NTP write-back, and the second boot is the real test.
+> panel. The RTC only ever sets the clock on a true power-on boot: system
+> time survives soft restarts (OTA, panic, watchdog), so those boots log
+> `klockan behållen över omstarten` and leave the RTC alone. The first
+> power-on boot on this firmware logs `RTC opålitlig` (a fresh chip says
+> year 2000) until the first NTP write-back; the real test is a later
+> power-on boot with no network, which must log `tid från RTC`. The
+> schedule and the local RUNS OUT time also apply on the 2.41 V2 once NTP
+> has synced; that board has no RTC path.
 
 ## Over-the-air updates
 
