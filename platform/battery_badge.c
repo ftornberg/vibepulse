@@ -7,11 +7,14 @@
 
 extern const lv_font_t plex_ui_12;
 
-/* Sidfotens högra kant: samma marginal som "TO RESET" (22 px) och samma
- * baslinje som sidprickarna (PAGER_Y 456 på 2.16). Sidprickarna är
- * horisontellt centrerade och badgen sitter i högerkanten, så de delar
- * rad utan att krocka; kontrollerat mot bilderna i task-4-report.md. */
-#define BADGE_RIGHT_MARGIN 22
+/* Samma baslinje som sidprickarna (PAGER_Y 456 på 2.16). Sidprickarna är
+ * horisontellt centrerade och badgen sitter till höger, så de delar rad
+ * utan att krocka. Högermarginalen är INTE sidfotens 22 px ("TO RESET"):
+ * glasets hörn är rundade, och med 22 px satt kroppen och nubben
+ * (x 429..458 vid y 454..470) i själva hörnet och skars av av ramen —
+ * sett på panelen 2026-09-25. En brickbredd (BODY_W + NUB_W = 29 px)
+ * längre in går den fri. */
+#define BADGE_RIGHT_MARGIN 50
 #define BADGE_Y (456 - (TG_VIEWPORT_INSET_Y ? 4 : 0))
 #define BODY_W 26
 #define BODY_H 13

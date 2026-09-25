@@ -101,7 +101,10 @@ compile them unchanged.
 ### `platform/battery_badge.c/.h`
 
 An LVGL widget on `lv_layer_top()` anchored bottom-right at the footer
-baseline with the same right margin as the "TO RESET" label. It knows only a
+baseline. Its right margin is one badge width more than the "TO RESET"
+label's 22 px (50 px): the glass has rounded corners, and at 22 px the
+body and nub sat inside the corner and were clipped by the bezel (seen on
+the panel 2026-09-25). It knows only a
 badge state and an optional percentage. It is seen on every app page; it
 hides itself while a takeover owns the glass (UPDATE READY, Needs You, WiFi
 setup, OTA transfer, the completion pulse), and it is covered by the SETTINGS overlay for as long

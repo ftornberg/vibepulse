@@ -7,6 +7,10 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Fixed
 
+- The battery badge sits one badge width further from the right edge
+  (margin 50 px instead of the footer's 22 px). At 22 px the panel's
+  rounded bezel clipped the body and nub, seen at the glass on 2026-09-25.
+  The two README frames are re-captured.
 - A fuel gauge reading 0 % that no voltage reading below 3.5 V confirms
   (cell at 3.5 V or more, or the VBAT ADC off) is treated as "no number"
   instead of an empty battery. An unconfigured or disabled
