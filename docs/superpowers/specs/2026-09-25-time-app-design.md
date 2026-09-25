@@ -71,9 +71,11 @@ platform-wide auto-rotation is unchanged and keeps the picture upright.
   While the app is visible an `lv_timer` reads the quadrant and ticks the view.
   Long press calls `torget_launcher_open()`, as the app contract requires.
 - **Platform change.** A read-only `sg_rotation_quadrant()` in
-  `main/rotation.[ch]` returning the current quarter-turn (0-3), with a
-  simulator counterpart driven by a key. The rotation logic itself is not
-  modified.
+  `main/rotation.[ch]` returning the current quarter-turn (0-3, or -1 without
+  a running rotation), reached by apps through one new host function,
+  `torget_orientation()` in `platform/torget.h` (an app component cannot
+  include `main/`). The simulator implements it with a key. The rotation logic
+  itself is not modified.
 - **Registration.** `main/registry.c` and `sim/CMakeLists.txt`, behind a build
   flag (see decisions).
 
@@ -131,13 +133,12 @@ record. Safe volume must be set. Sound is out of scope here.
 
 1. **2.16 only.** Not registered on the 2.41 V2.
 2. **Build flag.** `main/registry.c` states that a fresh clone builds exactly
-   one app. TID is therefore gated by a build flag, `TORGET_APP_TIME`, off by
-   default; the owner enables it in their build.
+   one app. TID is therefore gated by the CMake option `TORGET_WITH_TIME` (the
+   Buddy convention), off by default; the owner enables it in their build.
 3. **Button-edge quadrant** is a constant measured on the unit, not derived from
    source.
 
 ## Open items for the plan
 
 - Exact touch layout and typography of the three views (design step).
-- Flag name and how the simulator picks it up.
 - Whether the quadrant accessor needs a pure-function seam for the host test.
