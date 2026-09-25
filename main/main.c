@@ -12,6 +12,8 @@
 #include <inttypes.h>
 #include <stdatomic.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -43,10 +45,12 @@
 #include "esp_lv_adapter.h"
 #include "lvgl.h"
 
+#include "app_tokens_config.h"
 #include "axp2101.h"
 #include "battery_badge.h"
 #include "battery_policy.h"
 #include "boot_health.h"
+#include "clock_policy.h"
 #include "boot_screen.h"
 #include "button_arbitration.h"
 #include "settings_menu.h"
@@ -55,6 +59,7 @@
 #include "needs_you_net.h"
 #include "ota_service.h"
 #include "ota_ui.h"
+#include "pcf85063.h"
 #include "rotation.h"
 #include "secrets.h"
 #include "torget.h"
@@ -100,8 +105,64 @@ static lv_indev_t *s_touch;
 #define POWER_POLL_MS 5000
 static volatile int s_batt_bright_cap = 100;
 
+/* Klockan: RTC:n läses EN gång vid boot innan nätet, och skrivs tillbaka
+ * efter varje lyckad SNTP-synk. Skrivningen görs i power-tasken, som redan
+ * äger I2C-trafiken efter boot; net_task flaggar bara. Flaggorna finns på
+ * båda korten (ABOUT CLOCK och nattschemat läser dem) men bara 2.16 har en
+ * RTC-väg som sätter s_rtc_applied; på V2 står den kvar på false. */
+static volatile bool s_rtc_applied;
+static volatile bool s_rtc_write_pending;
+
 #ifndef TORGET_BOARD_241_V2
 static tg_batt_policy s_batt;
+static bool s_rtc_present;
+
+static void clock_start(void) {
+  if (bsp_i2c_init() != ESP_OK || tg_pcf85063_init(bsp_i2c_get_handle()) != ESP_OK) {
+    ESP_LOGW(TAG, "ingen RTC att läsa, tiden väntar på SNTP");
+    return;
+  }
+  s_rtc_present = true;
+  tg_civil c;
+  bool os = false;
+  if (tg_pcf85063_read(&c, &os) != ESP_OK) {
+    ESP_LOGW(TAG, "RTC svarar inte, tiden väntar på SNTP");
+    return;
+  }
+  if (!tg_rtc_reading_trusted(os, c.year)) {
+    ESP_LOGW(TAG, "RTC opålitlig (OS=%d, år %d), tiden väntar på SNTP", os ? 1 : 0, c.year);
+    return;
+  }
+  /* Aldrig bakåt: bara en osatt systemklocka (år < 2026) får RTC-tiden. */
+  time_t now = time(NULL);
+  struct tm sys;
+  gmtime_r(&now, &sys);
+  if (sys.tm_year + 1900 >= 2026) {
+    ESP_LOGI(TAG, "systemklockan är redan satt, RTC:n lämnas orörd");
+    return;
+  }
+  int64_t epoch = tg_civil_to_epoch(&c);
+  if (epoch < 0) {
+    ESP_LOGW(TAG, "RTC gav ett ogiltigt datum, tiden väntar på SNTP");
+    return;
+  }
+  struct timeval tv = { .tv_sec = (time_t)epoch, .tv_usec = 0 };
+  settimeofday(&tv, NULL);
+  s_rtc_applied = true;
+  ESP_LOGI(TAG, "tid från RTC: %04d-%02d-%02d %02d:%02d UTC",
+           c.year, c.month, c.day, c.hour, c.minute);
+}
+
+/* Kallas från power_task när net_task flaggat en lyckad synk. */
+static void clock_write_back(void) {
+  if (!s_rtc_present) return;
+  time_t now = time(NULL);
+  tg_civil c;
+  if (!tg_epoch_to_civil((int64_t)now, &c)) return;
+  esp_err_t err = tg_pcf85063_write(&c);
+  if (err == ESP_OK) ESP_LOGI(TAG, "RTC uppdaterad från SNTP");
+  else ESP_LOGW(TAG, "RTC kunde inte skrivas: %s", esp_err_to_name(err));
+}
 /* Inget tillstånd loggat än: första pollen loggar alltid, även okänd. */
 static int s_batt_logged = -1;
 
@@ -132,6 +193,10 @@ static void power_task(void *arg) {
     /* Del C bygger avstängningen; här bara varningen. */
     if (v.shutdown)
       ESP_LOGW(TAG, "batteri: avstängning begärd men inte kompilerad in (del C)");
+    if (s_rtc_write_pending) {
+      s_rtc_write_pending = false;
+      clock_write_back();
+    }
     vTaskDelay(pdMS_TO_TICKS(POWER_POLL_MS));
   }
 }
@@ -640,8 +705,9 @@ static void wifi_start(void) {
 }
 
 /* TLS kräver en rimlig klocka: utan tid är serverns certifikat "ännu inte
- * giltigt" och varje HTTPS-hämtning faller. Kortets RTC är inte batteri-
- * backad, så SNTP är förutsättningen för NET_READY. */
+ * giltigt" och varje HTTPS-hämtning faller. RTC:n (batteribackad, del B)
+ * kan ge tiden vid boot; SNTP är ändå vägen till en klocka som
+ * certifikaten litar på, och varje lyckad synk skrivs tillbaka till RTC:n. */
 static void time_sync(void) {
   esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
   ESP_ERROR_CHECK(esp_netif_sntp_init(&cfg));
@@ -649,6 +715,7 @@ static void time_sync(void) {
     ESP_LOGW(TAG, "ingen tid från SNTP ännu, apparnas hämtningar får vänta på den");
   } else {
     s_time_synced = true;
+    s_rtc_write_pending = true;
     ESP_LOGI(TAG, "tid synkad");
   }
 }
@@ -821,8 +888,7 @@ static void tick_cb(lv_timer_t *t) {
     char ip[16];
     bool have_ip = ip_text_copy(ip, sizeof ip);
     torget_settings_open(desc ? desc->version : NULL, have_ip ? ip : NULL);
-    /* Platshållare tills del B läser RTC:n. */
-    torget_settings_set_clock(s_time_synced ? "NTP ONLY" : "NOT SET");
+    torget_settings_set_clock(tg_clock_text(s_rtc_applied, s_time_synced));
   }
 
   /* Menyns val, utfört av den som äger fönsterordningen. Menyn rör aldrig
@@ -1159,6 +1225,9 @@ void app_main(void) {
     nvs = nvs_flash_init();
   }
   ESP_ERROR_CHECK(nvs);
+  /* Lokal tid för nattschemat och RUNS OUT-raden. Klockan hålls i UTC. */
+  setenv("TZ", TG_TIMEZONE, 1);
+  tzset();
   reboot_ledger_note(rr);
   coredump_note();
 
@@ -1247,6 +1316,11 @@ void app_main(void) {
    * app_main (prio 1), och en första övergång publicerad innan widgetarna
    * fanns hade tappats — brickan hade stått på okänd till nästa ändring. */
   power_start();
+#ifndef TORGET_BOARD_241_V2
+  /* RTC:n FÖRE nätet: en betrodd avläsning ger apparna rätt tid direkt,
+   * och SNTP får sedan alltid sista ordet. */
+  clock_start();
+#endif
 
   /* Fysisk sanning i loggen: KEY3:s råa nivå vid boot. Låg utan finger =
    * pinnen är inte att lita på förrän knappolicyns väpning släppt igenom
