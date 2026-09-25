@@ -270,7 +270,27 @@ static void test_power_text(void) {
   check("small buffer stays terminated", tiny[3] == '\0');
 }
 
+static void test_gauge_plausibility(void) {
+  check("71 % at 3.90 V is taken as is", tg_batt_gauge_percent(71, 3900) == 71);
+  check("100 % is taken as is", tg_batt_gauge_percent(100, 4180) == 100);
+  check("0 % at 3.10 V is a real empty cell", tg_batt_gauge_percent(0, 3100) == 0);
+  check("0 % at 3.50 V is an unconfigured gauge, no number",
+        tg_batt_gauge_percent(0, 3500) == -1);
+  check("0 % at 4.05 V is an unconfigured gauge, no number",
+        tg_batt_gauge_percent(0, 4050) == -1);
+  check("0 % without a voltage reading cannot be confirmed, no number",
+        tg_batt_gauge_percent(0, -1) == -1);
+  check("0 % at 0 mV (VBAT ADC off) cannot be confirmed, no number",
+        tg_batt_gauge_percent(0, 0) == -1);
+  check("71 % without a voltage reading is still taken as is",
+        tg_batt_gauge_percent(71, -1) == 71);
+  check("101 is out of range", tg_batt_gauge_percent(101, 3900) == -1);
+  check("255 (bus garbage) is out of range", tg_batt_gauge_percent(255, 3900) == -1);
+  check("negative raw is no number", tg_batt_gauge_percent(-1, 3900) == -1);
+}
+
 int main(void) {
+  test_gauge_plausibility();
   test_charging_full_and_on_battery();
   test_low_with_hysteresis();
   test_critical_needs_dwell_and_vbus_cancels();

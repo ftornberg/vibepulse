@@ -155,7 +155,12 @@ The hardware drivers are not built on the host.
   immediately.
 - **Percent** is the PMU fuel gauge rounded to an integer. No estimation from
   voltage, no interpolation. If the gauge reads invalid, the badge shows no
-  number.
+  number. Invalid means: a byte above 100, or 0 % that no voltage reading
+  below 3.5 V confirms (a lithium cell at 3.5 V or more is not empty, and
+  with the VBAT ADC off there is no reading at all; a gauge that says 0 %
+  in either case is unconfigured or disabled, and must not walk the panel
+  into LOW, CRITICAL and a shutdown). The rule is pure,
+  `tg_batt_gauge_percent`.
 - **`shutdown`** is true only in `CRITICAL`, only after the 30 s dwell, and
   only when `CONFIG_TG_POWER_SHUTDOWN` is enabled. Without the option the
   state machine still reaches `CRITICAL` and logs it; nothing else happens.

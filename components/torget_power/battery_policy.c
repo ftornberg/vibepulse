@@ -2,6 +2,16 @@
 
 #include <stdio.h>
 
+int tg_batt_gauge_percent(int raw_percent, int mv) {
+  if (raw_percent < 0 || raw_percent > 100) return -1;
+  /* 0 % godtas bara när en spänningsmätning bekräftar det: en cell på
+   * >= 3,5 V är inte tom, och utan mätning (ADC:n av, mv <= 0) kan ingen
+   * säga att den är det. En okonfigurerad mätare får aldrig larma. */
+  if (raw_percent == 0 && (mv <= 0 || mv >= TG_BATT_GAUGE_ZERO_IMPLAUSIBLE_MV))
+    return -1;
+  return raw_percent;
+}
+
 static tg_batt_state next_state(const tg_batt_policy *p, const tg_batt_sample *s,
                                 int64_t now_us) {
   if (!s->present) return TG_BATT_UNKNOWN;
