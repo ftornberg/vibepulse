@@ -94,9 +94,43 @@ void torget_corner_probe_show(void) {
   lv_obj_set_style_bg_opa(edge, LV_OPA_TRANSP, 0);
   lv_obj_remove_flag(edge, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
+  /* Diagonallinjal (v2): små rutor var 4:e px längs diagonalen från
+   * varje hörn, med talet var 20:e px = avståndet d från hörnet längs
+   * diagonalen. Den FÖRSTA synliga rutans tal ger glasets hörnradie som
+   * R = d / (1 − 1/√2) ≈ 3,41·d: bågarna ovan säger bara "mellan 40 och
+   * 60", linjalen ger ett tal. */
+  for (int c = 0; c < 4; c++) {
+    bool right = c == 1 || c == 2, bottom = c == 2 || c == 3;
+    for (int d = 4; d <= 60; d += 4) {
+      lv_obj_t *sq = lv_obj_create(s_root);
+      lv_obj_remove_style_all(sq);
+      lv_obj_set_size(sq, 3, 3);
+      int x = right ? TG_DISPLAY_WIDTH - d - 2 : d - 1;
+      int y = bottom ? TG_DISPLAY_HEIGHT - d - 2 : d - 1;
+      lv_obj_set_pos(sq, x, y);
+      lv_obj_set_style_bg_color(sq, (d % 20 == 0) ? lv_color_hex(0x8FBF6A) : lv_color_white(), 0);
+      lv_obj_set_style_bg_opa(sq, LV_OPA_COVER, 0);
+      if (d % 20 == 0) {
+        /* talet strax utanför diagonalen, bort från hörnet, med ett
+         * radiehjälpvärde: d20 -> R68, d40 -> R137 för den som vill slippa räkna */
+        char t[8];
+        snprintf(t, sizeof t, "%d", d);
+        lv_obj_t *l = lv_label_create(s_root);
+        lv_label_set_text(l, t);
+        lv_obj_set_style_text_font(l, &plex_ui_12, 0);
+        lv_obj_set_style_text_color(l, lv_color_hex(0x8FBF6A), 0);
+        int lx = right ? TG_DISPLAY_WIDTH - d - 2 - 26 : d + 6;
+        int ly = bottom ? TG_DISPLAY_HEIGHT - d - 2 + 2 : d - 1 - 14;
+        if (bottom) ly = TG_DISPLAY_HEIGHT - d - 16;
+        lv_obj_set_pos(l, lx, ly);
+      }
+    }
+  }
+
   lv_obj_t *title = lv_label_create(s_root);
-  lv_label_set_text(title, "CORNER PROBE\nsmallest complete arc per corner = glass radius\n"
-                           "white 40 - yellow 60 - green 80 - orange 100 - red 120");
+  lv_label_set_text(title, "CORNER PROBE v2\nread the FIRST visible diagonal square per corner\n"
+                           "green numbers = px from corner: 20 = R68  40 = R137\n"
+                           "arcs: white 40 - yellow 60 - green 80 - orange 100 - red 120");
   lv_obj_set_style_text_font(title, &plex_ui_12, 0);
   lv_obj_set_style_text_color(title, lv_color_hex(0xBBBBBB), 0);
   lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
