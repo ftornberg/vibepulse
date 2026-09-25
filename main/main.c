@@ -123,11 +123,31 @@ static volatile int s_batt_bright_cap = 100;
  * s_clock_kept: systemklockan överlever mjuka omstarter (esp_restart efter
  * OTA, panik, vakthund, LABS-omstart) eftersom tidssyscallen räknar på
  * RTC-timern. Då är klockan giltig för nattschemat redan innan SNTP svarat,
- * och RTC:n lämnas orörd (aldrig bakåt). ABOUT:s fyra texter är specens
- * och nämner inte fallet: raden säger NOT SET tills första synken. */
+ * och RTC:n lämnas orörd (aldrig bakåt). Varifrån den klockan kom (RTC,
+ * NTP) sparas i RTC-minne som överlever samma omstarter, så ABOUT säger
+ * samma sak efter omstarten som före; först när det minnet saknar sitt
+ * märke (första omstarten efter en uppgradering) står raden på NOT SET
+ * tills första synken. Komplementet gör ett slumpvärde efter strömpåslag
+ * ogiltigt, som för HTTP-återhämtningen nedan. */
 static volatile bool s_rtc_applied;
 static volatile bool s_rtc_write_pending;
+/* Satt av SNTP:s synk-callback (eller återställd ur RTC-minnet nedan);
+ * läses av LVGL-tasken för ABOUT CLOCK och nattschemat. */
+static volatile bool s_time_synced;
 static bool s_clock_kept;
+#define TG_CLOCK_PROV_MAGIC 0x434C4B31u /* "CLK1" */
+#define TG_CLOCK_PROV_RTC 1u
+#define TG_CLOCK_PROV_NTP 2u
+RTC_NOINIT_ATTR static uint32_t s_clock_prov_magic;
+RTC_NOINIT_ATTR static uint32_t s_clock_prov_flags;
+RTC_NOINIT_ATTR static uint32_t s_clock_prov_flags_inverse;
+
+static void clock_provenance_save(void) {
+  uint32_t f = (s_rtc_applied ? TG_CLOCK_PROV_RTC : 0u) | (s_time_synced ? TG_CLOCK_PROV_NTP : 0u);
+  s_clock_prov_flags = f;
+  s_clock_prov_flags_inverse = ~f;
+  s_clock_prov_magic = TG_CLOCK_PROV_MAGIC;
+}
 
 #ifndef TORGET_BOARD_241_V2
 static tg_batt_policy s_batt;
@@ -139,16 +159,17 @@ static void clock_start(void) {
     return;
   }
   s_rtc_present = true;
-  tg_civil c;
-  bool os = false;
-  if (tg_pcf85063_read(&c, &os) != ESP_OK) {
+  tg_rtc_reading r;
+  if (tg_pcf85063_read(&r) != ESP_OK) {
     ESP_LOGW(TAG, "RTC svarar inte, tiden väntar på SNTP");
     return;
   }
-  if (!tg_rtc_reading_trusted(os, c.year)) {
-    ESP_LOGW(TAG, "RTC opålitlig (OS=%d, år %d), tiden väntar på SNTP", os ? 1 : 0, c.year);
+  if (!tg_rtc_reading_trusted(&r)) {
+    ESP_LOGW(TAG, "RTC opålitlig (OS=%d, UTC-märkt=%d, år %d), tiden väntar på SNTP",
+             r.os ? 1 : 0, r.utc_marked ? 1 : 0, r.civil.year);
     return;
   }
+  const tg_civil c = r.civil;
   /* Aldrig bakåt: bara en osatt systemklocka (år < 2026) får RTC-tiden. */
   time_t now = time(NULL);
   struct tm sys;
@@ -165,16 +186,26 @@ static void clock_start(void) {
   struct timeval tv = { .tv_sec = (time_t)epoch, .tv_usec = 0 };
   settimeofday(&tv, NULL);
   s_rtc_applied = true;
+  clock_provenance_save();
   ESP_LOGI(TAG, "tid från RTC: %04d-%02d-%02d %02d:%02d UTC",
            c.year, c.month, c.day, c.hour, c.minute);
 }
 
-/* Kallas från power_task när net_task flaggat en lyckad synk. */
+/* Kallas från power_task när SNTP flaggat en lyckad synk. Skrivningen
+ * väntar in nästa hela sekund, så RTC:n (som bara räknar sekunder) får
+ * den utan avrundningsfel — restfelet är en FreeRTOS-tick plus I2C-tiden.
+ * Att power_task hinner dit några sekunder efter synken spelar ingen roll:
+ * det är klockan i skrivögonblicket som skrivs, inte synkens. */
 static void clock_write_back(void) {
   if (!s_rtc_present) return;
-  time_t now = time(NULL);
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  if (tv.tv_usec > 0) {
+    vTaskDelay(pdMS_TO_TICKS((1000000 - tv.tv_usec) / 1000 + 1));
+    gettimeofday(&tv, NULL);
+  }
   tg_civil c;
-  if (!tg_epoch_to_civil((int64_t)now, &c)) return;
+  if (!tg_epoch_to_civil((int64_t)tv.tv_sec, &c)) return;
   esp_err_t err = tg_pcf85063_write(&c);
   if (err == ESP_OK) ESP_LOGI(TAG, "RTC uppdaterad från SNTP");
   else ESP_LOGW(TAG, "RTC kunde inte skrivas: %s", esp_err_to_name(err));
@@ -238,8 +269,6 @@ static void power_start(void) {
 
 static EventGroupHandle_t s_net_events;
 #define WIFI_GOT_IP BIT0
-/* Satt av net_task när SNTP svarat; läses av LVGL-tasken för ABOUT CLOCK. */
-static volatile bool s_time_synced;
 
 /* Senaste tilldelade IPv4-adressen som text, för SETTINGS ABOUT.
  * Tom sträng = ingen adress; menyn visar då streck och tonar ner
@@ -730,6 +759,7 @@ static void time_synced_cb(struct timeval *tv) {
   bool first = !s_time_synced;
   s_time_synced = true;
   s_rtc_write_pending = true;
+  clock_provenance_save();
   if (!first) ESP_LOGI(TAG, "tid omsynkad från SNTP");
 }
 
@@ -957,8 +987,10 @@ static void tick_cb(lv_timer_t *t) {
       s_night_active = night;
       s_night_time_valid = time_valid;
       s_night_logged_once = true;
-      ESP_LOGI(TAG, "natt: %s (%02d:%02d, schema %04d–%04d, %s)",
-               night ? "dimmar" : "dag", lt.tm_hour, lt.tm_min,
+      char hhmm[6] = "--:--"; /* ingen påhittad tid i loggen utan klocka */
+      if (time_valid) snprintf(hhmm, sizeof hhmm, "%02d:%02d", lt.tm_hour, lt.tm_min);
+      ESP_LOGI(TAG, "natt: %s (%s, schema %04d–%04d, %s)",
+               night ? "dimmar" : "dag", hhmm,
                TG_NIGHT_START_HHMM, TG_NIGHT_END_HHMM,
                time_valid ? "klocka giltig" : "klocka saknas");
     }
@@ -1286,14 +1318,25 @@ void app_main(void) {
   /* Lokal tid för nattschemat och RUNS OUT-raden. Klockan hålls i UTC. */
   setenv("TZ", TG_TIMEZONE, 1);
   tzset();
+  ESP_LOGI(TAG, "tidszon: %s", TG_TIMEZONE);
   {
     time_t now = time(NULL);
     struct tm sys;
     gmtime_r(&now, &sys);
     if (sys.tm_year + 1900 >= 2026) {
       s_clock_kept = true;
-      ESP_LOGI(TAG, "klockan behållen över omstarten: %04d-%02d-%02d %02d:%02d UTC",
-               sys.tm_year + 1900, sys.tm_mon + 1, sys.tm_mday, sys.tm_hour, sys.tm_min);
+      bool prov_ok = s_clock_prov_magic == TG_CLOCK_PROV_MAGIC &&
+                     s_clock_prov_flags == ~s_clock_prov_flags_inverse;
+      if (prov_ok) {
+        s_rtc_applied = (s_clock_prov_flags & TG_CLOCK_PROV_RTC) != 0;
+        s_time_synced = (s_clock_prov_flags & TG_CLOCK_PROV_NTP) != 0;
+      }
+      ESP_LOGI(TAG, "klockan behållen över omstarten: %04d-%02d-%02d %02d:%02d UTC (källa %s)",
+               sys.tm_year + 1900, sys.tm_mon + 1, sys.tm_mday, sys.tm_hour, sys.tm_min,
+               prov_ok ? tg_clock_text(s_rtc_applied, s_time_synced) : "okänd");
+    } else {
+      /* Strömpåslag: RTC-minnet är slump, börja om. */
+      s_clock_prov_magic = 0;
     }
   }
   reboot_ledger_note(rr);

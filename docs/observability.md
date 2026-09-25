@@ -73,12 +73,18 @@ restart — the time syscall runs on the RTC timer) logs `klockan behållen
 över omstarten: …`; a power-on boot does not. On the 2.16 the RTC speaks
 before WiFi: `tid från RTC: …` when its reading was trusted and applied,
 `systemklockan är redan satt, RTC:n lämnas orörd` on the soft-restart
-boots above, `RTC opålitlig (OS=…, år …)` when the reading was not trusted
-(a fresh chip says year 2000, so this is normal on the first power-on boot
-of the RTC firmware), `RTC svarar inte` / `RTC gav ett ogiltigt datum`
-when the chip answered badly, or `ingen RTC att läsa` when it did not
-answer — each once. The `pcf85063` tag adds `PCF85063 hittad (Control_1
-0x..)` and, at most once, `12-timmarsläge nollat`. After `tid synkad` the
+boots above (the line ends with `källa RTC + NTP` etc. when the clock's
+provenance survived too, `källa okänd` on the first soft restart after
+upgrading to this firmware), `RTC opålitlig (OS=…, UTC-märkt=…, år …)` when
+the reading was not trusted (a fresh chip says year 2000 and has no UTC
+mark, so this is normal on the first power-on boot of the RTC firmware;
+`UTC-märkt=0` with a plausible year means a vendor demo set the chip),
+`RTC svarar inte` / `RTC gav ett ogiltigt datum` when the chip answered
+badly, or `ingen RTC att läsa` when it did not answer — each once. The
+`pcf85063` tag adds `PCF85063 hittad (Control_1 0x..)` and, at most once,
+`Control_1 0x.. rättat (STOP / 12 h)` when it had to unfreeze the clock or
+switch it to 24-hour mode. `tidszon: …` right after NVS prints the POSIX TZ
+string every local time is derived from. After `tid synkad` the
 power task logs `RTC uppdaterad från SNTP` (or `RTC kunde inte skrivas:
 …`) once per sync, and every later hourly resync logs `tid omsynkad från
 SNTP` first. The night schedule writes `natt: dimmar (…)` / `natt: dag (…)`

@@ -2,8 +2,9 @@
 
 #include <stddef.h>
 
-bool tg_rtc_reading_trusted(bool os_flag, int year) {
-  return !os_flag && year >= 2026 && year <= 2099;
+bool tg_rtc_reading_trusted(const tg_rtc_reading *r) {
+  if (!r) return false;
+  return !r->os && r->utc_marked && r->civil.year >= 2026 && r->civil.year <= 2099;
 }
 
 static bool leap(int y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }

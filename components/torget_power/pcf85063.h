@@ -8,14 +8,18 @@
 #include "esp_err.h"
 
 /*
- * PCF85063ATL på I2C 0x51 (spec/hardware.md). Bara tidsregistren 0x04..0x0A
- * läses och skrivs, i UTC. Enda konfigurationsskrivningen är att nolla
- * 12/24-biten i Control_1 om den råkar vara satt: BCD-avkodningen nedan
- * förutsätter 24-timmarsläge. Larm, timer och avbrott rörs inte (del B
- * har inget schemalagt väckande, spec 2026-09-24).
+ * PCF85063ATL på I2C 0x51 (spec/hardware.md). RAM-byten 0x03 och
+ * tidsregistren 0x04..0x0A läses och skrivs i EN transaktion; tiden är UTC
+ * och RAM-byten bär ett märke som säger "skriven av torget, i UTC". Utan
+ * märket (färsk krets, fabriksdemo i lokal tid) litar policyn inte på
+ * avläsningen. Konfigurationsskrivningar i Control_1, bara om biten är
+ * satt: 12/24 nollas (BCD-avkodningen förutsätter 24 h) och STOP nollas
+ * (en stoppad klocka räknar inte och kan aldrig bli rätt); båda nollar
+ * märket, eftersom tiden i kretsen då inte är vår. Larm, timer och avbrott
+ * rörs inte (del B har inget schemalagt väckande, spec 2026-09-24).
  */
 esp_err_t tg_pcf85063_init(i2c_master_bus_handle_t bus);
-esp_err_t tg_pcf85063_read(tg_civil *out, bool *os_flag);
+esp_err_t tg_pcf85063_read(tg_rtc_reading *out);
 esp_err_t tg_pcf85063_write(const tg_civil *utc);
 
 #endif

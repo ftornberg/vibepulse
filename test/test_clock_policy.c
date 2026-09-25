@@ -12,13 +12,27 @@ static void check(const char *what, int condition) {
   }
 }
 
+static tg_rtc_reading reading(int year, bool os, bool utc_marked) {
+  tg_rtc_reading r = { { year, 9, 25, 10, 0, 0 }, os, utc_marked };
+  return r;
+}
+
 static void test_trust_rule(void) {
-  check("clean 2026 is trusted", tg_rtc_reading_trusted(false, 2026));
-  check("clean 2099 is trusted", tg_rtc_reading_trusted(false, 2099));
-  check("oscillator stop is not trusted", !tg_rtc_reading_trusted(true, 2026));
-  check("2025 is not trusted", !tg_rtc_reading_trusted(false, 2025));
-  check("2100 is not trusted", !tg_rtc_reading_trusted(false, 2100));
-  check("2000 (fresh chip) is not trusted", !tg_rtc_reading_trusted(false, 2000));
+  tg_rtc_reading r = reading(2026, false, true);
+  check("clean, marked 2026 is trusted", tg_rtc_reading_trusted(&r));
+  r = reading(2099, false, true);
+  check("clean, marked 2099 is trusted", tg_rtc_reading_trusted(&r));
+  r = reading(2026, true, true);
+  check("oscillator stop is not trusted", !tg_rtc_reading_trusted(&r));
+  r = reading(2026, false, false);
+  check("unmarked (vendor demo, maybe local time) is not trusted", !tg_rtc_reading_trusted(&r));
+  r = reading(2025, false, true);
+  check("2025 is not trusted", !tg_rtc_reading_trusted(&r));
+  r = reading(2100, false, true);
+  check("2100 is not trusted", !tg_rtc_reading_trusted(&r));
+  r = reading(2000, false, false);
+  check("2000 (fresh chip) is not trusted", !tg_rtc_reading_trusted(&r));
+  check("NULL is not trusted", !tg_rtc_reading_trusted(NULL));
 }
 
 static void test_epoch_round_trips(void) {
