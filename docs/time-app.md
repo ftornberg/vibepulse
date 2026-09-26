@@ -93,7 +93,8 @@ wrong value shows as a constant wrong face and is one number to change.
   switches to VibePulse so the question is seen, and returns to TID after the
   answer, unless you switched app yourself meanwhile. A running TID timer keeps
   counting underneath. Seen on the owner's 2.16 panel on 2026-09-26
-  (`v1.1.0-32-g96d6947`): NEEDS YOU came up over the clock face. The return to
+  (`v1.1.0-32-g96d6947`): NEEDS YOU came up over the clock face, for a
+  manual-mode request where the panel offered only to dismiss it. The return to
   TID after the answer is so far verified in the simulator only.
 - **With the buttons down the picture is garbled in every app.** Seen on the
   owner's 2.16 unit on 2026-09-25, VibePulse included: one of the auto-rotation's
