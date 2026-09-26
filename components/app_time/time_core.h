@@ -22,17 +22,20 @@ typedef enum {
 } tg_time_mode;
 
 /* Kvartsvarv från boot som auto-rotationen mäter (torget_orientation()).
- * Värdena är PROVISORISKA tills de mätts på enheten: ett fel visar sig som
- * konstant fel läge och rättas här (redigera de tre #define-raderna nedan). Rotation 2
- * (knappkanten nedåt) har inget eget läge och behåller det senaste. */
+ * UPPMÄTT på ägarens 2.16-panel 2026-09-26: knapparna uppåt ger 0, åt vänster
+ * 1, nedåt 2 och åt höger 3. Ägaren vill ha klockan med knapparna åt höger
+ * (panelens viloläge, laddsladden åt rätt håll), timern med knapparna uppåt
+ * och pomodoro med knapparna åt vänster. Rotation 2 (knappkanten nedåt, där
+ * bilden är förvrängd i alla appar) har inget eget läge och behåller det
+ * senaste. */
 #ifndef TG_TIME_ROT_CLOCK
-#define TG_TIME_ROT_CLOCK 0
+#define TG_TIME_ROT_CLOCK 3
 #endif
 #ifndef TG_TIME_ROT_POMODORO
 #define TG_TIME_ROT_POMODORO 1
 #endif
 #ifndef TG_TIME_ROT_TIMER
-#define TG_TIME_ROT_TIMER 3
+#define TG_TIME_ROT_TIMER 0
 #endif
 
 /* Läget för en rotation. Allt utanför de tre kända (2, -1 utan IMU, 4, ...)

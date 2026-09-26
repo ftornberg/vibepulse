@@ -5,19 +5,21 @@ with agents: it turns the panel into a small desk clock, a pomodoro timer and a
 plain countdown, and **the side the panel stands on chooses which one**. There
 is no menu.
 
-> **Status.** Designed, built and reviewed in the simulator only. It has **not
-> been flashed** to any panel, the rotation values below are provisional until
-> they are measured on the unit, and it is silent (see [Limits](#limits)).
+> **Status.** Running on the owner's 2.16 panel since 2026-09-26 (OTA), with the
+> side mapping below measured there. It is silent (see [Limits](#limits)).
 > Nothing here promotes a hardware capability in `spec/`.
 
 ## What it does
 
 | Panel position | Face |
 |---|---|
-| Button edge up | **Clock:** the current local time as `HH:MM`, seconds as a ring around it |
-| Right edge down | **Pomodoro:** 25 min focus, 5 min break, four rounds, then a 15 min long break |
-| Left edge down | **Timer:** pick 20, 40 or 50 minutes |
-| Button edge down | No face of its own: the app keeps whatever it showed last |
+| Buttons to the right | **Clock:** the current local time as `HH:MM`, seconds as a ring around it |
+| Buttons to the left | **Pomodoro:** 25 min focus, 5 min break, four rounds, then a 15 min long break |
+| Buttons up | **Timer:** pick 20, 40 or 50 minutes |
+| Buttons down | No face of its own: the app keeps whatever it showed last |
+
+The clock sits with the buttons to the right because that is how the panel
+rests on the desk, with the charging cable leading away naturally.
 
 The digital time sits in the middle of the glass and a thin ring runs around it:
 
@@ -78,10 +80,12 @@ build, so commit before any install.
 
 `components/app_time/time_core.h` maps the rotation the panel measures
 (`torget_orientation()`, quarter turns from boot) to a face:
-`TG_TIME_ROT_CLOCK`, `TG_TIME_ROT_POMODORO` and `TG_TIME_ROT_TIMER`. The
-defaults are a guess. After a first install, stand the panel on each side, note
-which face appears, and edit the three `#define` values. A
-wrong value shows as a constant wrong face and is one number to change.
+`TG_TIME_ROT_CLOCK`, `TG_TIME_ROT_POMODORO` and `TG_TIME_ROT_TIMER`. On the
+owner's 2.16 panel (2026-09-26) buttons up reports 0, buttons left 1 and
+buttons right 3, so buttons down is 2 by elimination. Another unit should
+report the same (the calibration in `main/rotation.c` is fixed), but if a face
+appears on the wrong side, stand the panel on each side, note which face
+appears, and edit the three `#define` values.
 
 ## Limits
 
@@ -100,10 +104,7 @@ wrong value shows as a constant wrong face and is one number to change.
   owner's 2.16 unit on 2026-09-25, VibePulse included: one of the auto-rotation's
   four MADCTL modes renders a distorted frame. That is a platform rotation
   problem, not a TID one, and it is the position where TID has no face of its
-  own (it keeps the last face). Which of the four quarter turns the unit
-  reports there has not been measured yet, so the provisional
-  `TG_TIME_ROT_*` values are unchecked against it; measure all four on the
-  unit before trusting the mapping.
+  own (it keeps the last face).
 - **Without a working IMU the face stays where it was** (the clock after boot);
   the auto-rotation reports no orientation and TID keeps the last face.
 - **Wall-clock time** comes from the RTC or SNTP like the night dimming does. The
