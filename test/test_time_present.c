@@ -149,30 +149,32 @@ static void test_ring(void) {
   tg_pomo_init(&p); tg_countdown_init(&c);
 
   tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, 0);
-  check("clock ring shows the seconds", m.ring_permille == 516);
+  check("minute 5 fills clockwise", m.ring_start == 0 && m.ring_end == 516);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 4, 30, &p, &c, 0);
+  check("minute 4 empties clockwise", m.ring_start == 516 && m.ring_end == 1000);
   tg_time_present(&m, TG_TIME_MODE_CLOCK, false, 9, 5, 30, &p, &c, 0);
-  check("no clock, no ring", m.ring_permille == -1);
+  check("no clock, no ring", m.ring_end == -1);
   tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, 0);
-  check("idle pomodoro has no ring", m.ring_permille == -1);
+  check("idle pomodoro has no ring", m.ring_end == -1);
 
   tg_pomo_tap(&p, 0);
   tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, MIN_US(5));
-  check("pomodoro ring is the remaining fraction (20/25)", m.ring_permille == 800);
+  check("pomodoro ring is the remaining fraction (20/25)", m.ring_start == 0 && m.ring_end == 800);
   tg_pomo_tap(&p, MIN_US(5));
   tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, MIN_US(9));
-  check("paused pomodoro keeps its ring", m.ring_permille == 800);
+  check("paused pomodoro keeps its ring", m.ring_start == 0 && m.ring_end == 800);
 
   tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, MIN_US(9));
-  check("idle timer has no ring even while the pomodoro runs", m.ring_permille == -1);
+  check("idle timer has no ring even while the pomodoro runs", m.ring_end == -1);
   tg_countdown_start(&c, 1, 0);
   tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, MIN_US(10));
-  check("timer ring is the remaining fraction (30/40)", m.ring_permille == 750);
+  check("timer ring is the remaining fraction (30/40)", m.ring_start == 0 && m.ring_end == 750);
 
   tg_timer_tick(&c.timer, MIN_US(50));
   tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, MIN_US(50));
-  check("the DONE marker hides the ring", m.done && m.ring_permille == -1);
+  check("the DONE marker hides the ring", m.done && m.ring_end == -1);
   tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, MIN_US(50));
-  check("...also over the clock", m.done && m.ring_permille == -1);
+  check("...also over the clock", m.done && m.ring_end == -1);
 }
 
 int main(void) {

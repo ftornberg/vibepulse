@@ -97,4 +97,18 @@ assert "UPDATE READY" in docs and "outside the repository" in docs, (
     "docs/time-app.md must explain why the firmware build directory lives outside the repo"
 )
 
+# RESET is a finger target on glass: the owner found the 200 x 56 area too
+# small on the physical panel (2026-09-26). Keep it at least 240 x 80.
+import re
+reset = re.search(r"v\.reset = plain\(root, (\d+), (\d+)\);", views)
+assert reset and int(reset.group(1)) >= 240 and int(reset.group(2)) >= 80, (
+    "the RESET hit area must stay at least 240 x 80 px"
+)
+
+# The owner chose VibePulse's palette on the glass (2026-09-26): Claude orange
+# accent and the softer off-white for the big digits; pure white was too sharp.
+assert "#define COL_ACCENT lv_color_hex(0xD97757)" in views
+assert "#define COL_WHITE  lv_color_hex(0xD9DCE2)" in views
+assert "0x5FD0A5" not in views and "0x5FD0A5" not in app
+
 print("OK: TID is opt-in, 2.16-only and taps are short clicks")

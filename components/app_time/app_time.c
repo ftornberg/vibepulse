@@ -134,9 +134,9 @@ const torget_app_t time_app = {
   .icon = {
     .font = &plex_icon_64,
     .glyph = "T",
-    .plate_hex = 0x12302A,
+    .plate_hex = 0x2A1812,
     .glyph_hex = 0xFFFFFF,
-    .dot_hex = 0x5FD0A5,
+    .dot_hex = 0xD97757,
   },
   .create = create,
   .enter = enter,

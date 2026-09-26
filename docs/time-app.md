@@ -21,9 +21,10 @@ is no menu.
 
 The digital time sits in the middle of the glass and a thin ring runs around it:
 
-- **Clock:** the ring is the seconds of the current minute. It is never empty
-  while the time is valid, and it is hidden until the panel has a valid time
-  (the digits then read `––:––`, never `00:00`).
+- **Clock:** the ring counts the seconds and always moves clockwise: in odd
+  minutes the filled part grows from 12 o'clock, in even minutes the empty
+  part does, so the ring never jumps from full to empty. It is hidden until the
+  panel has a valid time (the digits then read `––:––`, never `00:00`).
 - **Pomodoro and timer:** the ring is the time left, full at the start and
   shrinking to nothing. It is hidden while a timer is idle.
 
@@ -31,7 +32,8 @@ The digital time sits in the middle of the glass and a thin ring runs around it:
 
 - **Tap** starts, pauses and resumes. In the timer face a tap on 20, 40 or 50
   starts that length.
-- **RESET** (shown while a timer runs or is paused) cancels it.
+- **RESET** (shown while a timer runs or is paused) cancels it. Its touch area
+  is larger than the word: most of the bottom of the face.
 - **Long press** anywhere opens the launcher, as in every app.
 - When a timer ends, a full circle and **DONE** take over the glass in *any*
   face until you tap. In pomodoro the next phase then waits idle for another
@@ -90,7 +92,10 @@ wrong value shows as a constant wrong face and is one number to change.
 - **Needs You takes the glass from TID.** When an agent needs you, the panel
   switches to VibePulse so the question is seen, and returns to TID after the
   answer, unless you switched app yourself meanwhile. A running TID timer keeps
-  counting underneath. (Simulator-verified; not yet seen on the glass.)
+  counting underneath. Seen on the owner's 2.16 panel on 2026-09-26
+  (`v1.1.0-32-g96d6947`): NEEDS YOU came up over the clock face, for a
+  manual-mode request where the panel offered only to dismiss it, and TID came
+  back after it was dismissed.
 - **With the buttons down the picture is garbled in every app.** Seen on the
   owner's 2.16 unit on 2026-09-25, VibePulse included: one of the auto-rotation's
   four MADCTL modes renders a distorted frame. That is a platform rotation

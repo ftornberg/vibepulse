@@ -14,8 +14,10 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   answer's payoff beat ends, returns to what was showing, unless you
   navigated yourself meanwhile. Only Needs You claims; the DONE pulse does
   not. New host API `torget_glass_claim()` / `torget_glass_release()`, rule in
-  `platform/glass_claim.c` (host-tested); simulator-verified, not yet on the
-  glass.
+  `platform/glass_claim.c` (host-tested). On the owner's 2.16 panel
+  (2026-09-26, `v1.1.0-32-g96d6947`) NEEDS YOU came up over TID's clock for a
+  manual-mode request, offering only to dismiss it, and TID came back after
+  it was dismissed.
 - A corner probe for measuring an AMOLED's rounded active-area corners:
   `./sim/build/torget-sim --corner-probe` renders it, and
   `TG_CORNER_PROBE_AT_BOOT` in `secrets.h` shows it for two minutes after
@@ -42,6 +44,12 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Changed
 
+- TID's seconds ring always moves clockwise: odd minutes fill it, even minutes
+  empty it from 12 o'clock, instead of snapping from full to empty every
+  minute. RESET's touch area grows from 200 x 56 to 260 x 84 px. TID takes
+  VibePulse's palette: Claude-orange accent and the softer off-white
+  (`0xD9DCE2`) for its big digits, as pure white was too sharp. All from the
+  owner's first look at the physical panel.
 - **Claude and Codex approvals now share one shell-command classifier.**
   The Claude path used to judge a Bash permission by its first word and the
   absence of shell metacharacters alone, so `git branch -D main`,

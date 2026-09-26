@@ -10,14 +10,15 @@ extern const lv_font_t plex_headline_48;
 extern const lv_font_t plex_attention_52;
 extern const lv_font_t plex_ui_21;
 
-/* Palette: svart botten och paletten ur VibePulse-designsystemet
- * (vibepulse_layout.generated.h: TEXT/MUTED/TRACK). Accenten är provisorisk
- * tills rastergranskningen har godkänt den. */
+/* Paletten är VibePulses (vibepulse_layout.generated.h och usage_screen.c),
+ * vald av ägaren på glaset 2026-09-26: Claude-orange accent och VibePulses
+ * mjukare off-white (COL_META) för de stora siffrorna — rent vitt blev skarpt
+ * i så här stor yta på AMOLED. */
 #define COL_BLACK  lv_color_hex(0x000000)
-#define COL_WHITE  lv_color_hex(0xFFFFFF)
+#define COL_WHITE  lv_color_hex(0xD9DCE2)
 #define COL_MUTED  lv_color_hex(0x9298A2)
 #define COL_TRACK  lv_color_hex(0x303238)
-#define COL_ACCENT lv_color_hex(0x5FD0A5)
+#define COL_ACCENT lv_color_hex(0xD97757)
 
 #define DOT_COUNT 4
 
@@ -179,8 +180,11 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
   }
 
   /* RESET: en stor träffyta, en liten text. */
-  v.reset = plain(root, 200, 56);
-  lv_obj_set_pos(v.reset, 140, 396);
+  /* 260 x 84 (ägaren 2026-09-26: 200 x 56 var för litet för ett finger på
+   * glaset). Texten ligger kvar där den låg; ytan börjar under prickarna
+   * (y 366) och får gå in under ringen, som aldrig tar emot tryck. */
+  v.reset = plain(root, 260, 84);
+  lv_obj_set_pos(v.reset, 110, 380);
   lv_obj_t *reset_text = lv_label_create(v.reset);
   lv_obj_set_style_text_font(reset_text, &plex_ui_21, 0);
   lv_obj_set_style_text_color(reset_text, COL_MUTED, 0);
@@ -233,8 +237,13 @@ void time_views_render(const tg_time_view_model *m) {
                m->show_presets ? BIG_OFFSET_Y_PRESETS : BIG_OFFSET_Y);
   lv_obj_set_y(v.hint, m->show_presets ? HINT_Y_PRESETS : HINT_Y);
 
-  set_shown(v.ring, m->ring_permille >= 0);
-  if (m->ring_permille >= 0) lv_arc_set_value(v.ring, m->ring_permille);
+  /* Bågen sätts med vinklar, inte med ett värde: klockans ring kan växa från
+   * båda kanterna (alltid medurs), timrarnas krymper mot 12. 1 promille =
+   * 0,36 grader; en sekund är exakt 6 grader. */
+  set_shown(v.ring, m->ring_end >= 0);
+  if (m->ring_end >= 0)
+    lv_arc_set_angles(v.ring, (m->ring_start * 360 + 500) / 1000,
+                      (m->ring_end * 360 + 500) / 1000);
 
   lv_label_set_text(v.done_caption, m->caption ? m->caption : "");
   set_shown(v.done_layer, m->done);
