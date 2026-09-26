@@ -109,9 +109,10 @@ The digital time sits in the middle of the glass and a thin ring runs around
 it in every mode (an `lv_arc`, 10 px wide, inset 16 px, drawn clockwise from
 12 o'clock; no transform layer or canvas):
 
-- **Clock:** the ring shows the seconds of the current minute. It is never
-  empty while the time is valid (`(second + 1) / 60`, full at :59) and is
-  hidden while the time is invalid.
+- **Clock:** the ring counts the seconds and always moves clockwise
+  (owner, 2026-09-26): in odd minutes the filled part grows from 12 o'clock, in
+  even minutes the empty part does, one sixtieth (6 degrees) per second, so it
+  never jumps from full to empty. Hidden while the time is invalid.
 - **Pomodoro and timer:** the ring shows the remaining fraction of the run,
   full at the start and shrinking to nothing, rounded up so a running timer
   never shows an empty ring. It is hidden while idle and under the DONE marker.

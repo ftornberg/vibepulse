@@ -39,12 +39,17 @@ void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
   m->caption = "";
   m->hint = "";
   m->dots_done = -1;
-  m->ring_permille = -1;
+  m->ring_start = 0;
+  m->ring_end = -1;
 
   switch (mode) {
     case TG_TIME_MODE_CLOCK:
       tg_time_clock_text(clock_valid, hour, minute, m->big, sizeof m->big);
-      m->ring_permille = tg_ring_seconds(clock_valid, second);
+      {
+        tg_ring_arc arc = tg_ring_seconds(clock_valid, minute, second);
+        m->ring_start = arc.start;
+        m->ring_end = arc.end;
+      }
       break;
 
     case TG_TIME_MODE_POMODORO: {
@@ -60,7 +65,7 @@ void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
         m->hint = "TAP TO START";
       } else {
         fill_active(m, &pomo->timer, now_us);
-        m->ring_permille = tg_ring_remaining(&pomo->timer, now_us);
+        m->ring_end = tg_ring_remaining(&pomo->timer, now_us);
       }
       break;
     }
@@ -74,14 +79,14 @@ void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
         m->hint = "CHOOSE MINUTES";
       } else {
         fill_active(m, &count->timer, now_us);
-        m->ring_permille = tg_ring_remaining(&count->timer, now_us);
+        m->ring_end = tg_ring_remaining(&count->timer, now_us);
       }
       break;
   }
 
   /* KLAR gäller i alla lägen så länge appen syns; pomodoron kvitteras först. */
   m->done_source = tg_time_done_source_of(pomo, count);
-  if (m->done_source != TG_TIME_DONE_NONE) m->ring_permille = -1; /* KLAR-lagret täcker ringen */
+  if (m->done_source != TG_TIME_DONE_NONE) { m->ring_start = 0; m->ring_end = -1; } /* KLAR-lagret täcker ringen */
   if (m->done_source == TG_TIME_DONE_POMODORO) {
     m->done = true;
     m->caption = pomo_caption(tg_pomo_phase_of(pomo));

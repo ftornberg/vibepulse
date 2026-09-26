@@ -135,9 +135,19 @@ void tg_time_mmss_text(int64_t remaining_us, char *out, size_t cap);
 
 /* ---- ringen (specens "Ring"-avsnitt) ------------------------------------- */
 
-/* Sekundringen på klockan: aldrig tom medan tiden är giltig ((sekund+1)/60,
- * full vid :59). -1 döljer ringen (ogiltig klocka eller sekund utanför 0..59). */
-int tg_ring_seconds(bool valid, int second);
+/* En ringbåge i promille av varvet, medurs från klockan 12: start..end.
+ * end == -1 döljer ringen. start == end är en tom ring. */
+typedef struct {
+  int start;
+  int end;
+} tg_ring_arc;
+
+/* Sekundringen på klockan rör sig ALLTID medurs (ägaren 2026-09-26): udda
+ * minuter växer den fyllda delen från 12, jämna minuter växer den tomma, så
+ * ringen varken hoppar från full till tom eller går baklänges. En kant flyttar
+ * exakt 1/60 varv per sekund. Dold (end -1) vid ogiltig klocka eller
+ * minut/sekund utanför 0..59. */
+tg_ring_arc tg_ring_seconds(bool valid, int minute, int second);
 
 /* Kvarvarande andel av en löpning i promille, avrundad UPP så att en gående
  * timer aldrig visar en tom ring. -1 utom när timern går eller är pausad. */

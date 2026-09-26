@@ -228,12 +228,45 @@ static void test_text(void) {
 }
 
 static void test_ring(void) {
-  check("seconds ring at :00 is 16", tg_ring_seconds(true, 0) == 16);
-  check("seconds ring at :29 is 500", tg_ring_seconds(true, 29) == 500);
-  check("seconds ring at :59 is full", tg_ring_seconds(true, 59) == 1000);
-  check("seconds ring hidden without a valid clock", tg_ring_seconds(false, 10) == -1);
-  check("negative second hides the ring", tg_ring_seconds(true, -1) == -1);
-  check("second 60 hides the ring", tg_ring_seconds(true, 60) == -1);
+  /* Always clockwise (owner, 2026-09-26): odd minutes the filled part grows
+   * clockwise from 12, even minutes the empty part does, so the ring never
+   * jumps from full to empty nor runs backwards. Permille of the circle. */
+  tg_ring_arc a;
+  a = tg_ring_seconds(true, 11, 0);
+  check("odd minute starts as a sliver at 12", a.start == 0 && a.end == 16);
+  a = tg_ring_seconds(true, 11, 29);
+  check("odd minute :29 is the first half", a.start == 0 && a.end == 500);
+  a = tg_ring_seconds(true, 11, 59);
+  check("odd minute ends full", a.start == 0 && a.end == 1000);
+  a = tg_ring_seconds(true, 12, 0);
+  check("even minute starts with a sliver emptied", a.start == 16 && a.end == 1000);
+  a = tg_ring_seconds(true, 12, 29);
+  check("even minute :29 keeps the second half", a.start == 500 && a.end == 1000);
+  a = tg_ring_seconds(true, 12, 59);
+  check("even minute ends empty", a.start == 1000 && a.end == 1000);
+
+  /* One edge moves exactly one sixtieth clockwise every second, across every
+   * second and every minute boundary of the hour. */
+  tg_ring_arc prev = tg_ring_seconds(true, 59, 59);
+  for (int minute = 0; minute < 60; minute++)
+    for (int second = 0; second < 60; second++) {
+      a = tg_ring_seconds(true, minute, second);
+      int ds = a.start - prev.start, de = a.end - prev.end;
+      bool wrap = prev.start == prev.end || prev.end - prev.start == 1000;
+      bool one_edge_forward =
+          (ds == 0 && (de == 16 || de == 17)) || (de == 0 && (ds == 16 || ds == 17));
+      check("one edge moves one step clockwise each second",
+            one_edge_forward || (wrap && a.end - a.start <= 17));
+      check("start never passes end", a.start <= a.end);
+      prev = a;
+    }
+
+  a = tg_ring_seconds(false, 11, 10);
+  check("seconds ring hidden without a valid clock", a.end == -1);
+  check("negative second hides the ring", tg_ring_seconds(true, 10, -1).end == -1);
+  check("second 60 hides the ring", tg_ring_seconds(true, 10, 60).end == -1);
+  check("minute 60 hides the ring", tg_ring_seconds(true, 60, 10).end == -1);
+  check("negative minute hides the ring", tg_ring_seconds(true, -1, 10).end == -1);
 
   tg_timer t;
   tg_timer_init(&t);

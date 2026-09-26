@@ -167,9 +167,19 @@ void tg_time_mmss_text(int64_t remaining_us, char *out, size_t cap) {
   snprintf(out, cap, "%02d:%02d", (int)(seconds / 60), (int)(seconds % 60));
 }
 
-int tg_ring_seconds(bool valid, int second) {
-  if (!valid || second < 0 || second > 59) return -1;
-  return (second + 1) * 1000 / 60;
+tg_ring_arc tg_ring_seconds(bool valid, int minute, int second) {
+  tg_ring_arc arc = { 0, -1 };
+  if (!valid || minute < 0 || minute > 59 || second < 0 || second > 59)
+    return arc;
+  int edge = (second + 1) * 1000 / 60;
+  if (minute % 2 == 1) {        /* udda: den fyllda delen växer medurs */
+    arc.start = 0;
+    arc.end = edge;
+  } else {                      /* jämn: den tomma delen växer medurs */
+    arc.start = edge;
+    arc.end = 1000;
+  }
+  return arc;
 }
 
 int tg_ring_remaining(const tg_timer *t, int64_t now_us) {

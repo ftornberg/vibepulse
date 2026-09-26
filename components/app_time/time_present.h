@@ -31,7 +31,8 @@ typedef struct {
   bool done;             /* helskärmsmarkeringen */
   bool muted;            /* pausad: siffran dämpas */
   tg_time_done_source done_source;
-  int ring_permille;     /* ringen runt ansiktet 0..1000; -1 döljer den */
+  int ring_start;        /* ringbågen i promille, medurs från 12 */
+  int ring_end;          /* -1 döljer ringen */
 } tg_time_view_model;
 
 /* Vem av timrarna som är klar (pomodoro först), annars NONE. NULL-säker. */
