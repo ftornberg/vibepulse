@@ -105,4 +105,10 @@ assert reset and int(reset.group(1)) >= 240 and int(reset.group(2)) >= 80, (
     "the RESET hit area must stay at least 240 x 80 px"
 )
 
+# The owner chose VibePulse's palette on the glass (2026-09-26): Claude orange
+# accent and the softer off-white for the big digits; pure white was too sharp.
+assert "#define COL_ACCENT lv_color_hex(0xD97757)" in views
+assert "#define COL_WHITE  lv_color_hex(0xD9DCE2)" in views
+assert "0x5FD0A5" not in views and "0x5FD0A5" not in app
+
 print("OK: TID is opt-in, 2.16-only and taps are short clicks")

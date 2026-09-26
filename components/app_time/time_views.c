@@ -10,14 +10,15 @@ extern const lv_font_t plex_headline_48;
 extern const lv_font_t plex_attention_52;
 extern const lv_font_t plex_ui_21;
 
-/* Palette: svart botten och paletten ur VibePulse-designsystemet
- * (vibepulse_layout.generated.h: TEXT/MUTED/TRACK). Accenten är provisorisk
- * tills rastergranskningen har godkänt den. */
+/* Paletten är VibePulses (vibepulse_layout.generated.h och usage_screen.c),
+ * vald av ägaren på glaset 2026-09-26: Claude-orange accent och VibePulses
+ * mjukare off-white (COL_META) för de stora siffrorna — rent vitt blev skarpt
+ * i så här stor yta på AMOLED. */
 #define COL_BLACK  lv_color_hex(0x000000)
-#define COL_WHITE  lv_color_hex(0xFFFFFF)
+#define COL_WHITE  lv_color_hex(0xD9DCE2)
 #define COL_MUTED  lv_color_hex(0x9298A2)
 #define COL_TRACK  lv_color_hex(0x303238)
-#define COL_ACCENT lv_color_hex(0x5FD0A5)
+#define COL_ACCENT lv_color_hex(0xD97757)
 
 #define DOT_COUNT 4
 

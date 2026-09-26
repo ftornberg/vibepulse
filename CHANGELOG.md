@@ -44,7 +44,9 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 - TID's seconds ring always moves clockwise: odd minutes fill it, even minutes
   empty it from 12 o'clock, instead of snapping from full to empty every
-  minute. RESET's touch area grows from 200 x 56 to 260 x 84 px. Both from the
+  minute. RESET's touch area grows from 200 x 56 to 260 x 84 px. TID takes
+  VibePulse's palette: Claude-orange accent and the softer off-white
+  (`0xD9DCE2`) for its big digits, as pure white was too sharp. All from the
   owner's first look at the physical panel.
 - **Claude and Codex approvals now share one shell-command classifier.**
   The Claude path used to judge a Bash permission by its first word and the
