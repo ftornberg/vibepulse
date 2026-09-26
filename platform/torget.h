@@ -109,6 +109,15 @@ void torget_app_show(int idx);
  * targetet, tangent N i bänken — appväxling utan att röra glaset. */
 void torget_app_next(void);
 
+/* Glasets anspråk (platform/glass_claim.h). En app vars larm MÅSTE synas även
+ * när en annan app står framme — Needs You, som tar time-out om ingen ser den —
+ * gör anspråk: plattformen tar fram appen och minns vad som visades. När
+ * larmet är besvarat släpper appen, och glaset går tillbaka dit det var, om
+ * inte personen själv navigerat under tiden. Upprepade anrop är billiga och
+ * idempotenta. Kallas under torget_ui_lock(). */
+void torget_glass_claim(const torget_app_t *app);
+void torget_glass_release(const torget_app_t *app);
+
 /* Pixeldriften mot inbränning: allt UI bor i en låda som vandrar ett par
  * pixlar per minut. Apparna behöver aldrig bry sig; exponerad för värdlager
  * som vill styra takten i test. */

@@ -78,6 +78,7 @@ add_executable(torget-sim
   ../platform/boot_screen.c
   ../platform/settings_menu.c
   ../platform/button_arbitration.c
+  ../platform/glass_claim.c
   ../platform/battery_badge.c
   ../platform/corner_probe.c
   ../components/torget_power/battery_policy.c

@@ -38,6 +38,7 @@ idf_component_register(
        "../platform/battery_badge.c"
        "../platform/corner_probe.c"
        "../platform/button_arbitration.c"
+       "../platform/glass_claim.c"
   # ".." ger `#include "secrets.h"` (gitignorad, kopieras ur secrets.h.example)
   INCLUDE_DIRS "." ".." "../platform"
   REQUIRES ${TORGET_MAIN_REQUIRES}

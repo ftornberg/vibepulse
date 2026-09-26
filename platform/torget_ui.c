@@ -1,5 +1,6 @@
 #include "torget.h"
 #include "display_geometry.h"
+#include "glass_claim.h"
 
 #include <string.h>
 
@@ -32,6 +33,7 @@ static struct {
   tg_wifi_status_mode wifi_rendered_mode;
   bool wifi_rendered_connected;
   bool wifi_rendered_valid;
+  tg_glass_claim claim;            /* ett larm som tagit fram sin app */
 } tg;
 
 /* ---------------------------------------------------------------- helpers */
@@ -125,6 +127,7 @@ void torget_app_show(int idx) {
   lv_obj_add_flag(tg.launcher, LV_OBJ_FLAG_HIDDEN);
   lv_obj_remove_flag(tg.roots[idx], LV_OBJ_FLAG_HIDDEN);
   tg.active = idx;
+  tg_glass_claim_note_show(&tg.claim, idx);
   if (torget_apps[idx]->enter) torget_apps[idx]->enter();
 }
 
@@ -140,6 +143,24 @@ void torget_launcher_open(void) {
     tg.active = -1;
   }
   lv_obj_remove_flag(tg.launcher, LV_OBJ_FLAG_HIDDEN);
+  tg_glass_claim_note_show(&tg.claim, TG_GLASS_LAUNCHER);
+}
+
+static int app_index_of(const torget_app_t *app) {
+  for (int i = 0; i < torget_app_count; i++)
+    if (torget_apps[i] == app && tg.roots[i]) return i;
+  return -1;
+}
+
+void torget_glass_claim(const torget_app_t *app) {
+  int target = tg_glass_claim_take(&tg.claim, app_index_of(app), tg.active);
+  if (target >= 0) torget_app_show(target);
+}
+
+void torget_glass_release(const torget_app_t *app) {
+  int target = tg_glass_claim_release(&tg.claim, app_index_of(app), tg.active);
+  if (target == TG_GLASS_LAUNCHER) torget_launcher_open();
+  else if (target >= 0) torget_app_show(target);
 }
 
 static void icon_clicked(lv_event_t *e) {
@@ -238,6 +259,7 @@ static void drift_timer(lv_timer_t *t) {
 void torget_ui_create(void) {
   memset(&tg, 0, sizeof tg);
   tg.active = -1;
+  tg_glass_claim_init(&tg.claim);
 
   lv_obj_t *scr = lv_screen_active();
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);

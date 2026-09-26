@@ -7,6 +7,15 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Added
 
+- **Needs You comes forward from any app.** Its takeover lives in VibePulse's
+  page tree, so with another app or the launcher in front it rendered into a
+  hidden root and timed out back to the terminal unseen. A visible Needs You
+  now claims the glass: the platform brings VibePulse forward and, once the
+  answer's payoff beat ends, returns to what was showing, unless you
+  navigated yourself meanwhile. Only Needs You claims; the DONE pulse does
+  not. New host API `torget_glass_claim()` / `torget_glass_release()`, rule in
+  `platform/glass_claim.c` (host-tested); simulator-verified, not yet on the
+  glass.
 - A corner probe for measuring an AMOLED's rounded active-area corners:
   `./sim/build/torget-sim --corner-probe` renders it, and
   `TG_CORNER_PROBE_AT_BOOT` in `secrets.h` shows it for two minutes after
