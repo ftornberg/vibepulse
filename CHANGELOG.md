@@ -14,8 +14,9 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   answer's payoff beat ends, returns to what was showing, unless you
   navigated yourself meanwhile. Only Needs You claims; the DONE pulse does
   not. New host API `torget_glass_claim()` / `torget_glass_release()`, rule in
-  `platform/glass_claim.c` (host-tested); simulator-verified, not yet on the
-  glass.
+  `platform/glass_claim.c` (host-tested). On the owner's 2.16 panel
+  (2026-09-26, `v1.1.0-32-g96d6947`) NEEDS YOU came up over TID's clock; the
+  return afterwards is simulator-verified only.
 - A corner probe for measuring an AMOLED's rounded active-area corners:
   `./sim/build/torget-sim --corner-probe` renders it, and
   `TG_CORNER_PROBE_AT_BOOT` in `secrets.h` shows it for two minutes after
