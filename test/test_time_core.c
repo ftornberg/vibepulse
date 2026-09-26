@@ -16,6 +16,14 @@ static void check(const char *what, int condition) {
 #define MIN_US(m) ((int64_t)(m) * 60LL * 1000000LL)
 
 static void test_mode_for(void) {
+  /* Measured on the owner's 2.16 panel (2026-09-26): buttons up reports
+   * rotation 0, buttons left 1, buttons right 3; buttons down is 2. The owner
+   * wants the clock with the buttons right (the panel's resting pose), the
+   * timer with the buttons up, pomodoro with the buttons left. */
+  check("buttons right (3) is the clock", tg_time_mode_for(3, TG_TIME_MODE_TIMER) == TG_TIME_MODE_CLOCK);
+  check("buttons up (0) is the timer", tg_time_mode_for(0, TG_TIME_MODE_CLOCK) == TG_TIME_MODE_TIMER);
+  check("buttons left (1) is pomodoro", tg_time_mode_for(1, TG_TIME_MODE_CLOCK) == TG_TIME_MODE_POMODORO);
+  check("buttons down (2) keeps the last face", tg_time_mode_for(2, TG_TIME_MODE_POMODORO) == TG_TIME_MODE_POMODORO);
   check("rot clock -> clock",
         tg_time_mode_for(TG_TIME_ROT_CLOCK, TG_TIME_MODE_TIMER) == TG_TIME_MODE_CLOCK);
   check("rot pomodoro -> pomodoro",

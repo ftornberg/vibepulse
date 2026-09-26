@@ -21,10 +21,14 @@ it shows, so no menu is needed:
 
 | Panel position | Mode |
 |---|---|
-| Button edge up | Clock only (current local time) |
-| Right edge down | Pomodoro |
-| Left edge down | Plain timer with presets 20, 40 and 50 minutes |
-| Button edge down | No mode of its own: keep the last mode |
+| Buttons to the right | Clock only (current local time) |
+| Buttons to the left | Pomodoro |
+| Buttons up | Plain timer with presets 20, 40 and 50 minutes |
+| Buttons down | No mode of its own: keep the last mode |
+
+(Revised 2026-09-26 on the physical panel: the owner moved the clock to the
+buttons-right pose, the panel's natural resting position, and the timer to
+buttons up. The original draft had the clock at buttons up.)
 
 The app is an ordinary entry in the launcher (`torget_app_t`); the owner picks
 it there or with KEY3. Orientation chooses the mode only inside the app. The

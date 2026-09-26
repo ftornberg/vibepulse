@@ -44,6 +44,10 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Changed
 
+- TID's clock moves to the buttons-right pose, the panel's natural resting
+  position on the desk, and the timer to buttons up; pomodoro stays at buttons
+  left. The rotation values are now measured on the owner's panel (buttons up
+  0, left 1, right 3) instead of guessed.
 - TID's seconds ring always moves clockwise: odd minutes fill it, even minutes
   empty it from 12 o'clock, instead of snapping from full to empty every
   minute. RESET's touch area grows from 200 x 56 to 260 x 84 px. TID takes
