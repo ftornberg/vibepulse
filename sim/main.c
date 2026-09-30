@@ -1857,6 +1857,27 @@ static int run_glass_claim_qa(void) {
   usage_screen_tick(base_us + 10000000LL);
   torget_wifi_status_foreground();
   dump_frame("glass-claim-returned");
+
+  /* The waiting pulse (Claude finished and waits for you): it claims the
+   * glass for its 45 s pulse and hands it back, while the card stays static
+   * inside VibePulse. */
+  size_t w_len = 0;
+  char *w_json = read_fixture("agent-status-claude-waiting.json", &w_len);
+  tk_agent_snapshot waiting;
+  bool w_ok = w_json && tk_agent_status_parse(w_json, w_len, &waiting);
+  free(w_json);
+  if (!w_ok) return 2;
+  int64_t pulse_us = base_us + 20000000LL;
+  torget_launcher_open();
+  torget_wifi_status_foreground();
+  dump_frame("glass-pulse-before");
+  usage_screen_apply_agent(&waiting, pulse_us);
+  dump_frame("glass-pulse-alert");
+  usage_screen_tick(pulse_us + 30000000LL);
+  dump_frame("glass-pulse-held");
+  usage_screen_tick(pulse_us + 46000000LL);
+  torget_wifi_status_foreground();
+  dump_frame("glass-pulse-returned");
   return capture_failures == 0 ? 0 : 1;
 }
 
@@ -1988,6 +2009,21 @@ static int run_time_app_captures(void) {
   time_frame(TG_TIME_ROT_TIMER, "time-timer-running");
   time_app_qa_advance(40LL * 60 * 1000000);
   time_frame(TG_TIME_ROT_TIMER, "time-timer-done");
+  time_app_qa_tap();
+
+  /* Claude waits for you: the 45 s pulse borrows the glass, then TID comes
+   * back with the orange Claude icon above the clock. */
+  size_t w_len = 0;
+  char *w_json = read_fixture("agent-status-claude-waiting.json", &w_len);
+  tk_agent_snapshot waiting;
+  bool w_ok = w_json && tk_agent_status_parse(w_json, w_len, &waiting);
+  free(w_json);
+  if (!w_ok) return 2;
+  int64_t wait_us = torget_now_us() + 1000000LL;
+  sim_orientation = TG_TIME_ROT_CLOCK;
+  usage_screen_apply_agent(&waiting, wait_us);
+  usage_screen_tick(wait_us + 46000000LL);
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock-attention");
   return capture_failures == 0 ? 0 : 1;
 }
 #endif

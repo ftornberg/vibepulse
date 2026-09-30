@@ -66,7 +66,11 @@ static void refresh(void) {
 #endif
 
   tg_time_view_model model;
-  tg_time_present(&model, app.mode, valid, hour, minute, second, &app.pomo, &app.count, now);
+  uint32_t attention_color = 0;
+  const lv_image_dsc_t *attention = torget_attention_icon(&attention_color);
+  time_views_set_attention(attention, attention_color);
+  tg_time_present(&model, app.mode, valid, hour, minute, second, &app.pomo,
+                  &app.count, now, attention != NULL);
   time_views_render(&model);
 }
 

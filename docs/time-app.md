@@ -100,6 +100,13 @@ appears, and edit the three `#define` values.
   (`v1.1.0-32-g96d6947`): NEEDS YOU came up over the clock face, for a
   manual-mode request where the panel offered only to dismiss it, and TID came
   back after it was dismissed.
+- **When Claude waits for you, TID lends the glass for 45 s.** Claude Code
+  reports "waiting" when it has finished its answer, asks a question or needs
+  permission. The panel then shows VibePulse's pulsing NEEDS YOU card for up to
+  45 s (a DONE card: 10 s) and hands the glass back to TID. While Claude still
+  waits, a small orange Claude icon sits above the clock; it goes away when
+  Claude works again or the card is dismissed in VibePulse. Simulator-verified;
+  not yet seen on the glass.
 - **Buttons down has no TID face of its own** (it keeps the last face). That
   pose used to render every app as smeared streaks; the cause was a platform
   rotation gap, not TID, and is fixed in source (OBS-42 in

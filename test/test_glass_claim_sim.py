@@ -41,6 +41,22 @@ class GlassClaimSimTests(unittest.TestCase):
             self.assertEqual(frames["returned"], frames["before"],
                              "after the answer the launcher must come back")
 
+            # The waiting pulse (Claude finished and waits for you) claims the
+            # glass for its 45 s pulse, then hands it back; the static card
+            # stays inside VibePulse (2026-09-30, owner).
+            pulse = {}
+            for tag in ("before", "alert", "held", "returned"):
+                with Image.open(Path(temporary) / f"torget-glass-pulse-{tag}.bmp") as im:
+                    im = im.convert("RGB")
+                    self.assertEqual(im.size, (480, 480))
+                    pulse[tag] = hashlib.sha256(im.tobytes()).hexdigest()
+            self.assertNotEqual(pulse["alert"], pulse["before"],
+                                "the waiting pulse did not reach the glass")
+            self.assertNotEqual(pulse["held"], pulse["before"],
+                                "the pulse must hold the glass for its 45 s")
+            self.assertEqual(pulse["returned"], pulse["before"],
+                             "after the 45 s pulse the launcher must come back")
+
 
 if __name__ == "__main__":
     unittest.main()

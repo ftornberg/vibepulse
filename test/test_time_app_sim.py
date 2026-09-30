@@ -17,6 +17,7 @@ FRAMES = [
     "pomodoro-idle", "pomodoro-running", "pomodoro-paused", "pomodoro-done",
     "done-over-clock", "pomodoro-break",
     "timer-select", "timer-running", "timer-done",
+    "clock-attention",
 ]
 
 
@@ -51,6 +52,8 @@ class TimeAppSimTests(unittest.TestCase):
                         images[tag] = im.tobytes()
             self.assertNotEqual(images["clock"], images["clock-unset"],
                                 "an unset clock must not look like a set one")
+            self.assertNotEqual(images["clock-attention"], images["clock"],
+                                "Claude waiting must show its icon on the clock")
 
 
 if __name__ == "__main__":

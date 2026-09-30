@@ -23,5 +23,8 @@ typedef struct {
 void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions);
 /* Kallas under UI-låset. */
 void time_views_render(const tg_time_view_model *m);
+/* Vilken uppmärksamhetsikon som ska visas (plattformens, se torget.h) och i
+ * vilken färg; synligheten styrs av vymodellens show_attention. */
+void time_views_set_attention(const lv_image_dsc_t *icon, uint32_t color_hex);
 
 #endif
