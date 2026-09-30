@@ -1960,6 +1960,10 @@ static int run_time_app_captures(void) {
   torget_wifi_status_foreground();
   torget_app_show(idx);
 
+  /* Väggklockan låses så att klockbilden är densamma varje körning och kan
+   * pinnas i docs/img (test_docs_frame_drift.py). 10:09:40 är en udda minut:
+   * ringen växer medurs och är två tredjedelar full. */
+  time_app_qa_clock(10, 9, 40);
   time_frame(TG_TIME_ROT_CLOCK, "time-clock");
   time_app_qa_time_unset(true);
   time_frame(TG_TIME_ROT_CLOCK, "time-clock-unset");

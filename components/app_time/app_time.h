@@ -22,6 +22,9 @@ void time_app_qa_tap(void);
 void time_app_qa_preset(int idx);
 void time_app_qa_reset(void);
 void time_app_qa_time_unset(bool unset);
+/* Lås klockans väggtid (h < 0 släpper låset) så att klockbilden blir
+ * reproducerbar i dokumentationen. */
+void time_app_qa_clock(int hour, int minute, int second);
 #endif
 
 #endif

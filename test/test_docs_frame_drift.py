@@ -110,6 +110,11 @@ PINNED = {
     "vibepulse-settings-about.png": "torget-settings-about-found.bmp",
     "vibepulse-settings-no-address.png": "torget-settings-menu-address-lost.bmp",
     "vibepulse-wifi-setup.png": "torget-wifi-setup-open.bmp",
+    # TID (opt-in, 2.16): captured by the TID simulator variant below, with the
+    # wall clock pinned by --time-app-captures so the clock face is exact.
+    "time-clock.png": "torget-time-clock.bmp",
+    "time-pomodoro-running.png": "torget-time-pomodoro-running.bmp",
+    "time-timer-select.png": "torget-time-timer-select.bmp",
 }
 
 # Frames whose chrome this guard cannot confirm is current, each frozen at
@@ -279,6 +284,22 @@ class DocsFrameDriftTests(unittest.TestCase):
 
         subprocess.run(
             [str(ROOT / "sim/build/torget-sim"), "--vibepulse-labs-captures"],
+            cwd=ROOT,
+            env={**os.environ, "TORGET_CAPTURE_DIR": str(cls.capture_dir)},
+            check=True, text=True, capture_output=True)
+        # TID is opt-in, so its frames come from a separate simulator build
+        # (CMake caches the option; sim/build must stay VibePulse-only). Reuse
+        # the LVGL checkout the default build fetched instead of a second one.
+        time_configure = ["cmake", "-S", "sim", "-B", "sim/build-time", "-G",
+                          "Ninja", "-DTORGET_WITH_TIME=ON"]
+        shared_lvgl = ROOT / "sim/build/_deps/lvgl-src"
+        if shared_lvgl.is_dir():
+            time_configure.append(f"-DFETCHCONTENT_SOURCE_DIR_LVGL={shared_lvgl}")
+        for argv in (time_configure, ["cmake", "--build", "sim/build-time"]):
+            subprocess.run(argv, cwd=ROOT, check=True, text=True,
+                           capture_output=True)
+        subprocess.run(
+            [str(ROOT / "sim/build-time/torget-sim"), "--time-app-captures"],
             cwd=ROOT,
             env={**os.environ, "TORGET_CAPTURE_DIR": str(cls.capture_dir)},
             check=True, text=True, capture_output=True)

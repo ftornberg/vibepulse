@@ -673,6 +673,30 @@ has shared LVGL simulator coverage; physical memory and touch review are
 pending before release. [Setup, defaults and future experiments](docs/labs/README.md).
 Countdown clocks and coding quotes remain concepts for a later Labs addition.
 
+## TID: a clock, a pomodoro and a timer
+
+A second, opt-in app for the 2.16 panel that has nothing to do with agents.
+**The side the panel stands on chooses the face**, so there is no menu: buttons
+to the right shows the clock (the panel's natural resting pose), buttons to the
+left a pomodoro (25 / 5 min, a 15 min break after four rounds), buttons up a
+plain timer with 20, 40 and 50 minute presets. A ring around the digits counts
+the seconds, always moving clockwise, or shows the time left.
+
+<p align="center">
+  <img src="docs/img/time-clock.png" width="31%" alt="TID clock face: 10:09 with a clockwise seconds ring two-thirds full">
+  &nbsp;
+  <img src="docs/img/time-pomodoro-running.png" width="31%" alt="TID pomodoro: FOCUS 21:48 with the ring showing the time left">
+  &nbsp;
+  <img src="docs/img/time-timer-select.png" width="31%" alt="TID timer waiting for a choice of 20, 40 or 50 minutes">
+</p>
+
+Tap to start, pause and resume; a long press opens the launcher. A NEEDS YOU
+alert still reaches you: the panel switches to VibePulse for the question and
+returns to TID after the answer. TID is off by default (`-DTORGET_WITH_TIME=ON`
+to build it) and silent for now. It runs on the owner's 2.16 panel, with the
+side mapping measured there. [How it works, how to build it and its
+limits](docs/time-app.md).
+
 ## One button, one menu
 
 **2.41 V2:** hold **BOOT for three seconds** to open SETTINGS, then choose
