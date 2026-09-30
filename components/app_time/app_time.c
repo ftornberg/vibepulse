@@ -22,6 +22,7 @@ static struct {
 #ifndef ESP_PLATFORM
   int64_t skew_us;
   bool time_unset;
+  int fixed_hour, fixed_minute, fixed_second; /* fixed_hour < 0: av */
 #endif
 } app;
 
@@ -55,6 +56,14 @@ static void refresh(void) {
   } else {
     valid = false;
   }
+#ifndef ESP_PLATFORM
+  if (app.fixed_hour >= 0 && !app.time_unset) {
+    valid = true;
+    hour = app.fixed_hour;
+    minute = app.fixed_minute;
+    second = app.fixed_second;
+  }
+#endif
 
   tg_time_view_model model;
   tg_time_present(&model, app.mode, valid, hour, minute, second, &app.pomo, &app.count, now);
@@ -104,6 +113,9 @@ static void on_preset(int idx) {
 static void create(lv_obj_t *root) {
   memset(&app, 0, sizeof app);
   app.mode = TG_TIME_MODE_CLOCK;
+#ifndef ESP_PLATFORM
+  app.fixed_hour = -1;
+#endif
   tg_pomo_init(&app.pomo);
   tg_countdown_init(&app.count);
 
@@ -150,4 +162,9 @@ void time_app_qa_tap(void) { on_tap(); }
 void time_app_qa_preset(int idx) { on_preset(idx); }
 void time_app_qa_reset(void) { on_reset(); }
 void time_app_qa_time_unset(bool unset) { app.time_unset = unset; }
+void time_app_qa_clock(int hour, int minute, int second) {
+  app.fixed_hour = hour;
+  app.fixed_minute = minute;
+  app.fixed_second = second;
+}
 #endif

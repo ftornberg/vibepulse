@@ -103,7 +103,8 @@ appears, and edit the three `#define` values.
 - **Buttons down has no TID face of its own** (it keeps the last face). That
   pose used to render every app as smeared streaks; the cause was a platform
   rotation gap, not TID, and is fixed in source (OBS-42 in
-  `docs/observability-backlog.md`), still to be confirmed on the glass.
+  `docs/observability-backlog.md`), verified clean on the owner's panel on
+  2026-09-30.
 - **Without a working IMU the face stays where it was** (the clock after boot);
   the auto-rotation reports no orientation and TID keeps the last face.
 - **Wall-clock time** comes from the RTC or SNTP like the night dimming does. The

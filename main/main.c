@@ -1165,7 +1165,7 @@ esp_err_t torget_display_rotation_set(bsp_display_rotation_t rotation) {
   static const uint8_t MADCTL[4] = { 0x00, 0x60, 0xC0, 0xA0 };
   static const int GAP[4][2] = { /* {x_gap, y_gap} per läge */
     {0, 0},  /* 0x00 */
-    {0, 6},  /* 0x60 — MV: gapet på y, aldrig x (OBS-42); ej glasverifierat */
+    {0, 6},  /* 0x60 — MV: gapet på y, aldrig x (OBS-42); glasverifierat 2026-09-30 */
     {0, 6},  /* 0xC0 — linjen satt i botten: skjut raderna +6 */
     {0, 0},  /* 0xA0 — bootläget, verifierat rent */
   };
