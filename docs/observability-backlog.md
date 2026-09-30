@@ -986,3 +986,22 @@ on every run. A healthy first start therefore looks like an incident.
 one-line WARNING transition (interface, address, errno) instead of letting
 its traceback reach the log, or exclude zeroconf's own socket errors from
 the smoke test's traceback count. Verify against a two-interface host.
+
+### OBS-42 · With the buttons down every app renders as smeared, dotted streaks
+`firmware · S · done in source (2026-09-30), physically unverified` — seen
+on the owner's 2.16 panel on 2026-09-25 and photographed on 2026-09-30:
+standing the panel on its button edge turned every app (VibePulse, TID,
+Needs You) into horizontally smeared, dotted streaks with a dotted column
+where a vertical line should be; the other three poses were clean. That
+pose is auto-rotation quadrant 2, MADCTL `0x60` (MV|MX), and the gap table in
+`torget_display_rotation_set` gave it `{6, 0}`. The CO5300 driver adds
+`x_gap` straight to CASET and does not know MV has swapped the axes, so the
+column window ran to 485 on an axis that ends at 479; the controller clamps
+the window while every row still carries 480 pixels, and within each
+12-row flush band each row spills six more pixels into the next (a
+sawtooth, which is why the streaks restart instead of forming one diagonal).
+The table's comment also claimed the init CASET starts at column 6; BSP
+2.0.1 sends `0x0000..0x01DF`. **Fix:** `0x60` gets `{0, 6}`, and
+`test/test_display_rotation_gap.py` pins that no MV mode ever carries an
+`x_gap`. **Verify:** stand the panel with the buttons down after the OTA; a
+clean frame closes this, a thin bright line at one edge means `{0, 0}`.
