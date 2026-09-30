@@ -105,8 +105,10 @@ appears, and edit the three `#define` values.
   permission. The panel then shows VibePulse's pulsing NEEDS YOU card for up to
   45 s (a DONE card: 10 s) and hands the glass back to TID. While Claude still
   waits, a small orange Claude icon sits above the clock; it goes away when
-  Claude works again or the card is dismissed in VibePulse. Simulator-verified;
-  not yet seen on the glass.
+  Claude works again or the card is dismissed in VibePulse. Seen on the owner's
+  2.16 panel on 2026-09-30 (`v1.1.0-37-g7d28aa8`): the pulse came up over the
+  clock after Claude's turn ended, the clock came back, and the icon sat above
+  the digits, sized well for a notification.
 - **Buttons down has no TID face of its own** (it keeps the last face). That
   pose used to render every app as smeared streaks; the cause was a platform
   rotation gap, not TID, and is fixed in source (OBS-42 in
