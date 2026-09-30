@@ -1146,22 +1146,26 @@ static void display_start(void) {
 /* MADCTL-vridningen ur BSP:ns bsp_display_rotation_set — den läser BSP:ns
  * statiska handles som aldrig sätts när vi startar displayen själva.
  *
- * PLUS panelens gap: CO5300-glasets fönster börjar på kontrollerkolumn 6
- * (initsekvensens CASET är 0x0006..0x01DD) och drivrutinen adderar
- * x_gap/y_gap till varje adressfönster — men BSP:n justerar aldrig gapet
- * vid rotation. I bootläget 0xA0 går mappningen jämnt ut; i andra lägen
- * hamnar 6-pixelremsan oskriven vid en kant (den vita linjen, hittad på
- * foto 2026-08-06 i läge 0xC0). Konstanterna nedan kalibreras med P24-
- * metoden: ETT strukturerat fyrlägestest, en konstant per läge — aldrig
- * fotoforensik. Ser du en ljus kantlinje i ett läge: justera det lägets
- * par (6 på den axel linjen sitter, spegelvänt om den flyttar till
- * motsatt kant). */
+ * PLUS panelens gap: i ett speglat läge blir en 6-pixelremsa oskriven vid en
+ * kant (den vita linjen, hittad på foto 2026-08-06 i läge 0xC0), och
+ * drivrutinen adderar x_gap/y_gap rakt på varje adressfönster — men BSP:n
+ * justerar aldrig gapet vid rotation. (BSP 2.0.1 initierar CASET/RASET
+ * 0x0000..0x01DF, utan offset; en äldre kommentar här påstod att glaset
+ * började på kolumn 6.)
+ *
+ * REGEL (OBS-42, 2026-09-30): i ett MV-läge (0x20, axlarna bytta) är x_gap
+ * ALLTID 0. Drivrutinen vet inte att MV bytt axlarna, så x_gap hamnar på
+ * den axel som tar slut vid 479: fönstret kapas medan varje rad ändå bär 480
+ * pixlar, och varje rad i ett 12-radersband spiller över 6 pixlar på nästa
+ * — hela glaset blir sidledes utsmetade, prickiga streck (knapparna nedåt,
+ * 0x60, som hade {6, 0}). test/test_display_rotation_gap.py pinnar regeln.
+ * Ser du en ljus kantlinje i ett läge: justera det lägets y-gap. */
 #ifndef TORGET_BOARD_241_V2
 esp_err_t torget_display_rotation_set(bsp_display_rotation_t rotation) {
   static const uint8_t MADCTL[4] = { 0x00, 0x60, 0xC0, 0xA0 };
   static const int GAP[4][2] = { /* {x_gap, y_gap} per läge */
     {0, 0},  /* 0x00 */
-    {6, 0},  /* 0x60 */
+    {0, 6},  /* 0x60 — MV: gapet på y, aldrig x (OBS-42); ej glasverifierat */
     {0, 6},  /* 0xC0 — linjen satt i botten: skjut raderna +6 */
     {0, 0},  /* 0xA0 — bootläget, verifierat rent */
   };
