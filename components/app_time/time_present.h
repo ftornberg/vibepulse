@@ -33,6 +33,7 @@ typedef struct {
   tg_time_done_source done_source;
   int ring_start;        /* ringbågen i promille, medurs från 12 */
   int ring_end;          /* -1 döljer ringen */
+  bool show_attention;   /* en annan app väntar på dig: ikonen ovanför klockan */
 } tg_time_view_model;
 
 /* Vem av timrarna som är klar (pomodoro först), annars NONE. NULL-säker. */
@@ -42,6 +43,6 @@ tg_time_done_source tg_time_done_source_of(const tg_pomo *p, const tg_countdown 
 void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
                      bool clock_valid, int hour, int minute, int second,
                      const tg_pomo *pomo, const tg_countdown *count,
-                     int64_t now_us);
+                     int64_t now_us, bool attention);
 
 #endif

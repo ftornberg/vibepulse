@@ -7,6 +7,14 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Added
 
+- **The waiting pulse comes forward too, and TID shows who is waiting.**
+  When Claude finishes an answer, asks a question or needs permission, its
+  pulsing NEEDS YOU card now borrows the glass from another app for its pulse
+  (45 s; a DONE card 10 s) and hands it back, while the card stays static in
+  VibePulse. A new host API, `torget_attention_set()` /
+  `torget_attention_icon()`, lets an app light a small icon for others to show:
+  TID puts the orange Claude mark above its clock until Claude works again.
+  Simulator-verified; not yet on the glass.
 - **Needs You comes forward from any app.** Its takeover lives in VibePulse's
   page tree, so with another app or the launcher in front it rendered into a
   hidden root and timed out back to the terminal unseen. A visible Needs You

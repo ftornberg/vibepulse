@@ -33,7 +33,7 @@ static void fill_active(tg_time_view_model *m, const tg_timer *t, int64_t now_us
 void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
                      bool clock_valid, int hour, int minute, int second,
                      const tg_pomo *pomo, const tg_countdown *count,
-                     int64_t now_us) {
+                     int64_t now_us, bool attention) {
   memset(m, 0, sizeof *m);
   m->mode = mode;
   m->caption = "";
@@ -50,6 +50,8 @@ void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
         m->ring_start = arc.start;
         m->ring_end = arc.end;
       }
+      /* Bara klockan: pomodoro och timer har sin rubrik på samma plats. */
+      m->show_attention = attention;
       break;
 
     case TG_TIME_MODE_POMODORO: {
@@ -86,7 +88,11 @@ void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
 
   /* KLAR gäller i alla lägen så länge appen syns; pomodoron kvitteras först. */
   m->done_source = tg_time_done_source_of(pomo, count);
-  if (m->done_source != TG_TIME_DONE_NONE) { m->ring_start = 0; m->ring_end = -1; } /* KLAR-lagret täcker ringen */
+  if (m->done_source != TG_TIME_DONE_NONE) {
+    m->ring_start = 0;
+    m->ring_end = -1;
+    m->show_attention = false; /* KLAR-lagret täcker allt */
+  } /* KLAR-lagret täcker ringen */
   if (m->done_source == TG_TIME_DONE_POMODORO) {
     m->done = true;
     m->caption = pomo_caption(tg_pomo_phase_of(pomo));

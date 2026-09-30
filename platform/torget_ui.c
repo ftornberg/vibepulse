@@ -34,6 +34,9 @@ static struct {
   bool wifi_rendered_connected;
   bool wifi_rendered_valid;
   tg_glass_claim claim;            /* ett larm som tagit fram sin app */
+  const torget_app_t *attention_app;
+  const lv_image_dsc_t *attention_icon;
+  uint32_t attention_color;
 } tg;
 
 /* ---------------------------------------------------------------- helpers */
@@ -161,6 +164,25 @@ void torget_glass_release(const torget_app_t *app) {
   int target = tg_glass_claim_release(&tg.claim, app_index_of(app), tg.active);
   if (target == TG_GLASS_LAUNCHER) torget_launcher_open();
   else if (target >= 0) torget_app_show(target);
+}
+
+void torget_attention_set(const torget_app_t *app, const lv_image_dsc_t *icon,
+                          uint32_t color_hex) {
+  if (!app) return;
+  if (icon) {
+    tg.attention_app = app;
+    tg.attention_icon = icon;
+    tg.attention_color = color_hex;
+  } else if (tg.attention_app == app) {
+    tg.attention_app = NULL;
+    tg.attention_icon = NULL;
+    tg.attention_color = 0;
+  }
+}
+
+const lv_image_dsc_t *torget_attention_icon(uint32_t *color_hex) {
+  if (color_hex) *color_hex = tg.attention_color;
+  return tg.attention_icon;
 }
 
 static void icon_clicked(lv_event_t *e) {

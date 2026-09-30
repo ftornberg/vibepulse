@@ -36,6 +36,9 @@ static struct {
 
   lv_obj_t *ring;
   lv_obj_t *caption;
+  lv_obj_t *attention;
+  const lv_image_dsc_t *attention_src;
+  uint32_t attention_color;
   lv_obj_t *big;
   lv_obj_t *hint;
   lv_obj_t *dots[DOT_COUNT];
@@ -139,6 +142,15 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
 
   /* Allt annat ryms innanför ringens innerkant (radie ~214). */
   v.caption = label(root, &plex_headline_48, COL_MUTED, 112);
+  /* Uppmärksamhetsikonen (Claude väntar på dig): 32 px, centrerad ovanför
+   * klockans siffror och innanför ringen. Källa och färg kommer från
+   * plattformen; synligheten från vymodellen. */
+  v.attention = lv_image_create(root);
+  lv_obj_set_size(v.attention, 32, 32);
+  lv_obj_set_pos(v.attention, 224, 128);
+  lv_obj_remove_flag(v.attention, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_image_recolor_opa(v.attention, LV_OPA_COVER, 0);
+  lv_obj_add_flag(v.attention, LV_OBJ_FLAG_HIDDEN);
   v.big = label(root, &plex_num_118, COL_WHITE, 0);
   lv_obj_align(v.big, LV_ALIGN_CENTER, 0, BIG_OFFSET_Y);
   v.hint = label(root, &plex_ui_21, COL_MUTED, HINT_Y);
@@ -231,6 +243,7 @@ void time_views_render(const tg_time_view_model *m) {
     set_shown(v.dots[i], m->dots_done >= 0);
     lv_obj_set_style_bg_color(v.dots[i], i < m->dots_done ? COL_ACCENT : COL_TRACK, 0);
   }
+  set_shown(v.attention, m->show_attention && v.attention_src != NULL);
   set_shown(v.presets_row, m->show_presets);
   set_shown(v.reset, m->show_reset);
   lv_obj_align(v.big, LV_ALIGN_CENTER, 0,
@@ -247,4 +260,16 @@ void time_views_render(const tg_time_view_model *m) {
 
   lv_label_set_text(v.done_caption, m->caption ? m->caption : "");
   set_shown(v.done_layer, m->done);
+}
+
+void time_views_set_attention(const lv_image_dsc_t *icon, uint32_t color_hex) {
+  if (!v.attention || (icon == v.attention_src && color_hex == v.attention_color))
+    return;
+  v.attention_src = icon;
+  v.attention_color = color_hex;
+  if (icon) {
+    lv_image_set_src(v.attention, icon);
+    lv_obj_set_style_image_recolor(v.attention, lv_color_hex(color_hex), 0);
+  }
+  v.has_shown = false; /* rita om: synligheten beror också på källan */
 }

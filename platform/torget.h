@@ -118,6 +118,15 @@ void torget_app_next(void);
 void torget_glass_claim(const torget_app_t *app);
 void torget_glass_release(const torget_app_t *app);
 
+/* Uppmärksamhetsikonen: en app som väntar på personen (VibePulse medan Claude
+ * väntar på input) tänder en liten ikon som andra appar får visa utan att
+ * bero på den appen — TID visar den ovanför klockan. icon NULL släcker; bara
+ * appen som tände kan släcka. Ikonen är en A8-/alfabild som målas i
+ * color_hex. Kallas under torget_ui_lock(). */
+void torget_attention_set(const torget_app_t *app, const lv_image_dsc_t *icon,
+                          uint32_t color_hex);
+const lv_image_dsc_t *torget_attention_icon(uint32_t *color_hex);
+
 /* Pixeldriften mot inbränning: allt UI bor i en låda som vandrar ett par
  * pixlar per minut. Apparna behöver aldrig bry sig; exponerad för värdlager
  * som vill styra takten i test. */

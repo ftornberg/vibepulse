@@ -141,7 +141,10 @@ static struct {
   tk_ir_policy interaction_policy;
   needs_you_key needs_you_rendered;
   bool needs_you_visible; /* read by render_completion to yield the screen */
-  bool glass_claimed;     /* Needs You holds the platform's glass claim */
+  bool glass_claimed;     /* Needs You or a pulse holds the glass claim */
+  bool completion_pulsing; /* a DONE/waiting card is in its pulse phase */
+  int attention_provider;  /* provider of a waiting card, or -1 */
+  int attention_shown;     /* what the platform was last told, or -1 */
   ny_stage stage;
   char stage_id[TK_PENDING_ID_CAP]; /* the interaction the stage belongs to */
   char echo[TK_PENDING_TITLE_CAP];  /* the approved item, for the payoff beat */
@@ -221,6 +224,8 @@ static void completion_pulse_start(void) {
   lv_anim_start(&anim);
 }
 
+static void sync_glass(void);
+
 static void render_completion(uint64_t now_ms) {
   tk_completion_phase phase = tk_completion_phase_at(&mon.queue, now_ms);
   const tk_completion_event *event =
@@ -230,6 +235,13 @@ static void render_completion(uint64_t now_ms) {
    * render key means the pulse cleanly reappears the moment the takeover
    * leaves. */
   bool visible = event && phase != TK_COMPLETION_HIDDEN && !mon.needs_you_visible;
+  /* Before the render-key early return: the pulse ending (45 s) changes no
+   * pixel of the card, yet it must hand the glass back. */
+  mon.completion_pulsing = visible && phase == TK_COMPLETION_PULSE;
+  mon.attention_provider = event && phase != TK_COMPLETION_HIDDEN &&
+                                   event->state == TK_AGENT_WAITING
+                               ? event->provider : -1;
+  sync_glass();
   if (!tk_completion_render_key_update(&mon.rendered_completion, event,
                                        visible)) return;
   if (!visible) {
@@ -1142,15 +1154,35 @@ extern const torget_app_t tokens_app;
  * when it ends, after the payoff beat, it releases the claim and the platform
  * returns to what was showing unless the person navigated meanwhile. Only
  * Needs You claims: the DONE pulse is transient and needs no answer. */
-static void render_needs_you(void) {
-  render_needs_you_view();
-  if (mon.needs_you_visible && !mon.glass_claimed) {
+/* The glass claim and the attention icon, recomputed after every render of
+ * either surface. Claim while the Needs You takeover is visible or a DONE/
+ * waiting card pulses (10 s / 45 s); release when both end, so another app
+ * comes back while a waiting card sits static inside VibePulse. The waiting
+ * card lights the platform's attention icon (TID shows it above the clock)
+ * until Claude works again or the card is dismissed. */
+static void sync_glass(void) {
+  bool want = mon.needs_you_visible || mon.completion_pulsing;
+  if (want && !mon.glass_claimed) {
     mon.glass_claimed = true;
     torget_glass_claim(&tokens_app);
-  } else if (!mon.needs_you_visible && mon.glass_claimed) {
+  } else if (!want && mon.glass_claimed) {
     mon.glass_claimed = false;
     torget_glass_release(&tokens_app);
   }
+  if (mon.attention_provider != mon.attention_shown) {
+    mon.attention_shown = mon.attention_provider;
+    if (mon.attention_provider == TK_AGENT_PROVIDER_CLAUDE)
+      torget_attention_set(&tokens_app, &tk_img_claude_32, VP_COLOR_CLAUDE);
+    else if (mon.attention_provider == TK_AGENT_PROVIDER_CODEX)
+      torget_attention_set(&tokens_app, &tk_img_codex_32, VP_COLOR_CODEX);
+    else
+      torget_attention_set(&tokens_app, NULL, 0);
+  }
+}
+
+static void render_needs_you(void) {
+  render_needs_you_view();
+  sync_glass();
 }
 
 void tk_agent_monitor_needs_you_press(tk_needs_you_verdict verdict) {
@@ -1173,6 +1205,8 @@ bool tk_agent_monitor_takeover_visible(void) {
 
 void tk_agent_monitor_create(lv_obj_t *app_root) {
   memset(&mon, 0, sizeof mon);
+  mon.attention_provider = -1;
+  mon.attention_shown = -1;
   tk_ir_policy_init(&mon.interaction_policy);
   create_completion(app_root);
   create_needs_you(app_root);
