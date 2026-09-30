@@ -35,8 +35,8 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   dotted streaks (OBS-42). That pose's MADCTL `0x60` swaps the axes, and its
   panel gap sat on x, where the CO5300 driver adds it to the column window
   and overruns the 480-pixel axis. The gap moves to y, and a guard test pins
-  that no axis-swapped mode carries an x gap. Fixed in source; still to be
-  confirmed on the glass.
+  that no axis-swapped mode carries an x gap. Verified clean on the owner's
+  2.16 panel in all four poses (2026-09-30).
 - The battery badge sits one badge width further from the right edge
   (margin 50 px instead of the footer's 22 px). At 22 px the panel's
   rounded bezel clipped the body and nub, seen at the glass on 2026-09-25.

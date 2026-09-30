@@ -988,7 +988,7 @@ its traceback reach the log, or exclude zeroconf's own socket errors from
 the smoke test's traceback count. Verify against a two-interface host.
 
 ### OBS-42 · With the buttons down every app renders as smeared, dotted streaks
-`firmware · S · done in source (2026-09-30), physically unverified` — seen
+`firmware · S · done (2026-09-30), verified on the glass` — seen
 on the owner's 2.16 panel on 2026-09-25 and photographed on 2026-09-30:
 standing the panel on its button edge turned every app (VibePulse, TID,
 Needs You) into horizontally smeared, dotted streaks with a dotted column
@@ -1003,5 +1003,6 @@ sawtooth, which is why the streaks restart instead of forming one diagonal).
 The table's comment also claimed the init CASET starts at column 6; BSP
 2.0.1 sends `0x0000..0x01DF`. **Fix:** `0x60` gets `{0, 6}`, and
 `test/test_display_rotation_gap.py` pins that no MV mode ever carries an
-`x_gap`. **Verify:** stand the panel with the buttons down after the OTA; a
-clean frame closes this, a thin bright line at one edge means `{0, 0}`.
+`x_gap`. **Verified:** on 2026-09-30 the owner's 2.16 panel ran
+`v1.1.0-35-g8b72b1a` (OTA): clean with the buttons down, the other three
+poses still clean, no edge line.
