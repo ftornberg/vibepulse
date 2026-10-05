@@ -25,6 +25,8 @@ void time_app_qa_time_unset(bool unset);
 /* Lås klockans väggtid (h < 0 släpper låset) så att klockbilden blir
  * reproducerbar i dokumentationen. */
 void time_app_qa_clock(int hour, int minute, int second);
+/* Samma väg som ett tryck på högtalarsymbolen. */
+void time_app_qa_speaker(void);
 #endif
 
 #endif

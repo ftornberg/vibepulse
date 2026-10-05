@@ -87,12 +87,36 @@ report the same (the calibration in `main/rotation.c` is fixed), but if a face
 appears on the wrong side, stand the panel on each side, note which face
 appears, and edit the three `#define` values.
 
+## Sound
+
+When a timer or a pomodoro phase ends, TID plays three rising notes (C6, E6,
+G6, about 0.6 s), also while another app is on the glass. It stays silent
+during the night schedule (the same 23:00 to 07:00 as night dimming, with a
+valid clock) and while the maintenance window is open. Silence follows night
+dimming itself: with **NIGHT DIM** switched off in SETTINGS → LABS, the chime
+also plays at night (the owner asked for "silent while night dimming").
+
+- **The speaker symbol** at the bottom of the clock and the timer's preset
+  page turns sound on and off; the choice survives a restart. Turning it on
+  plays the chime once. While a timer runs, RESET takes that place.
+- **It is compiled in only with `#define TK_TID_SOUND 1`** in `secrets.h`
+  (off in `secrets.h.example`). Without it the panel carries no audio code.
+- **Memory first.** The engine borrows the I2S peripheral and the ES8311 codec
+  per chime and returns them. Before each chime it checks that the largest
+  internal DMA block still covers the display flush (11 520 B) plus the
+  audio buffers and an 8 KB margin; otherwise it stays silent and logs
+  `ljud nekat: DMA-block ...`. Three failed starts in a row turn sound off
+  until the next boot. Every refusal is logged with its reason.
+
+Status: built and simulator-verified; **not yet heard on the glass**. The
+speaker on the owner's unit, the volume (`TG_AUDIO_VOLUME`, starting at 45)
+and the memory margin during playback are checked in a physical step on
+request, and only then recorded in `spec/device-units.yaml`.
+
 ## Limits
 
-- **Silent.** There is no sound yet. A timer that finishes while another app is
-  on the glass is seen when TID is next opened. A beep needs a platform audio
-  path (a codec backend, a physical speaker test and a display-DMA budget) and is
-  a separate piece of work.
+- **One chime for every ending.** Different cues for a focus phase starting or
+  ending, and repeating the chime until a tap, are a later step.
 - **Needs You takes the glass from TID.** When an agent needs you, the panel
   switches to VibePulse so the question is seen, and returns to TID after the
   answer, unless you switched app yourself meanwhile. A running TID timer keeps

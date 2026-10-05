@@ -827,6 +827,13 @@ static void qa_key3_tap(void) {
 static int sim_orientation;
 int torget_orientation(void) { return sim_orientation; }
 
+/* Bänken har ingen högtalare: ljudet loggas så att testerna kan se det. */
+bool torget_audio_play(tg_audio_cue cue) {
+  printf("audio: %s\n", cue == TG_AUDIO_CUE_DONE ? "DONE" : "?");
+  fflush(stdout);
+  return true;
+}
+
 /* Tangent 1-4: Solelkollen-fixtur. T: mata VibePulse. S: nästa agentläge.
  * L: launchern. [ och ] bläddrar VibePulse-sidor; N byter app (KEY3:s
  * appväxling utan gest). M: nästa Max Tracker-fixtur. G: simulera en ny
@@ -2024,6 +2031,26 @@ static int run_time_app_captures(void) {
   usage_screen_apply_agent(&waiting, wait_us);
   usage_screen_tick(wait_us + 46000000LL);
   time_frame(TG_TIME_ROT_CLOCK, "time-clock-attention");
+
+  /* Ljudet (spec 2026-10-02): av ger en överstruken högtalare, på spelar
+   * signalen en gång. Sedan en timer som går ut BAKOM VibePulse och ändå ska
+   * låta, eftersom bevakningen går även när TID är dold. */
+  usage_screen_apply_agent(&waiting, wait_us + 50000000LL);
+  tk_agent_monitor_dismiss_current();
+  usage_screen_tick(wait_us + 51000000LL);
+  time_app_qa_speaker();
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock-sound-off");
+  printf("qa: sound-on\n");
+  time_app_qa_speaker();
+  sim_orientation = TG_TIME_ROT_TIMER;
+  time_app_qa_refresh();
+  time_app_qa_preset(0);
+  torget_app_show(SIM_APP_VIBEPULSE);
+  printf("qa: hidden-timer\n");
+  fflush(stdout);
+  time_app_qa_advance(21LL * 60 * 1000000);
+  for (int i = 0; i < 12; i++) { lv_timer_handler(); lv_delay_ms(100); }
+  torget_app_show(idx);
   return capture_failures == 0 ? 0 : 1;
 }
 #endif

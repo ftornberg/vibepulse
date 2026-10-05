@@ -65,6 +65,8 @@ if(TORGET_WITH_TIME AND TORGET_BOARD STREQUAL "waveshare_216")
   set(TIME_SRCS
     ../components/app_time/time_core.c
     ../components/app_time/time_present.c
+    ../components/app_time/time_sound_store.c
+    ../components/app_time/speaker_assets.c
     ../components/app_time/time_views.c
     ../components/app_time/app_time.c)
 else()

@@ -64,6 +64,8 @@
 #include "ota_ui.h"
 #include "pcf85063.h"
 #include "rotation.h"
+#include "audio.h"
+#include "audio_policy.h"
 #include "secrets.h"
 #include "torget.h"
 #include "vibepulse_recovery.h"
@@ -384,6 +386,25 @@ uint8_t torget_wifi_signal_bars(void) {
 void torget_keep_awake(void) { s_last_activity_us = esp_timer_get_time(); }
 
 int torget_orientation(void) { return sg_rotation_quadrant(); }
+
+/* Plattformens ljudbeslut (spec 2026-10-02): natt och OTA-fönster vet bara
+ * värdlagret, så regeln gäller alla appar. Motorn lånar hårdvaran per signal. */
+bool torget_audio_play(tg_audio_cue cue) {
+  tg_audio_state s = {
+#if defined(TK_TID_SOUND) && TK_TID_SOUND && !defined(TORGET_BOARD_241_V2)
+    .built = true,
+#endif
+    .night = s_night_active,
+    .ota_busy = torget_ota_service_maintenance_open(),
+    .playing = tg_audio_engine_playing(),
+    .disabled = tg_audio_engine_disabled(),
+  };
+  tg_audio_verdict v = tg_audio_allowed(&s, cue);
+  if (v == TG_AUDIO_OK && tg_audio_engine_start_cue(cue)) return true;
+  ESP_LOGI(TAG, "ljud nekat: %s",
+           tg_audio_verdict_name(v == TG_AUDIO_OK ? TG_AUDIO_BUSY : v));
+  return false;
+}
 
 void torget_update_available(const char *version) {
   torget_ota_service_update_available(version);

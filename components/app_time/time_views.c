@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include "speaker_assets.h"
 #include "torget.h"
 
 extern const lv_font_t plex_num_118;
@@ -45,6 +46,8 @@ static struct {
   lv_obj_t *presets_row;
   lv_obj_t *chips[TG_COUNTDOWN_PRESETS];
   lv_obj_t *reset;
+  lv_obj_t *speaker_area;
+  lv_obj_t *speaker;
   lv_obj_t *done_layer;
   lv_obj_t *done_caption;
   lv_obj_t *done_word;
@@ -65,6 +68,11 @@ static void on_tap(lv_event_t *e) {
 static void on_reset(lv_event_t *e) {
   (void)e;
   if (v.actions.reset) v.actions.reset();
+}
+
+static void on_speaker(lv_event_t *e) {
+  (void)e;
+  if (v.actions.speaker) v.actions.speaker();
 }
 
 static void on_preset(lv_event_t *e) {
@@ -205,6 +213,19 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
   lv_obj_remove_flag(reset_text, LV_OBJ_FLAG_CLICKABLE);
   touchable(v.reset, on_reset, NULL);
 
+  /* Högtalaren: 24 px nere i ringen, en 96 x 64-yta att träffa (spec
+   * 2026-10-02). Delar plats med RESET, som tar över när en timer går. */
+  v.speaker_area = plain(root, 96, 64);
+  lv_obj_set_pos(v.speaker_area, 192, 392);
+  touchable(v.speaker_area, on_speaker, NULL);
+  v.speaker = lv_image_create(v.speaker_area);
+  lv_image_set_src(v.speaker, &tg_img_speaker_on);
+  lv_obj_set_style_image_recolor(v.speaker, COL_MUTED, 0);
+  lv_obj_set_style_image_recolor_opa(v.speaker, LV_OPA_COVER, 0);
+  lv_obj_center(v.speaker);
+  lv_obj_remove_flag(v.speaker, LV_OBJ_FLAG_CLICKABLE);
+  set_shown(v.speaker_area, false);
+
   /* KLAR: ett helskärmslager (fångar trycket) med en full cirkel i ringens
    * läge — en rund ram klipps inte av den rundade kåpan och krockar inte med
    * batteribrickan i hörnet, som en rektangulär ram gjorde. */
@@ -244,6 +265,8 @@ void time_views_render(const tg_time_view_model *m) {
     lv_obj_set_style_bg_color(v.dots[i], i < m->dots_done ? COL_ACCENT : COL_TRACK, 0);
   }
   set_shown(v.attention, m->show_attention && v.attention_src != NULL);
+  set_shown(v.speaker_area, m->show_speaker);
+  lv_image_set_src(v.speaker, m->speaker_on ? &tg_img_speaker_on : &tg_img_speaker_off);
   set_shown(v.presets_row, m->show_presets);
   set_shown(v.reset, m->show_reset);
   lv_obj_align(v.big, LV_ALIGN_CENTER, 0,

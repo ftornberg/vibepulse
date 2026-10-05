@@ -19,16 +19,16 @@ static void test_clock(void) {
   tg_pomo p; tg_countdown c; tg_time_view_model m;
   tg_pomo_init(&p); tg_countdown_init(&c);
 
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 0, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 0, &p, &c, 0, false, true);
   check("clock text", strcmp(m.big, "09:05") == 0);
   check("clock caption empty", m.caption && m.caption[0] == '\0');
   check("clock hint empty", m.hint && m.hint[0] == '\0');
   check("clock has no dots", m.dots_done == -1);
   check("clock no presets/reset/done", !m.show_presets && !m.show_reset && !m.done);
 
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, false, 9, 5, 0, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, false, 9, 5, 0, &p, &c, 0, false, true);
   check("invalid clock shows dashes", strcmp(m.big, TG_TIME_NO_VALUE) == 0);
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 24, 0, 0, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 24, 0, 0, &p, &c, 0, false, true);
   check("hour 24 shows dashes", strcmp(m.big, TG_TIME_NO_VALUE) == 0);
 }
 
@@ -36,7 +36,7 @@ static void test_pomodoro(void) {
   tg_pomo p; tg_countdown c; tg_time_view_model m;
   tg_pomo_init(&p); tg_countdown_init(&c);
 
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, 0, false, true);
   check("idle shows 25:00", strcmp(m.big, "25:00") == 0);
   check("idle caption FOCUS", strcmp(m.caption, "FOCUS") == 0);
   check("idle hint", strcmp(m.hint, "TAP TO START") == 0);
@@ -44,34 +44,34 @@ static void test_pomodoro(void) {
   check("idle has no reset", !m.show_reset);
 
   tg_pomo_tap(&p, 0);
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(1), false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(1), false, true);
   check("running 24:00", strcmp(m.big, "24:00") == 0);
   check("running hint", strcmp(m.hint, "TAP TO PAUSE") == 0);
   check("running shows reset", m.show_reset);
   check("running not muted", !m.muted);
 
   tg_pomo_tap(&p, MIN_US(1));
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(9), false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(9), false, true);
   check("paused frozen at 24:00", strcmp(m.big, "24:00") == 0);
   check("paused hint", strcmp(m.hint, "PAUSED") == 0);
   check("paused muted", m.muted);
 
   tg_pomo_tap(&p, MIN_US(10));                 /* resume */
   tg_timer_tick(&p.timer, MIN_US(60));
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(60), false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(60), false, true);
   check("done marker", m.done && m.done_source == TG_TIME_DONE_POMODORO);
   check("done caption is the finished phase", strcmp(m.caption, "FOCUS") == 0);
   check("first focus done counts one dot", m.dots_done == 1);
 
   tg_pomo_tap(&p, MIN_US(61));                 /* dismiss -> short break idle */
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(61), false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(61), false, true);
   check("short break idle 05:00", strcmp(m.big, "05:00") == 0);
   check("short break caption", strcmp(m.caption, "SHORT BREAK") == 0);
   check("short break keeps one dot", m.dots_done == 1);
   check("not done any more", !m.done);
 
   p.step = 7;                                   /* long break */
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(62), false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(62), false, true);
   check("long break 15:00", strcmp(m.big, "15:00") == 0);
   check("long break caption", strcmp(m.caption, "LONG BREAK") == 0);
   check("long break four dots", m.dots_done == 4);
@@ -79,7 +79,7 @@ static void test_pomodoro(void) {
   p.step = 6;                                   /* fourth focus finishing */
   tg_pomo_tap(&p, 0);
   tg_timer_tick(&p.timer, MIN_US(30));
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(30), false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, MIN_US(30), false, true);
   check("fourth focus done shows four dots", m.dots_done == 4);
 }
 
@@ -87,7 +87,7 @@ static void test_timer_mode(void) {
   tg_pomo p; tg_countdown c; tg_time_view_model m;
   tg_pomo_init(&p); tg_countdown_init(&c);
 
-  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, 0, false, true);
   check("idle timer shows dashes, not zero", strcmp(m.big, TG_TIME_NO_VALUE) == 0);
   check("idle timer caption", strcmp(m.caption, "TIMER") == 0);
   check("idle timer offers presets", m.show_presets);
@@ -95,13 +95,13 @@ static void test_timer_mode(void) {
   check("timer has no dots", m.dots_done == -1);
 
   tg_countdown_start(&c, 1, 0);
-  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, MIN_US(1), false);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, MIN_US(1), false, true);
   check("running 39:00", strcmp(m.big, "39:00") == 0);
   check("running hides presets", !m.show_presets);
   check("running shows reset", m.show_reset);
 
   tg_timer_tick(&c.timer, MIN_US(41));
-  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, MIN_US(41), false);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, MIN_US(41), false, true);
   check("timer done marker", m.done && m.done_source == TG_TIME_DONE_TIMER);
   check("timer done caption", strcmp(m.caption, "TIMER") == 0);
 }
@@ -113,15 +113,15 @@ static void test_independence_and_done_everywhere(void) {
   /* pomodoro running while standing in timer mode: the timer view is the
    * timer's own state, not the pomodoro's */
   tg_pomo_tap(&p, 0);
-  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, MIN_US(2), false);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, MIN_US(2), false, true);
   check("timer view unaffected by running pomodoro", m.show_presets);
   check("no done marker while both run/idle", !m.done);
 
   /* Review focus 6: a finished pomodoro shows in every mode */
   tg_timer_tick(&p.timer, MIN_US(30));
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 0, &p, &c, MIN_US(30), false);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 0, &p, &c, MIN_US(30), false, true);
   check("done shows over the clock", m.done && m.done_source == TG_TIME_DONE_POMODORO);
-  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, MIN_US(30), false);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 0, &p, &c, MIN_US(30), false, true);
   check("done shows over the timer view", m.done);
 
   /* both done: the pomodoro is acknowledged first */
@@ -138,8 +138,8 @@ static void test_independence_and_done_everywhere(void) {
 static void test_stable_bytes(void) {
   tg_pomo p; tg_countdown c; tg_time_view_model a, b;
   tg_pomo_init(&p); tg_countdown_init(&c);
-  tg_time_present(&a, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, 0, false);
-  tg_time_present(&b, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, 0, false);
+  tg_time_present(&a, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, 0, false, true);
+  tg_time_present(&b, TG_TIME_MODE_POMODORO, true, 9, 5, 0, &p, &c, 0, false, true);
   /* the view compares models with memcmp to skip redundant redraws */
   check("identical inputs give identical bytes", memcmp(&a, &b, sizeof a) == 0);
 }
@@ -148,54 +148,74 @@ static void test_ring(void) {
   tg_pomo p; tg_countdown c; tg_time_view_model m;
   tg_pomo_init(&p); tg_countdown_init(&c);
 
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, 0, false, true);
   check("minute 5 fills clockwise", m.ring_start == 0 && m.ring_end == 516);
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 4, 30, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 4, 30, &p, &c, 0, false, true);
   check("minute 4 empties clockwise", m.ring_start == 516 && m.ring_end == 1000);
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, false, 9, 5, 30, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, false, 9, 5, 30, &p, &c, 0, false, true);
   check("no clock, no ring", m.ring_end == -1);
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, 0, false, true);
   check("idle pomodoro has no ring", m.ring_end == -1);
 
   tg_pomo_tap(&p, 0);
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, MIN_US(5), false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, MIN_US(5), false, true);
   check("pomodoro ring is the remaining fraction (20/25)", m.ring_start == 0 && m.ring_end == 800);
   tg_pomo_tap(&p, MIN_US(5));
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, MIN_US(9), false);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, MIN_US(9), false, true);
   check("paused pomodoro keeps its ring", m.ring_start == 0 && m.ring_end == 800);
 
-  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, MIN_US(9), false);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, MIN_US(9), false, true);
   check("idle timer has no ring even while the pomodoro runs", m.ring_end == -1);
   tg_countdown_start(&c, 1, 0);
-  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, MIN_US(10), false);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, MIN_US(10), false, true);
   check("timer ring is the remaining fraction (30/40)", m.ring_start == 0 && m.ring_end == 750);
 
   tg_timer_tick(&c.timer, MIN_US(50));
-  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, MIN_US(50), false);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, MIN_US(50), false, true);
   check("the DONE marker hides the ring", m.done && m.ring_end == -1);
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, MIN_US(50), false);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, MIN_US(50), false, true);
   check("...also over the clock", m.done && m.ring_end == -1);
 }
 
 static void test_attention(void) {
   tg_pomo p; tg_countdown c; tg_time_view_model m;
   tg_pomo_init(&p); tg_countdown_init(&c);
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, 0, true);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, 0, true, true);
   check("clock shows the attention icon", m.show_attention);
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, 0, false);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, 0, false, true);
   check("no attention, no icon", !m.show_attention);
-  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, 0, true);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, 0, true, true);
   check("pomodoro face has its caption there, no icon", !m.show_attention);
-  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, 0, true);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, 0, true, true);
   check("timer face has no icon", !m.show_attention);
   tg_countdown_start(&c, 0, 0);
   tg_timer_tick(&c.timer, MIN_US(30));
-  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, MIN_US(30), true);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, MIN_US(30), true, true);
   check("the DONE marker covers the icon", m.done && !m.show_attention);
+}
+
+static void test_speaker(void) {
+  tg_pomo p; tg_countdown c; tg_time_view_model m;
+  tg_pomo_init(&p); tg_countdown_init(&c);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, 0, false, true);
+  check("clock shows the speaker", m.show_speaker && m.speaker_on);
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, 0, false, false);
+  check("off is shown crossed", m.show_speaker && !m.speaker_on);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, 0, false, true);
+  check("idle timer shows the speaker", m.show_speaker);
+  tg_countdown_start(&c, 0, 0);
+  tg_time_present(&m, TG_TIME_MODE_TIMER, true, 9, 5, 30, &p, &c, 1, false, true);
+  check("RESET takes that place while running", !m.show_speaker);
+  tg_time_present(&m, TG_TIME_MODE_POMODORO, true, 9, 5, 30, &p, &c, 1, false, true);
+  check("pomodoro has its dots there", !m.show_speaker);
+  tg_timer_tick(&c.timer, MIN_US(30));
+  tg_time_present(&m, TG_TIME_MODE_CLOCK, true, 9, 5, 30, &p, &c, MIN_US(30), false, true);
+  check("DONE covers it", m.done && !m.show_speaker);
 }
 
 int main(void) {
   test_clock();
+  test_speaker();
   test_attention();
   test_ring();
   test_pomodoro();

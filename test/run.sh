@@ -308,6 +308,14 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
   -o /tmp/torget-glass-claim-test
 /tmp/torget-glass-claim-test
 
+# Ljudets regler och tongenerator: ren C, delad av motorn på panelen.
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/torget_audio/audio_policy.c \
+  test_audio_policy.c \
+  -lm \
+  -o /tmp/torget-audio-policy-test
+/tmp/torget-audio-policy-test
+
 cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/app_time/time_core.c \
   test_time_core.c \
@@ -417,6 +425,7 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 cd ..
 "$PYTHON_BIN" -m unittest tools.agent_assets.test_build_agent_images -v
 "$PYTHON_BIN" -m unittest tools.wifi_status_assets.test_build_wifi_status_assets -v
+"$PYTHON_BIN" -m unittest tools.speaker_assets.test_build_speaker_assets -v
 "$PYTHON_BIN" -m unittest tools.vibepulse_studio.test_design \
   tools.vibepulse_studio.test_server -v
 "$PYTHON_BIN" tools/vibepulse_studio/design.py --check

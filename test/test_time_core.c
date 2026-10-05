@@ -308,8 +308,24 @@ static void test_tick_expired(void) {
   check("paused stays paused", t.state == TG_TIMER_PAUSED);
 }
 
+static void test_advance(void) {
+  tg_pomo p; tg_countdown c;
+  tg_pomo_init(&p); tg_countdown_init(&c);
+  check("nothing running, nothing expires", tg_time_advance(&p, &c, MIN_US(99)) == 0);
+  tg_pomo_tap(&p, 0);
+  check("before the deadline, nothing", tg_time_advance(&p, &c, MIN_US(24)) == 0);
+  check("the pomodoro expires once", tg_time_advance(&p, &c, MIN_US(25)) == 1);
+  check("...and only once", tg_time_advance(&p, &c, MIN_US(26)) == 0);
+  tg_pomo_tap(&p, MIN_US(27));             /* dismiss -> next phase idle */
+  tg_pomo_tap(&p, MIN_US(27));             /* start the 5 min break */
+  tg_countdown_start(&c, 0, MIN_US(12));   /* 20 min timer ends at 32 */
+  check("both expire in one tick", tg_time_advance(&p, &c, MIN_US(40)) == 2);
+  check("NULL safe", tg_time_advance(NULL, NULL, 0) == 0);
+}
+
 int main(void) {
   test_mode_for();
+  test_advance();
   test_tick_expired();
   test_ring();
   test_timer();

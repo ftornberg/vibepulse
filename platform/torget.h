@@ -7,6 +7,7 @@
 #include "lvgl.h"
 
 #include "torget_app.h"
+#include "audio_cue.h"
 
 /*
  * Plattformens API mot apparna. Två världar implementerar det: main/main.c
@@ -126,6 +127,12 @@ void torget_glass_release(const torget_app_t *app);
 void torget_attention_set(const torget_app_t *app, const lv_image_dsc_t *icon,
                           uint32_t color_hex);
 const lv_image_dsc_t *torget_attention_icon(uint32_t *color_hex);
+
+/* Spela ett kort ljud (audio_cue.h). Blockerar aldrig: false betyder nekat
+ * (ej inbyggt, natt, OTA, redan spelande, avstängt efter fel) och skälet
+ * loggas av plattformen. Rör aldrig LVGL från ljudet. Target: main/main.c
+ * med components/torget_audio; simulatorn loggar bara "audio: <cue>". */
+bool torget_audio_play(tg_audio_cue cue);
 
 /* Pixeldriften mot inbränning: allt UI bor i en låda som vandrar ett par
  * pixlar per minut. Apparna behöver aldrig bry sig; exponerad för värdlager

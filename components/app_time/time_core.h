@@ -116,6 +116,11 @@ bool tg_countdown_start(tg_countdown *c, int preset, int64_t now_us);
 void tg_countdown_tap(tg_countdown *c, int64_t now_us);
 void tg_countdown_reset(tg_countdown *c); /* -> IDLE */
 
+/* Tickar båda timrarna och svarar med hur många som just gick från RUNNING
+ * till DONE (0..2). Den ENDA tickvägen i appen, så att en signal varken
+ * missas eller spelas två gånger. NULL-säker. */
+int tg_time_advance(tg_pomo *p, tg_countdown *c, int64_t now_us);
+
 /* ---- text --------------------------------------------------------------- */
 
 /* Samma regel som main.c: ett år före 2026 är en osatt klocka. */

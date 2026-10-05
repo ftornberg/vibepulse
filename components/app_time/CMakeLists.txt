@@ -3,9 +3,11 @@
 # Opt-in: dras bara in av main när bygget sätter TORGET_WITH_TIME (2.16).
 idf_component_register(
   SRCS "time_core.c" "time_present.c" "time_views.c" "app_time.c"
+       "time_sound_store.c" "speaker_assets.c"
   INCLUDE_DIRS "."
   # Ingen egen idf_component.yml: ett manifest ändrar dependencies.lock:s
   # manifest_hash och får varje bygge att lösa om låset. LVGL finns redan i grafen.
-  REQUIRES torget_app lvgl__lvgl)
+  REQUIRES torget_app lvgl__lvgl
+  PRIV_REQUIRES nvs_flash)
 
 target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_LVGL_H_INCLUDE_SIMPLE)

@@ -147,6 +147,13 @@ void tg_countdown_tap(tg_countdown *c, int64_t now_us) {
 
 void tg_countdown_reset(tg_countdown *c) { tg_countdown_init(c); }
 
+int tg_time_advance(tg_pomo *p, tg_countdown *c, int64_t now_us) {
+  int expired = 0;
+  if (p && tg_timer_tick_expired(&p->timer, now_us)) expired++;
+  if (c && tg_timer_tick_expired(&c->timer, now_us)) expired++;
+  return expired;
+}
+
 bool tg_time_clock_valid(int64_t epoch_s) {
   return epoch_s >= TG_CLOCK_VALID_EPOCH_S;
 }

@@ -111,4 +111,21 @@ assert "#define COL_ACCENT lv_color_hex(0xD97757)" in views
 assert "#define COL_WHITE  lv_color_hex(0xD9DCE2)" in views
 assert "0x5FD0A5" not in views and "0x5FD0A5" not in app
 
+# TID sound (2026-10-02): the engine borrows I2S/ES8311 per chime. It must have
+# no component manifest (that re-solves dependencies.lock on every build) and
+# must keep no permanent task or queue.
+audio_dir = root / "components/torget_audio"
+assert not (audio_dir / "idf_component.yml").exists(), (
+    "components/torget_audio must not carry an idf_component.yml"
+)
+audio_c = (audio_dir / "audio.c").read_text(encoding="utf-8")
+assert "xQueueCreate" not in audio_c, "no permanent audio queue"
+assert "vTaskDelete(NULL)" in audio_c, "the chime task ends itself"
+assert "i2s_del_channel" in audio_c and "esp_codec_dev_delete" in audio_c
+assert "TORGET_BOARD_241_V2" in audio_c and "TK_TID_SOUND" in audio_c
+assert "tg_audio_after_outcome" in audio_c and "tg_audio_after_attempt(" not in audio_c, (
+    "the engine must count outcomes, so a memory refusal never disables sound"
+)
+assert "TG_AUDIO_TAIL_FRAMES" in audio_c, "drain the queued DMA before teardown"
+
 print("OK: TID is opt-in, 2.16-only and taps are short clicks")

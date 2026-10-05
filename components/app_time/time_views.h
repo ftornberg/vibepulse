@@ -17,6 +17,7 @@ typedef struct {
   void (*tap)(void);        /* tryck på bakgrunden eller KLAR-lagret */
   void (*reset)(void);      /* RESET-knappen */
   void (*preset)(int idx);  /* ett av 20/40/50 */
+  void (*speaker)(void);    /* högtalarsymbolen: ljud av/på */
 } tg_time_view_actions;
 
 /* Kallas under UI-låset med appens 480 x 480-root. */
