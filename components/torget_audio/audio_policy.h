@@ -28,6 +28,11 @@
  * ligga kvar när sista skrivningen returnerar, annars klipper nedrivningen
  * sista tonens nedtoning (ett klick). 1024 ramar = 64 ms. */
 #define TG_AUDIO_TAIL_FRAMES 1024u
+/* Tystnad FÖRE signalen: ES8311-drivrutinen slår på förstärkaren och slår av
+ * mute i samma ögonblick (es8311_enable), så den första tonen spelades medan
+ * förstärkaren ännu vaknade — hört på ägarens panel 2026-10-05 som en svag
+ * första ton. 2560 ramar = 160 ms, hela DMA-bitar. */
+#define TG_AUDIO_LEAD_FRAMES 2560u
 
 typedef struct {
   bool built;     /* TK_TID_SOUND på och kortet är 2.16 */

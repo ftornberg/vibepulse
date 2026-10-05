@@ -127,6 +127,12 @@ static void test_outcomes(void) {
   /* The tail must cover every DMA buffer still queued when the last write
    * returns, or teardown cuts the last note's release ramp. */
   check("tail covers the queued DMA", TG_AUDIO_TAIL_FRAMES >= 3u * 256u);
+  /* The ES8311 driver enables the amplifier and unmutes in the same instant
+   * (es8311_enable), so the first note used to play while the amplifier was
+   * still waking: heard on the owner's panel 2026-10-05 as a faint first note.
+   * At least 150 ms of silence leads every cue. */
+  check("lead-in lets the amplifier wake", TG_AUDIO_LEAD_FRAMES >= 150u * 16u);
+  check("lead-in fills whole DMA chunks", TG_AUDIO_LEAD_FRAMES % 256u == 0);
 }
 
 int main(void) {

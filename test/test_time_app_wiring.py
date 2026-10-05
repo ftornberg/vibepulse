@@ -127,5 +127,6 @@ assert "tg_audio_after_outcome" in audio_c and "tg_audio_after_attempt(" not in 
     "the engine must count outcomes, so a memory refusal never disables sound"
 )
 assert "TG_AUDIO_TAIL_FRAMES" in audio_c, "drain the queued DMA before teardown"
+assert "TG_AUDIO_LEAD_FRAMES" in audio_c, "lead every cue with silence so the amplifier wakes"
 
 print("OK: TID is opt-in, 2.16-only and taps are short clicks")

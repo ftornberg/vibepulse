@@ -123,6 +123,10 @@ static void chime_task(void *arg) {
       size_t during = dma_largest();
       int16_t buf[CHUNK_FRAMES];
       uint32_t off = 0, n;
+      /* Låt förstärkaren vakna innan första tonen. */
+      for (uint32_t i = 0; i < CHUNK_FRAMES; i++) buf[i] = 0;
+      for (uint32_t s = 0; s < TG_AUDIO_LEAD_FRAMES; s += CHUNK_FRAMES)
+        esp_codec_dev_write(c.dev, buf, (int)(CHUNK_FRAMES * sizeof buf[0]));
       while ((n = tg_audio_render(cue, off, buf, CHUNK_FRAMES, 100)) > 0) {
         esp_codec_dev_write(c.dev, buf, (int)(n * sizeof buf[0]));
         off += n;
