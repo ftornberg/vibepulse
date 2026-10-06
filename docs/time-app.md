@@ -108,10 +108,12 @@ also plays at night (the owner asked for "silent while night dimming").
   `ljud nekat: DMA-block ...`. Three failed starts in a row turn sound off
   until the next boot. Every refusal is logged with its reason.
 
-Status: built and simulator-verified; **not yet heard on the glass**. The
-speaker on the owner's unit, the volume (`TG_AUDIO_VOLUME`, starting at 45)
-and the memory margin during playback are checked in a physical step on
-request, and only then recorded in `spec/device-units.yaml`.
+Status: **heard on `torget-216-02`** (2026-10-05, `v1.1.0-40-gaef36a2`): all
+three notes clear at `TG_AUDIO_VOLUME` 45, ten chimes with the largest DMA
+block never below 31 744 B and no freeze
+([physical review](superpowers/reviews/2026-10-05-tid-sound-physical.md)).
+Every chime starts 160 ms after the tap: the amplifier needs that long to
+wake. Other units have not been heard.
 
 ## Limits
 

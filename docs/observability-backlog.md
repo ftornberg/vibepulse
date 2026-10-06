@@ -1006,3 +1006,19 @@ The table's comment also claimed the init CASET starts at column 6; BSP
 `x_gap`. **Verified:** on 2026-09-30 the owner's 2.16 panel ran
 `v1.1.0-35-g8b72b1a` (OTA): clean with the buttons down, the other three
 poses still clean, no edge line.
+
+### OBS-43 · A periodic internal-heap dip trips the audio leak warning
+`firmware · S · open` — seen on `torget-216-02` (`v1.1.0-40-gaef36a2`,
+2026-10-05) while verifying TID's chime: every one to two minutes the
+`heap:` probe shows internal free about 10 KB lower and the largest DMA block
+at 31 744 B instead of 34 816 B, for 30 to 110 s, then both recover by
+themselves. It happens with no chime at all (186, 276 and 368 s into the
+capture), so it is not the audio engine; most likely a periodic network fetch
+(TLS) holding buffers. When a chime ends inside such a dip, the engine's
+`möjlig ljudläcka` warning fires on a coincidence (once in ten chimes). The
+margin stays far above the 11 520 B flush and the 21 248 B audio gate.
+**Also:** the engine's real DMA cost is 3 072 B, twice the spec's 1 536 B
+estimate; the gate still covers it. **Fix:** name the periodic allocator (log
+the poller start/end next to the heap probe, or `heap_caps_dump` at the dip),
+and make the leak check compare against the block measured *after* a short
+settle, or only warn when two chimes in a row end lower.

@@ -1,5 +1,19 @@
 schema_version: 1
 sources:
+  - id: torget-physical-2026-10-05-tid-sound
+    kind: physical-test
+    rank: 1
+    title: TID chime heard and ten-chime DMA margin on the second 2.16 unit
+    publisher: Torget
+    locator: docs/superpowers/reviews/2026-10-05-tid-sound-physical.md
+    revision: findings-2026-10-05; unit=torget-216-02; firmware=v1.1.0-40-gaef36a2
+    accessed: "2026-10-05"
+    board_revision: unknown
+    unit: torget-216-02
+    tests:
+      - speaker-chime-audible-2026-10-05
+      - chime-dma-margin-ten-plays-2026-10-05
+
   - id: torget-physical-2026-09-25-rtc-boot-time
     kind: physical-test
     rank: 1

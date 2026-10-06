@@ -248,8 +248,8 @@ capabilities:
       board_wired: "yes"
       bsp_support: "yes"
       firmware_enabled: "yes"
-      unit_verified: unknown
-    confidence: source_inspected
+      unit_verified: "yes"
+    confidence: measured
     resources:
       - "I2S0"
       - "GPIO42 MCLK"
@@ -260,12 +260,13 @@ capabilities:
       - "shared I2C control bus"
       - "DMA and internal RAM"
     constraints:
-      - "the physical unit inventory does not establish that a speaker is fitted or attached"
-      - "speaker output needs an independent physical test before completion sounds or alerts are promised"
+      - "verified on torget-216-02 only (2026-10-05); every other unit still needs its own physical test"
+      - "the engine borrows I2S and the codec per chime behind a DMA-margin gate (components/torget_audio)"
       - "no independent buzzer or vibration motor is documented; haptics require external hardware"
     conflicts: ["shares I2S, DMA, CPU, memory, and native USB resources with microphone and USB audio paths"]
     opportunities: ["completion sounds", "spoken alerts", "audio playback", "audio diagnostics"]
     sources:
+      - torget-physical-2026-10-05-tid-sound
       - waveshare-schematic-2026-08-10
       - waveshare-bsp-2.0.1
       - torget-main-1fad449
@@ -276,7 +277,11 @@ capabilities:
       - {field: board_wired, value: "yes", source: waveshare-schematic-2026-08-10}
       - {field: bsp_support, value: "yes", source: waveshare-bsp-2.0.1}
       - {field: firmware_enabled, value: "yes", source: torget-main-1fad449}
-    last_verified: "2026-08-10"
+      - {field: unit_verified, value: "yes", source: torget-physical-2026-10-05-tid-sound}
+    last_verified: "2026-10-05"
+    verification:
+      unit: torget-216-02
+      test: speaker-chime-audible-2026-10-05
 
   - id: sensors.imu-qmi8658
     name: QMI8658 six-axis IMU

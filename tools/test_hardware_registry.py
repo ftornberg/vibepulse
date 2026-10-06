@@ -893,32 +893,34 @@ class RepositoryRegistryTests(unittest.TestCase):
         }
         self.assertEqual(
             verified_ids,
-            {"display.amoled", "touch.controller", "radio.wifi-24"},
+            {"display.amoled", "touch.controller", "radio.wifi-24",
+             "audio.speaker-output"},
         )
         for capability_id in verified_ids:
             with self.subTest(capability=capability_id):
                 capability = registry.capabilities[capability_id]
+                # The speaker was heard on the second 2.16 unit only; it
+                # says nothing about torget-home-01 (2026-10-05).
                 self.assertEqual(
                     capability["verification"]["unit"],
-                    "torget-home-01",
+                    "torget-216-02" if capability_id == "audio.speaker-output"
+                    else "torget-home-01",
                 )
                 self.assertTrue(capability["verification"]["test"].strip())
                 sources = {
                     finding["source"] for finding in capability["evidence"]
                     if finding["field"] == "unit_verified"
                 }
-                expected_source = (
-                    "torget-physical-2026-08-27-vibepulse"
-                    if capability_id == "touch.controller"
-                    else "torget-physical-2026-08-06"
-                )
+                expected_source = {
+                    "touch.controller": "torget-physical-2026-08-27-vibepulse",
+                    "audio.speaker-output": "torget-physical-2026-10-05-tid-sound",
+                }.get(capability_id, "torget-physical-2026-08-06")
                 self.assertEqual(sources, {expected_source})
 
     def test_repository_required_truth_distinctions(self):
         registry = self.load_repository_registry()
 
-        for capability_id in (
-                "audio.microphones", "audio.speaker-output"):
+        for capability_id in ("audio.microphones",):
             with self.subTest(capability=capability_id):
                 self.assertEqual(
                     registry.capabilities[capability_id]["states"][
@@ -1033,7 +1035,7 @@ class RepositoryRegistryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout,
-            "OK: 30 capabilities, 15 sources, 2 units\n",
+            "OK: 30 capabilities, 16 sources, 2 units\n",
         )
 
     def test_repository_registry_loads(self):
@@ -1107,6 +1109,11 @@ class RepositoryRegistryTests(unittest.TestCase):
                 "firmware=v1.1.0-26-ga3c84a3",
             ),
             "torget-dev-a3c84a3": ("source-code", 3, "a3c84a3"),
+            "torget-physical-2026-10-05-tid-sound": (
+                "physical-test", 1,
+                "findings-2026-10-05; unit=torget-216-02; "
+                "firmware=v1.1.0-40-gaef36a2",
+            ),
             "torget-physical-2026-08-30-vibepulse-stale-recovery": (
                 "physical-test", 1,
                 "findings-2026-08-30; unit=torget-home-01; "
@@ -1173,11 +1180,13 @@ class RepositoryRegistryTests(unittest.TestCase):
             ],
             "yes",
         )
+        # Heard on torget-216-02 on 2026-10-05 (TID chime, ten-chime DMA
+        # margin); see docs/superpowers/reviews/2026-10-05-tid-sound-physical.md.
         self.assertEqual(
             registry.capabilities["audio.speaker-output"]["states"][
                 "unit_verified"
             ],
-            "unknown",
+            "yes",
         )
         self.assertEqual(
             registry.capabilities["sensors.ambient-light"]["states"][

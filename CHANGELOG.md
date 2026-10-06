@@ -12,8 +12,10 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   the night schedule and the maintenance window. A speaker symbol in TID turns
   it on and off. A new platform engine, `components/torget_audio`, borrows
   I2S and the ES8311 codec per chime behind a DMA-margin check and returns
-  them; it is compiled in only with `TK_TID_SOUND`. Simulator-verified; not
-  yet heard on the glass.
+  them; it is compiled in only with `TK_TID_SOUND`. Heard on `torget-216-02`
+  (2026-10-05): all three notes clear at volume 45, ten chimes with the DMA
+  margin intact. Every chime leads with 160 ms of silence so the amplifier
+  wakes before the first note.
 - **The waiting pulse comes forward too, and TID shows who is waiting.**
   When Claude finishes an answer, asks a question or needs permission, its
   pulsing NEEDS YOU card now borrows the glass from another app for its pulse

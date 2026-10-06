@@ -1288,6 +1288,27 @@ pasted above a page or takeover. **Watch for:** approving tiny rounded shapes
 from enlarged simulator previews or testing only bounding boxes and total lit
 pixels.
 
+## 2026-10-05 · The amplifier wakes after the first note has started
+
+**What happened:** TID's first chime on `torget-216-02` was audible, but the
+first of its three notes was barely heard, "as if it takes a moment to wake
+up". **Root cause:** `es8311_enable()` in `esp_codec_dev` starts the codec,
+drives the amplifier enable pin (GPIO46) and unmutes in the same instant,
+with no settling delay; the engine wrote the 180 ms C6 straight after
+`esp_codec_dev_open()`, so it played while the amplifier came up. **Fix:**
+every chime leads with `TG_AUDIO_LEAD_FRAMES` (160 ms) of silence (#22); on
+the glass all three notes were then equally clear. **Rule:** after powering
+an amplifier through a codec driver, write silence before the content; never
+judge volume from a first note that may be playing into a waking amplifier.
+
+**Also learned:** opening the 2.16's USB-Serial-JTAG port with DTR and RTS
+set low before `open()` still reset the panel once
+(`rst:0x15 (USB_UART_CHIP_RESET)`), as on the 2.41 V2. Tell the owner a
+console capture restarts the panel, and open the port once for the whole
+capture. And a heap probe that compares "before and after" a short task can
+be fooled by an unrelated periodic allocation: the engine's leak warning fired
+on a dip that recurs every minute or two with no sound at all (OBS-43).
+
 ## 2026-09-13 · A test suite paid for a poll it never needed
 
 **What happened:** the tokenserver suite took 92 s and the plugin suite 48 s on

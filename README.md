@@ -695,7 +695,7 @@ timer ends it can chime (three rising notes, silent at night), toggled by the
 speaker symbol and built in with `TK_TID_SOUND`. A NEEDS YOU
 alert still reaches you: the panel switches to VibePulse for the question and
 returns to TID after the answer. TID is off by default (`-DTORGET_WITH_TIME=ON`
-to build it); its chime is not yet heard on the glass. It runs on the owner's 2.16 panel, with the
+to build it); its chime is heard on the owner's second 2.16 unit. It runs on the owner's 2.16 panel, with the
 side mapping measured there. [How it works, how to build it and its
 limits](docs/time-app.md).
 

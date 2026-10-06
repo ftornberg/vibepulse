@@ -19,10 +19,10 @@ units:
     sku_evidence: physical-device-and-working-bsp
     board_revision: unknown
     enclosure: unknown
-    speaker: unknown
+    speaker: fitted
     battery: fitted
     microsd: unknown
     antenna: onboard
-    installed_firmware: v1.1.0-26-ga3c84a3
-    last_physical_verification: "2026-09-25"
+    installed_firmware: v1.1.0-40-gaef36a2
+    last_physical_verification: "2026-10-05"
     secrets: false
