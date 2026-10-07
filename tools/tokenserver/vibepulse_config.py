@@ -33,11 +33,35 @@ _FIELDS = frozenset({
     "agent_status_relay",
     "interaction_relay_url",
     "interaction_mailbox",
+    "agent_status_ignore",
 })
 _MAX_CONFIG_BYTES = 16 * 1024
 _PROCESS_LOCKS = {}
 _PROCESS_LOCKS_GUARD = threading.Lock()
 _MAILBOX_RE = re.compile(r"vp_[A-Za-z0-9_-]{16}\Z")
+AGENT_STATUS_IGNORE_LIMIT = 16
+AGENT_STATUS_IGNORE_MAX_CHARS = 200
+
+
+def claude_project_key(path_fragment: str) -> str:
+    """A path (fragment) in the form Claude Code names its project folders.
+
+    Claude Code stores a session under ~/.claude/projects/<cwd with every
+    character that is not a letter or digit replaced by "-">. Comparing in
+    that form is what lets an ignore entry written as a real path
+    ("/agent-team-orchestrator/work/") match the folder name on disk.
+    """
+    return re.sub(r"[^A-Za-z0-9]", "-", path_fragment)
+
+
+def _valid_ignore_entry(value: object) -> bool:
+    if not isinstance(value, str) or not value or \
+            len(value) > AGENT_STATUS_IGNORE_MAX_CHARS:
+        return False
+    if any(ord(char) < 0x20 or ord(char) == 0x7f for char in value):
+        return False
+    # "/" alone would encode to "-" and hide every session on the machine.
+    return sum(char.isalnum() for char in claude_project_key(value)) >= 3
 
 
 class ConfigError(ValueError):
@@ -60,8 +84,21 @@ class VibePulseConfig:
     agent_status_relay: bool = False
     interaction_relay_url: str | None = None
     interaction_mailbox: str | None = None
+    # Paths whose Claude sessions are left off the agent monitor — typically
+    # automation that runs Claude headless (an orchestrator's work folder),
+    # whose finished runs would otherwise read as "waiting" on the panel.
+    agent_status_ignore: Tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        ignore = self.agent_status_ignore
+        if isinstance(ignore, list):
+            ignore = tuple(ignore)
+            object.__setattr__(self, "agent_status_ignore", ignore)
+        if not isinstance(ignore, tuple) or \
+                len(ignore) > AGENT_STATUS_IGNORE_LIMIT or \
+                not all(_valid_ignore_entry(entry) for entry in ignore) or \
+                len(set(ignore)) != len(ignore):
+            raise ConfigError("agent_status_ignore is invalid")
         for field_name in (
                 "claude_interactions", "codex_interactions",
                 "interaction_detail", "legacy_claude_panel_v1",

@@ -32,6 +32,7 @@ from codex_mcp_timeout import (  # noqa: E402
     TOOL_TIMEOUT_SECONDS as CODEX_MCP_TOOL_TIMEOUT_SECONDS,
 )
 from tokenserver.vibepulse_config import (  # noqa: E402
+    AGENT_STATUS_IGNORE_LIMIT,
     ConfigError,
     VibePulseConfig,
     config_lock,
@@ -304,7 +305,82 @@ def _parser() -> argparse.ArgumentParser:
                           "the bridge")
     statusline_commands.add_parser(
         "status", help="show whether the bridge is installed and feeding")
+
+    agents = commands.add_parser(
+        "agents",
+        help="keep automation's Claude sessions off the agent monitor")
+    agents_commands = agents.add_subparsers(
+        dest="agents_command", required=True)
+    agents_ignore = agents_commands.add_parser(
+        "ignore", help="leave sessions whose working folder contains PATH "
+                       "off the agent monitor (e.g. /agent-team-orchestrator"
+                       "/work/)")
+    agents_ignore.add_argument("path")
+    agents_unignore = agents_commands.add_parser(
+        "unignore", help="show sessions under PATH on the agent monitor "
+                         "again")
+    agents_unignore.add_argument("path")
+    agents_commands.add_parser(
+        "list", help="show the ignored paths")
     return parser
+
+
+_AGENTS_RESTART_HINT = ("Restart the tokenserver for the agent monitor to "
+                        "pick this up.")
+
+
+def _agents_ignore_config(saved: VibePulseConfig,
+                          ignore: tuple) -> VibePulseConfig:
+    return VibePulseConfig(
+        claude_interactions=saved.claude_interactions,
+        codex_interactions=saved.codex_interactions,
+        interaction_detail=saved.interaction_detail,
+        legacy_claude_panel_v1=saved.legacy_claude_panel_v1,
+        interaction_relay=saved.interaction_relay,
+        agent_status_relay=saved.agent_status_relay,
+        interaction_relay_url=saved.interaction_relay_url,
+        interaction_mailbox=saved.interaction_mailbox,
+        agent_status_ignore=ignore,
+    )
+
+
+def _agents_command(path: Path, command: str, value: str | None,
+                    stdout) -> bool:
+    """Edit the agent-monitor ignore list under the shared config lock."""
+    if command == "list":
+        ignore = load_config(path).agent_status_ignore
+        if not ignore:
+            print("No ignored paths — every Claude session is shown.",
+                  file=stdout)
+        for entry in ignore:
+            print(entry, file=stdout)
+        return True
+    value = (value or "").strip()
+    with config_lock(path):
+        saved = load_config(path)
+        current = saved.agent_status_ignore
+        if command == "ignore":
+            if value in current:
+                print(f"PASS Already ignored: {value}", file=stdout)
+                return True
+            updated = current + (value,)
+        else:
+            if value not in current:
+                print(f"FIX Not in the ignore list: {value}", file=stdout)
+                return False
+            updated = tuple(entry for entry in current if entry != value)
+        try:
+            config = _agents_ignore_config(saved, updated)
+        except ConfigError:
+            print("FIX The path must name a folder (at least three letters "
+                  f"or digits) and the list holds at most "
+                  f"{AGENT_STATUS_IGNORE_LIMIT} entries", file=stdout)
+            return False
+        save_config(path, config)
+    verb = "Ignoring" if command == "ignore" else "Showing again"
+    print(f"PASS {verb}: {value}", file=stdout)
+    print(_AGENTS_RESTART_HINT, file=stdout)
+    return True
 
 
 def _interactive_providers(input_fn: Callable[[str], str]) -> str:
@@ -343,6 +419,7 @@ def _chosen_config(providers: str, detail: bool,
         agent_status_relay=saved.agent_status_relay,
         interaction_relay_url=saved.interaction_relay_url,
         interaction_mailbox=saved.interaction_mailbox,
+        agent_status_ignore=saved.agent_status_ignore,
     )
 
 
@@ -359,6 +436,7 @@ def _disabled_config(saved: VibePulseConfig, target: str) -> VibePulseConfig:
         agent_status_relay=saved.agent_status_relay,
         interaction_relay_url=saved.interaction_relay_url,
         interaction_mailbox=saved.interaction_mailbox,
+        agent_status_ignore=saved.agent_status_ignore,
     )
 
 
@@ -383,6 +461,7 @@ def _relay_config(saved: VibePulseConfig, *, enabled: bool,
         interaction_mailbox=(None if clear else
                              (saved.interaction_mailbox
                               if mailbox is None else mailbox)),
+        agent_status_ignore=saved.agent_status_ignore,
     )
 
 
@@ -397,6 +476,7 @@ def _agent_status_relay_config(
         agent_status_relay=enabled,
         interaction_relay_url=saved.interaction_relay_url,
         interaction_mailbox=saved.interaction_mailbox,
+        agent_status_ignore=saved.agent_status_ignore,
     )
 
 
@@ -1244,6 +1324,9 @@ def _print_status(config: VibePulseConfig, stdout) -> None:
           file=stdout)
     print(f"Agent status relay: {switch(config.agent_status_relay)}",
           file=stdout)
+    ignored = len(config.agent_status_ignore)
+    print(f"Agent monitor ignores: {ignored} path(s)"
+          + (" — see `agents list`" if ignored else ""), file=stdout)
 
 
 def _reject_json_constant(value):
@@ -2795,6 +2878,11 @@ def main(
                 token_path=relay_token, secrets_path=secrets_header,
                 service_dir=relay_service, run=run,
                 stdout=output) else 1
+
+        if args.command == "agents":
+            return 0 if _agents_command(
+                path, args.agents_command, getattr(args, "path", None),
+                output) else 1
 
         if args.command == "statusline":
             if args.statusline_command == "status":

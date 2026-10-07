@@ -1209,6 +1209,69 @@ class AgentStatusServiceTests(unittest.TestCase):
                              "working")
             self.assertEqual(service.poll_once(), 0)
 
+    def test_ignored_paths_are_left_out_at_discovery(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            mine = root / "claude" / "-Users-f--src-kvitt" / "mine.jsonl"
+            bot = (root / "claude" /
+                   "-Users-f--src-kvitt-agent-team-orchestrator-work-"
+                   "pr-reviewer-pr130-TlJplj-repo" / "bot.jsonl")
+            done = claude_event("assistant", stop_reason="end_turn")
+            self._write_line(mine, dict(done, sessionId="mine"))
+            self._write_line(bot, dict(done, sessionId="bot"))
+            wall_time = AgentStatusService._event_wall_time(done)
+
+            def service(ignore):
+                return AgentStatusService(
+                    root / "claude", root / "codex", now=lambda: 10.0,
+                    ignore_paths=ignore, _wall_time=lambda: wall_time)
+
+            shown = service(())
+            shown.poll_once()
+            self.assertEqual(
+                shown.snapshot()["agents"]["claude"]["active_count"], 2)
+
+            filtered = service(("/agent-team-orchestrator/work/",))
+            filtered.poll_once()
+            claude = filtered.snapshot()["agents"]["claude"]
+            self.assertEqual(claude["active_count"], 1)
+            self.assertEqual([job["task_id"] for job in claude["jobs"]],
+                             [claude_task_id("mine")])
+
+    def test_ignored_paths_do_not_take_recent_file_slots(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            mine = root / "claude" / "-Users-f-project" / "mine.jsonl"
+            self._write_line(mine, claude_event("user"))
+            os.utime(mine, (1_000, 1_000))
+            limit = AgentStatusService._RECENT_FILE_LIMIT
+            for index in range(limit + 2):
+                bot = (root / "claude" /
+                       f"-Users-f-agent-team-orchestrator-work-run{index}" /
+                       "bot.jsonl")
+                self._write_line(bot, claude_event("user"))
+                os.utime(bot, (2_000 + index, 2_000 + index))
+
+            service = AgentStatusService(
+                root / "claude", root / "codex", now=lambda: 10.0,
+                ignore_paths=("/agent-team-orchestrator/work/",))
+            _, recent = service._discover_paths(root / "claude", "**/*.jsonl")
+
+            self.assertEqual(recent, [mine])
+
+    def test_ignore_paths_never_touch_codex_sessions(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            rollout = (root / "codex" / "agent-team-orchestrator-work" /
+                       "rollout-x.jsonl")
+            self._write_line(rollout, {"type": "event_msg"})
+            service = AgentStatusService(
+                root / "claude", root / "codex", now=lambda: 10.0,
+                ignore_paths=("agent-team-orchestrator-work",))
+            _, recent = service._discover_paths(
+                root / "codex", "**/rollout-*.jsonl")
+            self.assertEqual(recent, [rollout])
+
     def test_stateless_codex_tool_events_stay_on_current_turn(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

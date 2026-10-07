@@ -3838,6 +3838,7 @@ def _resolve_interaction_config(args, path=None):
                 if isinstance(args.interaction_relay, str)
                 else saved.interaction_relay_url),
             interaction_mailbox=saved.interaction_mailbox,
+            agent_status_ignore=saved.agent_status_ignore,
         )
         explicit = (claude_override is not None or
                     args.codex_interactions is not None or
@@ -4238,7 +4239,12 @@ def main():
     status_service = AgentStatusService(
         projects_dir=Handler.projects_dir,
         codex_sessions=CODEX_SESSIONS,
+        ignore_paths=interaction_config.agent_status_ignore,
     )
+    if interaction_config.agent_status_ignore:
+        log.info("agent monitor ignores %d path(s): %s",
+                 len(interaction_config.agent_status_ignore),
+                 ", ".join(interaction_config.agent_status_ignore))
     status_service.poll_once()
     status_service.start()
     Handler.agent_status = status_service

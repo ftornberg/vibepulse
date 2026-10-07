@@ -127,6 +127,8 @@ jobs:
           python test/test_vibepulse_codex_plugin.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python test/test_vibepulse_setup_claude_only.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python test/test_vibepulse_setup_agents.py
       - name: Validate the Windows Task Scheduler installer without installing
         if: runner.os == 'Windows'
         shell: powershell

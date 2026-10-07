@@ -13,6 +13,7 @@ from tools.tokenserver import vibepulse_config as config_module
 from tools.tokenserver.vibepulse_config import (
     ConfigError,
     VibePulseConfig,
+    claude_project_key,
     config_lock,
     load,
     load_config,
@@ -260,8 +261,43 @@ class SavedConfigTests(unittest.TestCase):
             "agent_status_relay": True,
             "interaction_relay_url": "https://relay.example",
             "interaction_mailbox": "vp_A1b2C3d4E5f6G7h8",
+            "agent_status_ignore": [],
         })
         self.assertNotIn("key", self.path.read_text(encoding="utf-8").lower())
+
+    def test_agent_status_ignore_round_trips_as_a_tuple(self):
+        expected = VibePulseConfig(
+            agent_status_ignore=("/agent-team-orchestrator/work/",))
+
+        save_config(self.path, expected)
+        loaded = load_config(self.path)
+
+        self.assertEqual(loaded, expected)
+        self.assertEqual(loaded.agent_status_ignore,
+                         ("/agent-team-orchestrator/work/",))
+        self.assertEqual(
+            json.loads(self.path.read_text(encoding="utf-8"))[
+                "agent_status_ignore"],
+            ["/agent-team-orchestrator/work/"])
+
+    def test_agent_status_ignore_rejects_unsafe_entries(self):
+        for bad in (
+                ("/",),                  # would hide every session
+                ("a/b",),                # fewer than three letters/digits
+                ("",),
+                ("x" * 201,),
+                ("ok-path\nnext",),
+                ("dup-path", "dup-path"),
+                tuple(f"path-{i}" for i in range(17)),
+                ("ok-path", 3),
+                "a-string-not-a-list"):
+            with self.subTest(bad=bad), self.assertRaises(ConfigError):
+                VibePulseConfig(agent_status_ignore=bad)
+
+    def test_claude_project_key_matches_claude_code_folder_names(self):
+        self.assertEqual(
+            claude_project_key("/Users/f/_src/kvitt/agent-team-orchestrator"),
+            "-Users-f--src-kvitt-agent-team-orchestrator")
 
     def test_unknown_duplicate_malformed_and_non_object_json_are_rejected(self):
         invalid_documents = (

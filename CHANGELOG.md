@@ -7,6 +7,13 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Added
 
+- **Automation can be left off the agent monitor.** `vibepulse_setup.py
+  agents ignore <path>` keeps Claude sessions whose working folder contains
+  the path off the agent monitor. A finished headless run (an orchestrator's
+  reviewer, say) ends on `end_turn` with no `result` line, so it pulsed as
+  NEEDS YOU for two hours and took a followed-transcript slot from a real
+  session. Filtered at discovery; token and cost totals still count it.
+
 - **TID can chime.** Three rising notes (C6, E6, G6) when a timer or a
   focus phase ends, also while another app is on the glass; silent during
   the night schedule and the maintenance window. A speaker symbol in TID turns

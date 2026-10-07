@@ -289,6 +289,29 @@ python3 tools/tokenserver/tokenserver.py --port 8738
 curl http://127.0.0.1:8738/api/agent-status
 ```
 
+### Leaving automation off the monitor
+
+Anything that runs Claude headless — an orchestrator, a CI helper — writes
+the same transcripts as a person at the terminal. A finished headless run
+ends on `end_turn` and never writes a `result` line, so it reads as
+**waiting** for the full two-hour lease: a pulsing NEEDS YOU card nobody can
+answer, and one of the twelve followed transcript slots taken from a real
+session. Name the folder those runs work in and the monitor skips them at
+discovery:
+
+```
+python3 tools/vibepulse_setup.py agents ignore /agent-team-orchestrator/work/
+python3 tools/vibepulse_setup.py agents list
+python3 tools/vibepulse_setup.py agents unignore /agent-team-orchestrator/work/
+```
+
+An entry matches any session whose working folder contains it, compared the
+way Claude Code names its project folders (every character that is not a
+letter or digit becomes `-`). At most 16 entries; an entry needs at least
+three letters or digits so `/` cannot hide everything. Codex sessions and the
+token and cost totals are not affected — headless runs still spend your
+quota. Restart the tokenserver after a change.
+
 ## Max Tracker
 
 `/api/max-tracker` serves contract v1 for the two heatmap pages: the day's
