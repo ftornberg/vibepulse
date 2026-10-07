@@ -31,6 +31,9 @@ jobs:
   host-gate:
     name: Host gate (./test/run.sh)
     runs-on: ubuntu-latest
+    # A hung runner (an apt mirror that never answers, 2026-10-07) would
+    # otherwise hold the check for GitHub's six-hour default.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,9 +44,13 @@ jobs:
           python -m pip install -r requirements-dev.txt
           -r requirements-interaction-relay.txt
       - name: Install SDL2, Ninja and xvfb for the simulator landmarks
+        # Normally under a minute. On 2026-10-07 apt-get update hung for an
+        # hour on three PRs at once; bounded and retried, it fails fast and
+        # a re-run picks another moment.
+        timeout-minutes: 10
         run: >
-          sudo apt-get update &&
-          sudo apt-get install -y --no-install-recommends
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends
           libsdl2-dev ninja-build xvfb
       # The vectors test compiles the panel's AES-GCM/HKDF boundary against
       # ESP-IDF's bundled Mbed TLS. Only those sources are needed — no
@@ -65,6 +72,7 @@ jobs:
   interaction-relay:
     name: Encrypted interaction Worker
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -79,6 +87,7 @@ jobs:
   numbers-relay:
     name: Numbers relay Worker
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -96,6 +105,7 @@ jobs:
   tokenserver:
     name: Tokenserver tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -172,6 +182,7 @@ jobs:
     # beroenden det här testet inte har — det klarar sig på stdlib och git.
     name: Snapshot tool (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -200,16 +211,18 @@ jobs:
       # fångas fortfarande.
       - name: Shellcheck the backup tool
         if: runner.os == 'Linux'
+        timeout-minutes: 10
         run: |
           if ! command -v shellcheck >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends shellcheck
+            sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+            sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends shellcheck
           fi
           shellcheck --severity=warning tools/snapshot.sh
 
   firmware:
     name: ESP32-S3 firmware build
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       # CI has no real WiFi or LAN service. Build the opt-in path anyway so
