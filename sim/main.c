@@ -829,7 +829,8 @@ int torget_orientation(void) { return sim_orientation; }
 
 /* Bänken har ingen högtalare: ljudet loggas så att testerna kan se det. */
 bool torget_audio_play(tg_audio_cue cue) {
-  printf("audio: %s\n", cue == TG_AUDIO_CUE_DONE ? "DONE" : "?");
+  printf("audio: %s\n", cue == TG_AUDIO_CUE_DONE ? "DONE"
+                         : cue == TG_AUDIO_CUE_BREAK_OVER ? "BREAK_OVER" : "?");
   fflush(stdout);
   return true;
 }
@@ -2051,6 +2052,18 @@ static int run_time_app_captures(void) {
   time_app_qa_advance(21LL * 60 * 1000000);
   for (int i = 0; i < 12; i++) { lv_timer_handler(); lv_delay_ms(100); }
   torget_app_show(idx);
+
+  /* En paus som tar slut har sin egen signal. Pomodoron väntar sedan förut på
+   * den korta pausen: första trycket kvitterar den färdiga timern, andra
+   * startar pausen. */
+  printf("qa: break-over\n");
+  fflush(stdout);
+  sim_orientation = TG_TIME_ROT_POMODORO;
+  time_app_qa_refresh();
+  time_app_qa_tap();
+  time_app_qa_tap();
+  time_app_qa_advance(6LL * 60 * 1000000);
+  time_app_qa_refresh();
   return capture_failures == 0 ? 0 : 1;
 }
 #endif

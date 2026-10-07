@@ -8,7 +8,7 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 ### Added
 
 - **TID can chime.** Three rising notes (C6, E6, G6) when a timer or a
-  pomodoro phase ends, also while another app is on the glass; silent during
+  focus phase ends, also while another app is on the glass; silent during
   the night schedule and the maintenance window. A speaker symbol in TID turns
   it on and off. A new platform engine, `components/torget_audio`, borrows
   I2S and the ES8311 codec per chime behind a DMA-margin check and returns
@@ -16,6 +16,9 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   (2026-10-05): all three notes clear at volume 45, ten chimes with the DMA
   margin intact. Every chime leads with 160 ms of silence so the amplifier
   wakes before the first note.
+- **A pomodoro break ends with its own cue.** Two falling, lower notes (G5,
+  E5) tell "back to work" apart from the three rising notes that end a focus
+  phase or a timer. Host- and simulator-tested; not yet heard on a panel.
 - **The waiting pulse comes forward too, and TID shows who is waiting.**
   When Claude finishes an answer, asks a question or needs permission, its
   pulsing NEEDS YOU card now borrows the glass from another app for its pulse

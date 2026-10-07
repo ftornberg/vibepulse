@@ -149,9 +149,18 @@ void tg_countdown_reset(tg_countdown *c) { tg_countdown_init(c); }
 
 int tg_time_advance(tg_pomo *p, tg_countdown *c, int64_t now_us) {
   int expired = 0;
-  if (p && tg_timer_tick_expired(&p->timer, now_us)) expired++;
-  if (c && tg_timer_tick_expired(&c->timer, now_us)) expired++;
+  if (p && tg_timer_tick_expired(&p->timer, now_us)) expired |= TG_TIME_EXPIRED_POMODORO;
+  if (c && tg_timer_tick_expired(&c->timer, now_us)) expired |= TG_TIME_EXPIRED_TIMER;
   return expired;
+}
+
+int tg_time_cue_for(int expired, const tg_pomo *p) {
+  if (p && (expired & TG_TIME_EXPIRED_POMODORO))
+    return tg_pomo_phase_of(p) == TG_POMO_FOCUS ? TG_AUDIO_CUE_DONE
+                                                : TG_AUDIO_CUE_BREAK_OVER;
+  if (expired & (TG_TIME_EXPIRED_POMODORO | TG_TIME_EXPIRED_TIMER))
+    return TG_AUDIO_CUE_DONE;
+  return -1;
 }
 
 bool tg_time_clock_valid(int64_t epoch_s) {

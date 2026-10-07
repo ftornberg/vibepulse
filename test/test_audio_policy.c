@@ -111,6 +111,54 @@ static void test_render(void) {
   free(chunked);
 }
 
+/* Pausens slut: G5 sedan E5, fallande och lägre än DONE. */
+static void test_render_break_over(void) {
+  uint32_t total = tg_audio_cue_frames(TG_AUDIO_CUE_BREAK_OVER);
+  check("break over: 570 ms at 16 kHz", total == 570u * 16u);
+  tg_audio_state s = ok_state();
+  check("break over is allowed like any cue",
+        tg_audio_allowed(&s, TG_AUDIO_CUE_BREAK_OVER) == TG_AUDIO_OK);
+
+  int16_t *all = calloc(total, sizeof *all);
+  check("break over: render all",
+        tg_audio_render(TG_AUDIO_CUE_BREAK_OVER, 0, all, total, 45) == total);
+  check("break over: starts at zero", all[0] == 0);
+  check("break over: ends at zero", all[total - 1] == 0);
+  int peak = 0;
+  for (uint32_t i = 0; i < total; i++)
+    if (abs(all[i]) > peak) peak = abs(all[i]);
+  check("break over: peak within the level", peak <= 32767 * 45 / 100 + 1);
+  check("break over: peak is audible", peak > 32767 * 45 / 100 * 9 / 10);
+
+  /* note 1: 240 ms = 3840 frames at 784 Hz -> ~376 crossings */
+  int c1 = crossings(all, 3840);
+  check("break over: note 1 is ~784 Hz", c1 >= 369 && c1 <= 383);
+  int gap_peak = 0;
+  for (uint32_t i = 3840; i < 3840 + 480; i++)
+    if (abs(all[i]) > gap_peak) gap_peak = abs(all[i]);
+  check("break over: gap is silent", gap_peak == 0);
+  /* note 2: 300 ms = 4800 frames at 659 Hz -> ~395 crossings */
+  int c2 = crossings(all + 4320, 4800);
+  check("break over: note 2 is ~659 Hz", c2 >= 388 && c2 <= 402);
+  check("break over: falling", (double)c2 / 4800.0 < (double)c1 / 3840.0);
+
+  int16_t *chunked = calloc(total, sizeof *chunked);
+  uint32_t off = 0;
+  for (;;) {
+    uint32_t n = tg_audio_render(TG_AUDIO_CUE_BREAK_OVER, off, chunked + off,
+                                 off + 256 <= total ? 256 : total - off, 45);
+    if (n == 0) break;
+    off += n;
+  }
+  check("break over: chunks cover everything", off == total);
+  check("break over: chunked equals one-shot",
+        memcmp(all, chunked, total * sizeof *all) == 0);
+  check("a negative cue renders nothing",
+        tg_audio_cue_frames(-1) == 0 && tg_audio_render(-1, 0, chunked, 256, 45) == 0);
+  free(all);
+  free(chunked);
+}
+
 static void test_outcomes(void) {
   uint8_t f = 0;
   /* Only an init failure counts toward disabling sound (spec: memory and
@@ -141,6 +189,7 @@ int main(void) {
   test_dma_gate();
   test_failures();
   test_render();
+  test_render_break_over();
   if (failures) { printf("%d failure(s)\n", failures); return 1; }
   printf("audio policy: ok\n");
   return 0;

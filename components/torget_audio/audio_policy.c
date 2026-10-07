@@ -18,7 +18,29 @@ static const note k_done[] = {
   {1319, 180, 20},
   {1568, 220, 0},
 };
-#define DONE_NOTES (sizeof k_done / sizeof k_done[0])
+/* G5, E5: två fallande, lägre och längre toner, ~0,57 s — pausen är slut
+ * (ägaren 2026-10-06). Mjukare genom tonhöjd och längd, inte genom nivå. */
+static const note k_break_over[] = {
+  {784, 240, 30},
+  {659, 300, 0},
+};
+
+typedef struct {
+  const note *notes;
+  unsigned count;
+} cue_def;
+
+#define CUE(a) {a, sizeof a / sizeof a[0]}
+static const cue_def k_cues[TG_AUDIO_CUE_COUNT] = {
+  [TG_AUDIO_CUE_DONE] = CUE(k_done),
+  [TG_AUDIO_CUE_BREAK_OVER] = CUE(k_break_over),
+};
+
+static const cue_def *cue_of(int cue) {
+  if (cue < 0 || cue >= TG_AUDIO_CUE_COUNT) return NULL;
+  return &k_cues[cue];
+}
+
 #define FRAMES_PER_MS (TG_AUDIO_RATE / 1000u)
 #define ENVELOPE_FRAMES (8u * FRAMES_PER_MS)
 
@@ -65,9 +87,10 @@ bool tg_audio_after_outcome(uint8_t *consecutive_failures, tg_audio_outcome o) {
 }
 
 uint32_t tg_audio_cue_frames(int cue) {
-  if (cue != TG_AUDIO_CUE_DONE) return 0;
+  const cue_def *d = cue_of(cue);
+  if (!d) return 0;
   uint32_t ms = 0;
-  for (unsigned i = 0; i < DONE_NOTES; i++) ms += k_done[i].ms + k_done[i].gap_ms;
+  for (unsigned i = 0; i < d->count; i++) ms += d->notes[i].ms + d->notes[i].gap_ms;
   return ms * FRAMES_PER_MS;
 }
 
@@ -81,18 +104,20 @@ static int16_t sample_of(const note *t, uint32_t frame, uint32_t n, float amp) {
 
 uint32_t tg_audio_render(int cue, uint32_t offset, int16_t *buf,
                          uint32_t frames, uint8_t level_percent) {
+  const cue_def *d = cue_of(cue);
   uint32_t total = tg_audio_cue_frames(cue);
-  if (!buf || offset >= total) return 0;
+  if (!d || !buf || offset >= total) return 0;
   if (level_percent > 100) level_percent = 100;
   float amp = 32767.0f * (float)level_percent / 100.0f;
   uint32_t written = 0;
   while (written < frames && offset + written < total) {
     uint32_t pos = offset + written, start = 0;
     int16_t value = 0;
-    for (unsigned i = 0; i < DONE_NOTES; i++) {
-      uint32_t n = k_done[i].ms * FRAMES_PER_MS;
-      uint32_t gap = k_done[i].gap_ms * FRAMES_PER_MS;
-      if (pos < start + n) { value = sample_of(&k_done[i], pos - start, n, amp); break; }
+    for (unsigned i = 0; i < d->count; i++) {
+      const note *t = &d->notes[i];
+      uint32_t n = t->ms * FRAMES_PER_MS;
+      uint32_t gap = t->gap_ms * FRAMES_PER_MS;
+      if (pos < start + n) { value = sample_of(t, pos - start, n, amp); break; }
       start += n;
       if (pos < start + gap) { value = 0; break; }
       start += gap;

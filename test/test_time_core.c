@@ -314,18 +314,57 @@ static void test_advance(void) {
   check("nothing running, nothing expires", tg_time_advance(&p, &c, MIN_US(99)) == 0);
   tg_pomo_tap(&p, 0);
   check("before the deadline, nothing", tg_time_advance(&p, &c, MIN_US(24)) == 0);
-  check("the pomodoro expires once", tg_time_advance(&p, &c, MIN_US(25)) == 1);
+  check("the pomodoro expires once",
+        tg_time_advance(&p, &c, MIN_US(25)) == TG_TIME_EXPIRED_POMODORO);
+  check("the step stays on the phase that ended", tg_pomo_phase_of(&p) == TG_POMO_FOCUS);
   check("...and only once", tg_time_advance(&p, &c, MIN_US(26)) == 0);
   tg_pomo_tap(&p, MIN_US(27));             /* dismiss -> next phase idle */
   tg_pomo_tap(&p, MIN_US(27));             /* start the 5 min break */
   tg_countdown_start(&c, 0, MIN_US(12));   /* 20 min timer ends at 32 */
-  check("both expire in one tick", tg_time_advance(&p, &c, MIN_US(40)) == 2);
+  check("both expire in one tick", tg_time_advance(&p, &c, MIN_US(40)) ==
+        (TG_TIME_EXPIRED_POMODORO | TG_TIME_EXPIRED_TIMER));
   check("NULL safe", tg_time_advance(NULL, NULL, 0) == 0);
+  tg_pomo_tap(&p, MIN_US(41));             /* dismiss the break */
+  tg_countdown_tap(&c, MIN_US(41));        /* dismiss the timer */
+  tg_countdown_start(&c, 0, MIN_US(41));
+  check("the timer alone", tg_time_advance(&p, &c, MIN_US(61)) == TG_TIME_EXPIRED_TIMER);
+}
+
+/* Vilken signal en utgång ger: pausens slut låter annorlunda. */
+static void test_cue_for(void) {
+  tg_pomo p;
+  tg_pomo_init(&p);
+  check("nothing expired, no cue", tg_time_cue_for(0, &p) == -1);
+  check("a timer is DONE", tg_time_cue_for(TG_TIME_EXPIRED_TIMER, &p) == TG_AUDIO_CUE_DONE);
+  check("a timer is DONE without a pomodoro",
+        tg_time_cue_for(TG_TIME_EXPIRED_TIMER, NULL) == TG_AUDIO_CUE_DONE);
+  check("NULL pomodoro still sounds",
+        tg_time_cue_for(TG_TIME_EXPIRED_POMODORO, NULL) == TG_AUDIO_CUE_DONE);
+  for (int step = 0; step < TG_POMO_STEPS; step++) {
+    p.step = step;
+    int want = step % 2 == 0 ? TG_AUDIO_CUE_DONE : TG_AUDIO_CUE_BREAK_OVER;
+    check("focus ends DONE, every break ends BREAK_OVER",
+          tg_time_cue_for(TG_TIME_EXPIRED_POMODORO, &p) == want);
+  }
+  p.step = 7;
+  check("the long break is a break", tg_pomo_phase_of(&p) == TG_POMO_LONG_BREAK);
+  p.step = 1;
+  check("both at once: the pomodoro decides, as on the glass",
+        tg_time_cue_for(TG_TIME_EXPIRED_POMODORO | TG_TIME_EXPIRED_TIMER, &p) ==
+        TG_AUDIO_CUE_BREAK_OVER);
+  p.step = 0;
+  check("both at once after focus",
+        tg_time_cue_for(TG_TIME_EXPIRED_POMODORO | TG_TIME_EXPIRED_TIMER, &p) ==
+        TG_AUDIO_CUE_DONE);
+  p.step = 1;
+  check("a timer during a break phase is still DONE",
+        tg_time_cue_for(TG_TIME_EXPIRED_TIMER, &p) == TG_AUDIO_CUE_DONE);
 }
 
 int main(void) {
   test_mode_for();
   test_advance();
+  test_cue_for();
   test_tick_expired();
   test_ring();
   test_timer();

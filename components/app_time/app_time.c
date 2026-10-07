@@ -38,11 +38,12 @@ static int64_t now_us(void) {
   return now;
 }
 
-/* En timer som just gick ut låter, om ljudet är på (spec 2026-10-02). Två på
- * samma tick ger en signal: plattformen nekar den andra medan den första
- * spelar. */
+/* En timer som just gick ut låter, om ljudet är på (spec 2026-10-02). En paus
+ * som är slut har sin egen signal; två utgångar på samma tick ger en. Kallas
+ * före kvitteringen, medan pomodoron står kvar på fasen som tog slut. */
 static void chime_on(int expired) {
-  if (expired && app.sound_on) torget_audio_play(TG_AUDIO_CUE_DONE);
+  int cue = tg_time_cue_for(expired, &app.pomo);
+  if (cue >= 0 && app.sound_on) torget_audio_play((tg_audio_cue)cue);
 }
 
 /* Tickar timrarna, läser orienteringen och ritar om vid ändring. Kallas under

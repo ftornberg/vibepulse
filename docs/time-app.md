@@ -89,8 +89,12 @@ appears, and edit the three `#define` values.
 
 ## Sound
 
-When a timer or a pomodoro phase ends, TID plays three rising notes (C6, E6,
-G6, about 0.6 s), also while another app is on the glass. It stays silent
+When a timer or a focus phase ends, TID plays three rising notes (C6, E6,
+G6, about 0.6 s), also while another app is on the glass. When a pomodoro
+break ends, short or long, it plays two falling, lower notes instead (G5, E5,
+about 0.6 s), so the ear can tell "rest now" from "back to work". If a break
+and the timer end on the same tick, only the break's cue plays, matching the
+pomodoro that the glass shows first. It stays silent
 during the night schedule (the same 23:00 to 07:00 as night dimming, with a
 valid clock) and while the maintenance window is open. Silence follows night
 dimming itself: with **NIGHT DIM** switched off in SETTINGS → LABS, the chime
@@ -113,12 +117,13 @@ three notes clear at `TG_AUDIO_VOLUME` 45, ten chimes with the largest DMA
 block never below 31 744 B and no freeze
 ([physical review](superpowers/reviews/2026-10-05-tid-sound-physical.md)).
 Every chime starts 160 ms after the tap: the amplifier needs that long to
-wake. Other units have not been heard.
+wake. Other units have not been heard. The break's falling cue (2026-10-06) is
+host- and simulator-tested only: **not yet heard on any panel**.
 
 ## Limits
 
-- **One chime for every ending.** Different cues for a focus phase starting or
-  ending, and repeating the chime until a tap, are a later step.
+- **No cue when a phase starts, and no repeat.** Starting a phase is your own
+  tap, so it is silent; repeating a chime until a tap is a later step.
 - **Needs You takes the glass from TID.** When an agent needs you, the panel
   switches to VibePulse so the question is seen, and returns to TID after the
   answer, unless you switched app yourself meanwhile. A running TID timer keeps

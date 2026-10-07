@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../../platform/audio_cue.h"
+
 /*
  * TID: den rena kärnan. Ingen LVGL, ingen systemklocka — allt tar `now_us`
  * (enhetens monotona mikrosekunder) som argument, så samma kod går att testa
@@ -116,10 +118,19 @@ bool tg_countdown_start(tg_countdown *c, int preset, int64_t now_us);
 void tg_countdown_tap(tg_countdown *c, int64_t now_us);
 void tg_countdown_reset(tg_countdown *c); /* -> IDLE */
 
-/* Tickar båda timrarna och svarar med hur många som just gick från RUNNING
- * till DONE (0..2). Den ENDA tickvägen i appen, så att en signal varken
- * missas eller spelas två gånger. NULL-säker. */
+/* Tickar båda timrarna och svarar med VILKA som just gick från RUNNING till
+ * DONE, som bitar (0 = ingen). Den ENDA tickvägen i appen, så att en signal
+ * varken missas eller spelas två gånger. NULL-säker. */
+#define TG_TIME_EXPIRED_POMODORO 1
+#define TG_TIME_EXPIRED_TIMER 2
 int tg_time_advance(tg_pomo *p, tg_countdown *c, int64_t now_us);
+
+/* Signalen för det tg_time_advance just svarade; -1 när inget gick ut. En
+ * paus som är slut låter annorlunda än en fokusfas eller en timer. Kallas
+ * FÖRE kvitteringen: p står då kvar på fasen som tog slut. Gick båda ut på
+ * samma tick väljs pomodoron, som också är den som visas och kvitteras först
+ * (tg_time_done_source_of) — plattformen spelar ändå bara en signal. */
+int tg_time_cue_for(int expired, const tg_pomo *p);
 
 /* ---- text --------------------------------------------------------------- */
 

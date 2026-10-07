@@ -60,6 +60,12 @@ class TimeAppSimTests(unittest.TestCase):
             out = run.stdout
             marker = out.find("qa: hidden-timer")
             self.assertGreaterEqual(marker, 0, out)
+            over = out.find("qa: break-over")
+            self.assertGreaterEqual(over, 0, out)
+            # A break that ends has its own cue, and never the DONE chime too.
+            self.assertEqual(out[over:].count("audio: BREAK_OVER"), 1, out[over:])
+            self.assertNotIn("audio: DONE", out[over:])
+            self.assertNotIn("audio: BREAK_OVER", out[:over])
             self.assertEqual(out[marker:].count("audio: DONE"), 1,
                              "a TID timer ending behind VibePulse must chime "
                              "exactly once, also across the return to TID")
