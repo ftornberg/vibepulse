@@ -30,7 +30,7 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / ".agents/plugins/plugins/vibepulse/scripts"
 MAX_HOOK_INPUT = 64 * 1024
-HOST_SOURCE_FINGERPRINT = "928976070ba7"
+HOST_SOURCE_FINGERPRINT = "033f9d617414"
 
 PERMISSION = {
     "hook_event_name": "PermissionRequest",
@@ -2474,7 +2474,7 @@ class SetupPlanTests(unittest.TestCase):
                 "Claude: ON", "Codex: OFF", "Detail: ON",
                 "Legacy Claude panel v1: OFF",
                 "Interaction relay: OFF", "Agent status relay: OFF",
-        "Agent monitor ignores: 0 path(s)"])
+        "Agent monitor ignores: 0 path(s)", "Merge queue: 0 source(s)"])
             self.assertNotIn("key", output.getvalue().lower())
 
 

@@ -34,12 +34,15 @@ _FIELDS = frozenset({
     "interaction_relay_url",
     "interaction_mailbox",
     "agent_status_ignore",
+    "merge_queue_sources",
 })
 _MAX_CONFIG_BYTES = 16 * 1024
 _PROCESS_LOCKS = {}
 _PROCESS_LOCKS_GUARD = threading.Lock()
 _MAILBOX_RE = re.compile(r"vp_[A-Za-z0-9_-]{16}\Z")
 AGENT_STATUS_IGNORE_LIMIT = 16
+MERGE_QUEUE_SOURCE_LIMIT = 16
+_MERGE_QUEUE_SOURCE_RE = re.compile(r"http://127\.0\.0\.1:([0-9]{1,5})\Z")
 AGENT_STATUS_IGNORE_MAX_CHARS = 200
 
 
@@ -88,8 +91,24 @@ class VibePulseConfig:
     # automation that runs Claude headless (an orchestrator's work folder),
     # whose finished runs would otherwise read as "waiting" on the panel.
     agent_status_ignore: Tuple[str, ...] = ()
+    # Local agent-team orchestrators whose /api/merge-queue the tokenserver
+    # polls ("ready to merge"). Loopback origins only, normalized.
+    merge_queue_sources: Tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        sources = self.merge_queue_sources
+        if isinstance(sources, list):
+            sources = tuple(sources)
+            object.__setattr__(self, "merge_queue_sources", sources)
+        if not isinstance(sources, tuple) or \
+                len(sources) > MERGE_QUEUE_SOURCE_LIMIT or \
+                len(set(sources)) != len(sources) or \
+                not all(isinstance(source, str) and
+                        (match := _MERGE_QUEUE_SOURCE_RE.fullmatch(source))
+                        and 1 <= int(match.group(1)) <= 65535 and
+                        str(int(match.group(1))) == match.group(1)
+                        for source in sources):
+            raise ConfigError("merge_queue_sources is invalid")
         ignore = self.agent_status_ignore
         if isinstance(ignore, list):
             ignore = tuple(ignore)

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import dataclasses
 from dataclasses import dataclass
 import json
 import os
@@ -33,6 +34,7 @@ from codex_mcp_timeout import (  # noqa: E402
 )
 from tokenserver.vibepulse_config import (  # noqa: E402
     AGENT_STATUS_IGNORE_LIMIT,
+    MERGE_QUEUE_SOURCE_LIMIT,
     ConfigError,
     VibePulseConfig,
     config_lock,
@@ -40,7 +42,7 @@ from tokenserver.vibepulse_config import (  # noqa: E402
     save_config,
 )
 from tokenserver.codex_command import resolve_codex_executable  # noqa: E402
-from tokenserver import statusline_bridge  # noqa: E402
+from tokenserver import merge_queue, statusline_bridge  # noqa: E402
 from tokenserver.tokenserver import _read_source_fingerprint  # noqa: E402
 
 
@@ -322,6 +324,21 @@ def _parser() -> argparse.ArgumentParser:
     agents_unignore.add_argument("path")
     agents_commands.add_parser(
         "list", help="show the ignored paths")
+
+    merge_queue = commands.add_parser(
+        "merge-queue",
+        help="show pull requests that wait for you to merge them, read from "
+             "local agent-team orchestrators")
+    merge_queue_commands = merge_queue.add_subparsers(
+        dest="merge_queue_command", required=True)
+    merge_queue_add = merge_queue_commands.add_parser(
+        "add", help="poll the orchestrator on this port (or "
+                    "http://127.0.0.1:<port>)")
+    merge_queue_add.add_argument("source")
+    merge_queue_remove = merge_queue_commands.add_parser(
+        "remove", help="stop polling that orchestrator")
+    merge_queue_remove.add_argument("source")
+    merge_queue_commands.add_parser("list", help="show the polled sources")
     return parser
 
 
@@ -341,6 +358,7 @@ def _agents_ignore_config(saved: VibePulseConfig,
         interaction_relay_url=saved.interaction_relay_url,
         interaction_mailbox=saved.interaction_mailbox,
         agent_status_ignore=ignore,
+        merge_queue_sources=saved.merge_queue_sources,
     )
 
 
@@ -383,6 +401,48 @@ def _agents_command(path: Path, command: str, value: str | None,
     return True
 
 
+def _merge_queue_command(path: Path, command: str, value: str | None,
+                         stdout) -> bool:
+    """Edit the orchestrator sources the merge queue is read from."""
+    if command == "list":
+        sources = load_config(path).merge_queue_sources
+        if not sources:
+            print("No merge-queue sources.", file=stdout)
+        for source in sources:
+            print(source, file=stdout)
+        return True
+    try:
+        source = merge_queue.normalize_source(value or "")
+    except ValueError as exc:
+        print(f"FIX {exc}", file=stdout)
+        return False
+    with config_lock(path):
+        saved = load_config(path)
+        current = saved.merge_queue_sources
+        if command == "add":
+            if source in current:
+                print(f"PASS Already polled: {source}", file=stdout)
+                return True
+            updated = current + (source,)
+        else:
+            if source not in current:
+                print(f"FIX Not a merge-queue source: {source}", file=stdout)
+                return False
+            updated = tuple(entry for entry in current if entry != source)
+        try:
+            config = dataclasses.replace(saved, merge_queue_sources=updated)
+        except ConfigError:
+            print(f"FIX At most {MERGE_QUEUE_SOURCE_LIMIT} sources",
+                  file=stdout)
+            return False
+        save_config(path, config)
+    verb = "Polling" if command == "add" else "No longer polling"
+    print(f"PASS {verb}: {source}", file=stdout)
+    print("Restart the tokenserver for the merge queue to pick this up.",
+          file=stdout)
+    return True
+
+
 def _interactive_providers(input_fn: Callable[[str], str]) -> str:
     prompt = (
         "Choose VibePulse panel providers "
@@ -420,6 +480,7 @@ def _chosen_config(providers: str, detail: bool,
         interaction_relay_url=saved.interaction_relay_url,
         interaction_mailbox=saved.interaction_mailbox,
         agent_status_ignore=saved.agent_status_ignore,
+        merge_queue_sources=saved.merge_queue_sources,
     )
 
 
@@ -437,6 +498,7 @@ def _disabled_config(saved: VibePulseConfig, target: str) -> VibePulseConfig:
         interaction_relay_url=saved.interaction_relay_url,
         interaction_mailbox=saved.interaction_mailbox,
         agent_status_ignore=saved.agent_status_ignore,
+        merge_queue_sources=saved.merge_queue_sources,
     )
 
 
@@ -462,6 +524,7 @@ def _relay_config(saved: VibePulseConfig, *, enabled: bool,
                              (saved.interaction_mailbox
                               if mailbox is None else mailbox)),
         agent_status_ignore=saved.agent_status_ignore,
+        merge_queue_sources=saved.merge_queue_sources,
     )
 
 
@@ -477,6 +540,7 @@ def _agent_status_relay_config(
         interaction_relay_url=saved.interaction_relay_url,
         interaction_mailbox=saved.interaction_mailbox,
         agent_status_ignore=saved.agent_status_ignore,
+        merge_queue_sources=saved.merge_queue_sources,
     )
 
 
@@ -1327,6 +1391,8 @@ def _print_status(config: VibePulseConfig, stdout) -> None:
     ignored = len(config.agent_status_ignore)
     print(f"Agent monitor ignores: {ignored} path(s)"
           + (" — see `agents list`" if ignored else ""), file=stdout)
+    print(f"Merge queue: {len(config.merge_queue_sources)} source(s)",
+          file=stdout)
 
 
 def _reject_json_constant(value):
@@ -2878,6 +2944,11 @@ def main(
                 token_path=relay_token, secrets_path=secrets_header,
                 service_dir=relay_service, run=run,
                 stdout=output) else 1
+
+        if args.command == "merge-queue":
+            return 0 if _merge_queue_command(
+                path, args.merge_queue_command,
+                getattr(args, "source", None), output) else 1
 
         if args.command == "agents":
             return 0 if _agents_command(

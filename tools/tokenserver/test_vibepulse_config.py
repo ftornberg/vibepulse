@@ -262,6 +262,7 @@ class SavedConfigTests(unittest.TestCase):
             "interaction_relay_url": "https://relay.example",
             "interaction_mailbox": "vp_A1b2C3d4E5f6G7h8",
             "agent_status_ignore": [],
+            "merge_queue_sources": [],
         })
         self.assertNotIn("key", self.path.read_text(encoding="utf-8").lower())
 
@@ -293,6 +294,25 @@ class SavedConfigTests(unittest.TestCase):
                 "a-string-not-a-list"):
             with self.subTest(bad=bad), self.assertRaises(ConfigError):
                 VibePulseConfig(agent_status_ignore=bad)
+
+    def test_merge_queue_sources_accept_only_normalized_loopback(self):
+        ok = VibePulseConfig(merge_queue_sources=[
+            "http://127.0.0.1:4400", "http://127.0.0.1:4401"])
+        self.assertEqual(ok.merge_queue_sources,
+                         ("http://127.0.0.1:4400", "http://127.0.0.1:4401"))
+        for bad in (
+                ("http://localhost:4400",),       # setup normalizes first
+                ("https://127.0.0.1:4400",),
+                ("http://192.168.1.10:4400",),
+                ("http://127.0.0.1:4400/api",),
+                ("http://127.0.0.1:0",),
+                ("http://127.0.0.1:70000",),
+                ("http://127.0.0.1:04400",),
+                ("http://127.0.0.1:4400", "http://127.0.0.1:4400"),
+                tuple(f"http://127.0.0.1:{4400 + i}" for i in range(17)),
+                "http://127.0.0.1:4400"):
+            with self.subTest(bad=bad), self.assertRaises(ConfigError):
+                VibePulseConfig(merge_queue_sources=bad)
 
     def test_claude_project_key_matches_claude_code_folder_names(self):
         self.assertEqual(

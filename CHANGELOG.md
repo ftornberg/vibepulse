@@ -7,6 +7,11 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Added
 
+- **Merge queue on the host.** `/api/merge-queue` lists pull requests that
+  local agent-team orchestrators have reviewed and that wait for a person to
+  merge them (`vibepulse_setup.py merge-queue add <port>`). Loopback sources
+  only, LAN only, a down source flagged instead of counted as zero. The
+  panel does not show it yet.
 - **Automation can be left off the agent monitor.** `vibepulse_setup.py
   agents ignore <path>` keeps Claude sessions whose working folder contains
   the path off the agent monitor. A finished headless run (an orchestrator's

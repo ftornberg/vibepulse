@@ -99,5 +99,50 @@ class AgentsIgnoreList(unittest.TestCase):
         self.assertIn("Agent monitor ignores: 1 path(s)", text)
 
 
+class MergeQueueSources(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.config = Path(self._tmp.name) / "config.json"
+        self.addCleanup(self._tmp.cleanup)
+
+    def _run(self, *argv):
+        out = io.StringIO()
+        code = setup.main(
+            list(argv), config_path=self.config, codex=None, run=_no_run,
+            stdout=out, stdin_isatty=False)
+        return code, out.getvalue()
+
+    def test_add_normalizes_a_port_and_keeps_other_settings(self):
+        self._run("agents", "ignore", "/agent-team-orchestrator/work/")
+        code, text = self._run("merge-queue", "add", "4401")
+        self.assertEqual(code, 0, text)
+        saved = json.loads(self.config.read_text())
+        self.assertEqual(saved["merge_queue_sources"],
+                         ["http://127.0.0.1:4401"])
+        self.assertEqual(saved["agent_status_ignore"],
+                         ["/agent-team-orchestrator/work/"])
+        # and the agents command keeps the sources in turn
+        self._run("agents", "unignore", "/agent-team-orchestrator/work/")
+        self.assertEqual(json.loads(self.config.read_text())[
+            "merge_queue_sources"], ["http://127.0.0.1:4401"])
+
+    def test_non_loopback_is_refused_and_nothing_saved(self):
+        code, text = self._run("merge-queue", "add", "http://192.168.1.2:4401")
+        self.assertEqual(code, 1)
+        self.assertIn("FIX", text)
+        self.assertFalse(self.config.exists())
+
+    def test_remove_list_and_status(self):
+        self._run("merge-queue", "add", "http://localhost:4400")
+        _, text = self._run("merge-queue", "list")
+        self.assertEqual(text.strip(), "http://127.0.0.1:4400")
+        _, text = self._run("status")
+        self.assertIn("Merge queue: 1 source(s)", text)
+        code, _ = self._run("merge-queue", "remove", "4400")
+        self.assertEqual(code, 0)
+        _, text = self._run("merge-queue", "list")
+        self.assertIn("No merge-queue sources", text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -80,6 +80,8 @@ if __package__:
     )
     from .codex_rollout import codex_rollout_rate_limits, observation_timestamp
     from .github_monitor import GitHubMonitor, disabled_snapshot, normalize_repo
+    from .merge_queue import MergeQueueMonitor
+    from .merge_queue import disabled_snapshot as merge_queue_disabled
     from .interactions import InteractionStore
     from .max_tracker import MaxTrackerStore
     from .publisher import Publisher
@@ -105,6 +107,8 @@ else:  # run directly: python3 tools/tokenserver/tokenserver.py
     )
     from codex_rollout import codex_rollout_rate_limits, observation_timestamp
     from github_monitor import GitHubMonitor, disabled_snapshot, normalize_repo
+    from merge_queue import MergeQueueMonitor
+    from merge_queue import disabled_snapshot as merge_queue_disabled
     from interactions import InteractionStore
     from max_tracker import MaxTrackerStore
     from publisher import Publisher
@@ -2966,6 +2970,7 @@ class Handler(BaseHTTPRequestHandler):
     agent_status = None  # background service, set in main
     max_tracker_store = None  # set in main
     github_monitor = None  # optional public repo monitor, set in main
+    merge_queue = None  # optional local orchestrator merge queue, set in main
     plans = {"claude": None, "codex": None}  # set in main from --*-plan
     interaction_store = None  # "Needs You", off by default; set in main
     interaction_timeout_s = 120.0  # set in main from --interaction-timeout
@@ -3599,6 +3604,10 @@ class Handler(BaseHTTPRequestHandler):
             self._reply(lambda: (self.github_monitor.snapshot()
                                  if self.github_monitor is not None
                                  else disabled_snapshot()))
+        elif self.path == "/api/merge-queue":
+            self._reply(lambda: (self.merge_queue.snapshot()
+                                 if self.merge_queue is not None
+                                 else merge_queue_disabled()))
         elif self.path == "/":
             self._reply(self._root_payload)
         else:
@@ -3613,7 +3622,7 @@ class Handler(BaseHTTPRequestHandler):
         failing_since = _compute_failing_since
         save_failing_since = _max_tracker_save_failing_since
         endpoints = ["/api/tokens", "/api/agent-status",
-                     "/api/max-tracker", "/api/github"]
+                     "/api/max-tracker", "/api/github", "/api/merge-queue"]
         return {"service": "torget-tokenserver",
                 "rev": _SERVER_REV,
                 "srcFingerprint": _SERVER_SRC,
@@ -3839,6 +3848,7 @@ def _resolve_interaction_config(args, path=None):
                 else saved.interaction_relay_url),
             interaction_mailbox=saved.interaction_mailbox,
             agent_status_ignore=saved.agent_status_ignore,
+            merge_queue_sources=saved.merge_queue_sources,
         )
         explicit = (claude_override is not None or
                     args.codex_interactions is not None or
@@ -4141,6 +4151,17 @@ def main():
                  "auth" if github_token else "anonymous — the name becomes "
                  "'someone'")
     Handler.github_monitor = github_monitor
+
+    # LAN only, like agent status: pull request titles never go to the relay.
+    merge_queue_monitor = None
+    if interaction_config.merge_queue_sources:
+        merge_queue_monitor = MergeQueueMonitor(
+            interaction_config.merge_queue_sources)
+        merge_queue_monitor.start()
+        log.info("merge queue polls %d orchestrator(s): %s",
+                 len(merge_queue_monitor.sources),
+                 ", ".join(merge_queue_monitor.sources))
+    Handler.merge_queue = merge_queue_monitor
 
     Handler.projects_dir = Path(args.dir)
     if not _any_provider_dir(Handler.projects_dir):
