@@ -1022,3 +1022,25 @@ estimate; the gate still covers it. **Fix:** name the periodic allocator (log
 the poller start/end next to the heap probe, or `heap_caps_dump` at the dip),
 and make the leak check compare against the block measured *after* a short
 settle, or only warn when two chimes in a row end lower.
+
+### OBS-44 · Renders hold the UI lock past 200 ms and nothing names the holder
+`firmware · S · open` — seen on `torget-216-02` on 2026-10-07, on both
+`v1.1.0-40-gaef36a2` and `v1.1.0-44-gb30d689`: the console logs
+`esp_lv_adapter_lock(751): Failed to acquire LVGL lock` at error level several
+times a minute (16 times in about six minutes of capture). Five of them land
+197 to 300 ms after a `tokens:` fetch line, so one holder is the redraw that
+follows a `/api/tokens` payload; the others cluster while the UPDATE READY
+takeover or the RECEIVING ring is on the glass, which points at full-screen
+redraws. The failing callers are the timed ones (`torget_ui_try_lock(200)`):
+the OTA overlay, the Wi-Fi setup overlay and the boot screen. They skip the
+frame by design, which is only safe when the same call is made again on the
+next poll. One caller was not: the takeover's show and hide were one-shot
+edges, fixed 2026-10-07 by reconciling the glass against the policy every poll
+(`tg_notice_glass`, see [lessons.md](lessons.md)). **Not known:** which render
+holds the lock, for how long at worst, and whether touch input waits behind it.
+**Fix:** time the lock hold in the adapter's render loop and log the longest
+one next to the `heap:` probe; name the caller in the timeout line (a wrapper
+around `torget_ui_try_lock` that logs its tag at warning level instead of the
+adapter's anonymous error); then decide whether the tokens redraw should be
+split. Audit the remaining timed callers (`wifi_setup_ui.c`, `boot_screen.c`) for the
+same one-shot assumption.

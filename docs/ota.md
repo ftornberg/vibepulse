@@ -98,7 +98,12 @@ compares against its own running version:
   the Mac, delivery is automatic. The pill is the ONLY affirmative action
   while the takeover owns the glass: a KEY3 hold does nothing there, on
   purpose, so SETTINGS can never open behind the notice.
-- **LATER / any other tap** → snooze; the takeover returns every hour
+- **LATER / any other tap** → snooze (logged `notisen avfärdad med ett
+  tryck`); the takeover then leaves the glass at the next half-second poll
+  (host-tested, not yet confirmed on a panel). Until
+  2026-10-07 it stayed drawn with dead pills and KEY3 disabled until a reset;
+  the glass is now reconciled against the notice state every poll. The
+  takeover returns every hour
   (`TG_NOTICE_NAG_US` in `notice_policy.h` — raise it when the platform
   calms down) until the update is installed.
 - **Match** → silence. The notice can never nag about nothing.
@@ -171,3 +176,4 @@ SHA, the version line names the incoming image.
 | UPDATE READY never appears | Same version already running, or tokenserver older than the feature | `curl localhost:8737/api/tokens \| grep otaAvailable` |
 | UPDATE READY appears for a version you never sent, often `-dirty` | A branch or scratch firmware build sits in a repo-root `build*/` directory (`build-time/`, `build-241/`, ...); the tokenserver announces the NEWEST `build*/torget.bin`, whatever its origin | `curl localhost:8737/api/tokens \| grep otaAvailable`, then delete that directory or build outside the repo root (`idf.py -B /tmp/<name> ...`); the notice clears at the next quota poll |
 | Takeover shows but UPDATE does nothing | No pusher waiting on the Mac | Start `tools/ota-flash.sh <ip>` — the tap opens the window; the Mac must deliver |
+| Takeover shows, neither pill reacts, KEY3 hold does nothing | Firmware older than the 2026-10-07 fix: a tap outside UPDATE dismissed the notice without hiding it | `curl http://<ip>/api/ota/status` gets no answer (window closed). Power-cycle the panel, then tap UPDATE first |

@@ -1374,3 +1374,36 @@ tests, both firmware profiles in CI, isolated hardware registries, the
 Automatic rotation, board-safe OTA, physical answer replies and sustained
 motion/network stress remain separate follow-ups; they were not established
 by displaying usage.
+
+## 2026-10-07 · A dismissed takeover stayed on the glass and swallowed every tap
+
+**What happened:** on `torget-216-02` (`v1.1.0-40-gaef36a2`) the UPDATE READY
+takeover ignored both pills: UPDATE did not open the window (port 80 stayed
+closed, the pusher kept waiting) and LATER did not close it. A KEY3 hold does
+nothing while the takeover is visible, by design, so the panel had no way out
+but a reset. After a USB reset the same takeover answered the first UPDATE tap.
+**Root cause:** the maintenance task drove the overlay from one-shot edges.
+`tg_notice_update` answers SHOW and HIDE only at a transition, and a
+dismissing tap goes through `tg_notice_dismiss`, which clears `showing`
+without any HIDE at all: the next `tg_notice_update` sees "not showing, nag
+clock running" and answers NONE. So one tap anywhere outside the UPDATE pill
+left the overlay drawn while the policy called it dismissed; every later tap
+was drained and ignored because taps count only while `showing`, and KEY3
+stayed disabled because that gate reads the glass. The same split could come
+from the other direction: `torget_ota_ui_set` skips a frame when the UI lock is
+busy for 200 ms, promising "the next poll tries again", which was false for an
+edge. The console shows that lock timing out several times a minute (OBS-44).
+**Not proven:** that the owner's first tap was a snooze. The frozen state was
+lost in the reset; the bug is established from the code and reproduces the
+symptom exactly, the cause of that one evening is inferred. **Fix:** the glass
+is reconciled against the policy every poll with the pure, host-tested
+`tg_notice_glass`, which also hides a countdown ring left behind when the
+window closed and redraws a takeover whose version line did not get through; a
+snooze now logs `notisen avfärdad med ett tryck`. **Rule:** when a UI call may skip its work
+(a timed lock, a dedupe), drive it from the state it should reach, asked again
+every poll, never from the event that changed the state. And test the tap that
+says no: the policy test asserted "freshly dismissed stays hidden" by checking
+that no new SHOW came, which is true while the pixels are still there.
+**Also learned:** `ioreg -p IOUSB -l` shows an ESP32-S3's MAC as its USB serial
+number without opening the port, so you can tell which panel is attached
+without resetting it; and "the power cable" may end in a hub on the Mac.

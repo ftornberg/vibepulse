@@ -63,6 +63,12 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Fixed
 
+- **UPDATE READY no longer goes deaf after a tap on LATER.** A tap outside the
+  UPDATE pill dismissed the notice without hiding it, so the takeover stayed
+  on the glass with both pills dead and the KEY3 hold disabled until the panel
+  was reset. The glass is now reconciled against the notice state every poll,
+  which also repairs a show or hide skipped while the UI lock was busy.
+  Host-tested; not yet confirmed on a panel.
 - With the buttons down, the 2.16 panel rendered every app as smeared,
   dotted streaks (OBS-42). That pose's MADCTL `0x60` swaps the axes, and its
   panel gap sat on x, where the CO5300 driver adds it to the column window
