@@ -136,6 +136,12 @@ The device proves an image is *valid*; the pusher proves it is the
    run on GitHub (`TG_OTA_ALLOW_NO_CI=1` for offline emergencies). CI
    runs on every pushed branch for exactly this reason.
 
+The script also reports the panel's answer honestly: only HTTP 202 prints the
+success line and exits 0. Any other answer, or none, names the failure and
+exits 1. To confirm a delivery, ask the panel:
+`curl http://<ip>/api/ota/status` shows `running_version` while the window is
+open, which includes the minutes after the post-update reboot.
+
 ## Day-to-day developer workflow
 
 ```
@@ -171,6 +177,7 @@ SHA, the version line names the incoming image.
 | "This project has no OTA" | Reading a pre-OTA tree (factory-only `partitions.csv`) | `git branch --show-current`; read `partitions.csv` in *that* checkout |
 | Upload gets 403 | Window not open | Hold KEY3, then pick UPDATE in SETTINGS — the hold alone only opens the menu; the glass must show the ring/UPDATES ON |
 | Upload gets 401 | Token mismatch or malformed | `TG_OTA_TOKEN` in `secrets.h`: exactly 64 lowercase hex |
+| Upload gets 408 "upload interrupted", often after 20 to 60 s | The panel saw no data for 5 s in mid-stream; seen three times in a row on 2026-10-07 with a healthy link (OBS-45, cause not measured) | Run `tools/ota-flash.sh` again while the window is open; the running slot is untouched. The script now exits 1 and says so |
 | Upload gets 400 "not a torget esp32s3 image" | Wrong file (bootloader? another project?) | Send `build*/torget.bin`, nothing else |
 | 202 but the old version still runs after reboot | Health gate rolled the image back | The new build is broken on-device; check it on USB with the console |
 | UPDATE READY never appears | Same version already running, or tokenserver older than the feature | `curl localhost:8737/api/tokens \| grep otaAvailable` |

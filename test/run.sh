@@ -412,6 +412,7 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 "$PYTHON_BIN" test_firmware_diagnostics.py
 "$PYTHON_BIN" test_ota_reopen_wiring.py
 "$PYTHON_BIN" test_ota_sender_gates.py
+"$PYTHON_BIN" test_ota_sender_result.py
 # Backupen AGENTS.md kräver före varje historikomskrivning. Testet bygger
 # syntetiska repon med git och kör verktyget mot dem på riktigt. Halva
 # svaret ligger dock i CI: tre av de fem defekter granskningen hittade i

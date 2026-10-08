@@ -1044,3 +1044,42 @@ around `torget_ui_try_lock` that logs its tag at warning level instead of the
 adapter's anonymous error); then decide whether the tokens redraw should be
 split. Audit the remaining timed callers (`wifi_setup_ui.c`, `boot_screen.c`) for the
 same one-shot assumption.
+
+### OBS-45 · OTA uploads crawl and break off with 408, and nothing says why
+`firmware · M · open` — seen on `torget-216-02` on 2026-10-07. Receiving on
+`v1.1.0-40-gaef36a2` a 2 MB image took 129 s; receiving on
+`v1.1.0-44-gb30d689` three uploads in a row ended in HTTP 408
+`upload interrupted` after 25, 61 and 18 s, and the fourth went through in
+224 s (about 9 KB/s). The link was healthy at rest: 60 pings of 1 400 bytes,
+no loss, 9 ms average, the Mac on wired Ethernet. A 408 is the handler's
+`httpd_req_recv` timing out, so the panel saw no data for 5 s in mid-stream.
+**Hypothesis, not measured:** the handler redraws the RECEIVING ring after
+every 4 096-byte chunk and each redraw may wait up to 200 ms for the UI lock
+(OBS-44), so the panel reads slowly; its TCP receive window is 5 760 bytes
+(`tcp rx win` in the boot log), so the window keeps closing; when one window
+update is lost over Wi-Fi the sender's persist timer (5 s minimum on macOS)
+meets the server's 5 s receive timeout and the panel gives up first. **Not
+known:** whether the app on the glass matters (the fourth attempt ran with
+VibePulse in front, but so may the others have), and whether an unread USB
+console slows the panel (the 129 s upload had a serial reader attached, the
+failures did not). **Fix:** measure first: log bytes, elapsed time and the
+longest gap between chunks when an upload ends or breaks, and count how often
+the ring redraw lost the lock. Then: redraw the ring per percent instead of
+per chunk and never wait for the lock on the receive path; consider a larger
+receive window for the OTA socket; give the receive a timeout longer than the
+sender's persist timer. An aborted upload never touches the running slot, so
+the cost is time and a second window, not a bricked panel.
+
+### OBS-46 · The OTA pusher reported success whatever the panel answered
+`tooling · S · done (2026-10-07)` — `tools/ota-flash.sh` printed
+`202 = avbilden vald för nästa boot` and exited 0 after every upload, also the
+three that ended in HTTP 408 (OBS-45), so a background run reported
+"completed" and the failure was found only by asking the panel for its
+version. Its 300 s cap was also close to cutting the 224 s upload that did get
+through. **Fix:** the script reads the HTTP status, prints the success line
+and exits 0 only for 202, names the failure otherwise (408, 403, 401, no
+answer) and exits 1; the cap is 570 s, inside the ten-minute window.
+`test/test_ota_sender_result.py` runs the real script against a stand-in
+panel for 202, 408 and other refusals. **Verify a delivery** with
+`curl http://<ip>/api/ota/status`: `running_version` answers while the window
+is open, which includes the minutes after the post-update reboot.

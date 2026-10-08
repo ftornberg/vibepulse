@@ -105,11 +105,39 @@ if [ "${TG_OTA_ALLOW_NO_CI:-0}" != "1" ]; then
 fi
 
 echo "fönstret öppet — laddar upp $BIN ($(wc -c < "$BIN" | tr -d ' ') byte):"
-curl -s --max-time 300 -X POST "http://$HOST/api/ota/firmware" \
+# Svaret AVGÖR utfallet (2026-10-07): skriptet skrev förut sin 202-rad och
+# slutade med 0 vad panelen än svarade, så tre avbrutna uppladdningar (408)
+# såg lyckade ut för den som bara läste sista raden eller exit-koden.
+# Taket är fönstrets tio minuter minus marginal: en uppladdning som går fram
+# tog 224 s samma kväll, och 300 s hade klippt en långsam men frisk ström.
+set +e
+REPLY=$(curl -s --max-time 570 -X POST "http://$HOST/api/ota/firmware" \
   -H "Authorization: Bearer $TOKEN" \
   -H "X-VibePulse-Project: torget" \
   -H "X-VibePulse-Chip: esp32s3" \
   -H "X-VibePulse-SHA256: $SHA" \
   --data-binary "@$BIN" \
-  -w "\nHTTP %{http_code} på %{time_total}s\n"
-echo "202 = avbilden vald för nästa boot; enheten startar om inom ett par sekunder."
+  -w '\n%{http_code} %{time_total}')
+CURL_STATUS=$?
+set -e
+META=$(printf '%s\n' "$REPLY" | tail -1)
+BODY=$(printf '%s\n' "$REPLY" | sed '$d')
+HTTP_CODE=${META%% *}
+[ -n "$BODY" ] && echo "$BODY"
+echo "HTTP $HTTP_CODE på ${META#* }s"
+
+if [ "$HTTP_CODE" = "202" ]; then
+  echo "202 = avbilden vald för nästa boot; enheten startar om inom ett par sekunder."
+  exit 0
+fi
+
+echo "MISSLYCKADES: avbilden gick INTE fram (HTTP $HTTP_CODE, curl $CURL_STATUS)." >&2
+echo "Enheten kör kvar sin gamla version; den aktiva luckan är orörd." >&2
+case "$HTTP_CODE" in
+  408) echo "408 = strömmen bröts: enheten fick ingen data på 5 s. Kör igen medan" >&2
+       echo "      fönstret står öppet (docs/ota.md, felsökning; OBS-45)." >&2 ;;
+  403) echo "403 = fönstret är inte öppet längre: öppna det igen på enheten." >&2 ;;
+  401) echo "401 = TG_OTA_TOKEN i secrets.h stämmer inte med enhetens." >&2 ;;
+  000) echo "000 = inget svar alls: tappad anslutning eller sändarens tak (570 s)." >&2 ;;
+esac
+exit 1

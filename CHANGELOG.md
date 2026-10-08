@@ -78,6 +78,10 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Fixed
 
+- **`tools/ota-flash.sh` no longer reports a failed upload as a success.** It
+  printed its "202" line and exited 0 whatever the panel answered, also after
+  an HTTP 408. It now exits 0 only for 202, names the failure otherwise, and
+  allows 570 s instead of 300 s, since a healthy upload was seen to take 224 s.
 - **UPDATE READY no longer goes deaf after a tap on LATER.** A tap outside the
   UPDATE pill dismissed the notice without hiding it, so the takeover stayed
   on the glass with both pills dead and the KEY3 hold disabled until the panel
