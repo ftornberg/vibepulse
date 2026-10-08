@@ -107,6 +107,20 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ### Changed
 
+- **48.6 KB of static data moved from internal RAM to PSRAM** (link map:
+  85 716 to 37 124 B), and the panel now logs its task stacks. The 2026-10-08 memory study (OBS-47) found
+  internal RAM at ~100 KB free in use with the largest free block pinned at
+  31 744 B; the HTTP bodies, the parsed payloads and the two big UI state
+  structs are plain CPU data and now carry `EXT_RAM_BSS_ATTR`
+  (`platform/ext_ram.h`): 36.7 KB of ours. The same Kconfig value lets
+  ESP-IDF place 12 KB of its own lwip, wpa_supplicant and Wi-Fi statics in
+  PSRAM too, by its own choice of what is safe there. Flash-adjacent buffers
+  (OTA chunk, Wi-Fi credentials) stay internal. A once-a-minute `stackar kvar` line lists the
+  eight tasks with the least headroom, and `LÅG STACK` warns under 512 B.
+  Both rest on two Kconfig values that `sdkconfig.defaults` seeds and a new
+  CMake guard enforces (`CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY`,
+  `CONFIG_FREERTOS_USE_TRACE_FACILITY`): an existing `sdkconfig` needs the
+  two lines and `idf.py reconfigure`. Built, not yet flashed.
 - TID's clock moves to the buttons-right pose, the panel's natural resting
   position on the desk, and the timer to buttons up; pomodoro stays at buttons
   left. The rotation values are now measured on the owner's panel (buttons up

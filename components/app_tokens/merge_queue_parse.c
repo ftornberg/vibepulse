@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "strict_json.h"
+#include "../../platform/ext_ram.h"
 
 /* A title longer than the panel keeps: cut at a UTF-8 character boundary
  * and end it with "…" (U+2026), so the card says it was shortened. */
@@ -98,7 +99,7 @@ bool tk_merge_queue_parse(const char *json, size_t len, tk_merge_queue *out) {
   /* Static, not on the stack: the payload is about 2 KB and the poller's
    * stack also carries cJSON's recursion and the HTTP client. One caller
    * (the merge-queue poller task), so no reentrancy to worry about. */
-  static tk_merge_queue parsed;
+  static EXT_RAM_BSS_ATTR tk_merge_queue parsed;
   memset(&parsed, 0, sizeof parsed);
   const cJSON *version = cJSON_GetObjectItemCaseSensitive(root, "v");
   const cJSON *enabled = cJSON_GetObjectItemCaseSensitive(root, "enabled");

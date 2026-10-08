@@ -16,6 +16,8 @@
 #include <time.h>
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "ext_ram.h"
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -847,6 +849,47 @@ static void corner_probe_off_cb(lv_timer_t *t) {
 }
 #endif
 
+/* Stackarnas högvattenlinje (minnesförstudien 2026-10-08, OBS-47): ~90 KB
+ * av internminnet är våra egna taskstackar och ingen utom chime var mätt.
+ * Alla taskar på en gång via uxTaskGetSystemState (kräver
+ * CONFIG_FREERTOS_USE_TRACE_FACILITY, vaktat i roten), de åtta med minst
+ * kvar först. Enheten är byte: portSTACK_TYPE är uint8_t på Xtensa. Kallas
+ * från LVGL-tasken en gång i minuten; schemaläggaren står still några
+ * mikrosekunder per anrop. */
+#define TG_STACK_PROBE_TASKS 32
+#define TG_STACK_PROBE_SHOWN 8
+#define TG_STACK_WARN_BYTES 512
+static void stack_probe_log(void) {
+  static EXT_RAM_BSS_ATTR TaskStatus_t status[TG_STACK_PROBE_TASKS];
+  UBaseType_t n = uxTaskGetSystemState(status, TG_STACK_PROBE_TASKS, NULL);
+  if (n == 0) {
+    ESP_LOGW(TAG, "stackar: fler än %d taskar, ingen mätning", TG_STACK_PROBE_TASKS);
+    return;
+  }
+  for (UBaseType_t i = 1; i < n; i++) { /* insättningssortering, n ~ 25 */
+    TaskStatus_t t = status[i];
+    UBaseType_t j = i;
+    while (j > 0 && status[j - 1].usStackHighWaterMark > t.usStackHighWaterMark) {
+      status[j] = status[j - 1];
+      j--;
+    }
+    status[j] = t;
+  }
+  char line[192];
+  size_t used = 0;
+  unsigned shown = n < TG_STACK_PROBE_SHOWN ? (unsigned)n : TG_STACK_PROBE_SHOWN;
+  for (unsigned i = 0; i < shown; i++) {
+    int w = snprintf(line + used, sizeof line - used, "%s%s %u", i ? ", " : "",
+                     status[i].pcTaskName, (unsigned)status[i].usStackHighWaterMark);
+    if (w < 0 || (size_t)w >= sizeof line - used) break;
+    used += (size_t)w;
+  }
+  ESP_LOGI(TAG, "stackar kvar (B, lägst först): %s", line);
+  for (UBaseType_t i = 0; i < n && status[i].usStackHighWaterMark < TG_STACK_WARN_BYTES; i++)
+    ESP_LOGW(TAG, "LÅG STACK: %s har %u B kvar", status[i].pcTaskName,
+             (unsigned)status[i].usStackHighWaterMark);
+}
+
 static void tick_cb(lv_timer_t *t) {
   (void)t;
   int64_t now = esp_timer_get_time();
@@ -881,6 +924,11 @@ static void tick_cb(lv_timer_t *t) {
              (unsigned)render_stats.ring_updates,
              (unsigned)render_stats.unchanged_ticks);
     tk_agent_monitor_render_stats_reset();
+    static int stack_probe;
+    if (++stack_probe >= 6) { /* var 60:e sekund */
+      stack_probe = 0;
+      stack_probe_log();
+    }
     /* Tidig varning INNAN glaset fryser: panelflushen behöver ett
      * sammanhängande DMA-block på DISPLAY_FLUSH_ROWS×480×2 byte. Faller
      * största DMA-blocket mot det taket dör nästa flush i NO_MEM och hela

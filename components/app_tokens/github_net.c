@@ -15,6 +15,7 @@
 #include "github_status_parse.h"
 #include "poll_backoff_policy.h"
 #include "torget.h"
+#include "ext_ram.h"
 #include "torget_http.h"
 
 static const char *TAG = "github-net";
@@ -34,7 +35,7 @@ static const char *TAG = "github-net";
 
 static void github_net_task(void *arg) {
   (void)arg;
-  static char body[GITHUB_BODY_MAX];
+  static EXT_RAM_BSS_ATTR char body[GITHUB_BODY_MAX];
   size_t len;
 
   tk_poll_backoff backoff;

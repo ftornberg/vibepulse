@@ -17,6 +17,7 @@
 #include "merge_queue_parse.h"
 #include "poll_backoff_policy.h"
 #include "torget.h"
+#include "ext_ram.h"
 #include "torget_http.h"
 
 #if TK_MERGE_QUEUE
@@ -50,7 +51,7 @@ static const char *TAG = "merge-net";
 
 static void merge_queue_net_task(void *arg) {
   (void)arg;
-  static char body[MERGE_BODY_MAX];
+  static EXT_RAM_BSS_ATTR char body[MERGE_BODY_MAX];
   size_t len;
 
   tk_poll_backoff backoff;
@@ -61,7 +62,7 @@ static void merge_queue_net_task(void *arg) {
   vTaskDelay(pdMS_TO_TICKS(25000));
 
   for (;;) {
-    static tk_merge_queue queue;
+    static EXT_RAM_BSS_ATTR tk_merge_queue queue;
     bool fetched = torget_http_get_service("/api/merge-queue", MERGE_QUEUE_URL, NULL,
                                            body, sizeof body, &len) &&
                    tk_merge_queue_parse(body, len, &queue);

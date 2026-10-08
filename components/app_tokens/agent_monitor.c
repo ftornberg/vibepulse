@@ -11,6 +11,7 @@
 #include "interaction_relay_policy.h"
 #include "merge_queue_policy.h"
 #include "torget.h"
+#include "ext_ram.h"
 #include "vibepulse_layout.generated.h"
 
 extern const lv_font_t plex_attention_18;
@@ -143,7 +144,9 @@ typedef struct {
   char request_id[TK_PENDING_ID_CAP];
 } needs_you_key;
 
-static struct {
+/* 8 KB tillstånd: PSRAM (ext_ram.h). Attributet står FÖRE struct — efter
+ * klammern binder det till typen, och gcc lägger då variabeln internt igen. */
+static EXT_RAM_BSS_ATTR struct {
   completion_view completion;
   needs_you_view needs_you;
   tk_needs_you_state needs_you_state;

@@ -403,6 +403,7 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 "$PYTHON_BIN" test_time_app_wiring.py
 "$PYTHON_BIN" test_lvgl_layer_safety.py
 "$PYTHON_BIN" test_lvgl_memory_config.py
+"$PYTHON_BIN" test_memory_headroom_config.py
 "$PYTHON_BIN" test_overlay_memory_budget.py
 "$PYTHON_BIN" test_lvgl_qrcode_config.py
 "$PYTHON_BIN" test_wifi_onboarding_design.py

@@ -18,6 +18,7 @@
 #include "app_tokens.h"
 #include "secrets.h"
 #include "torget.h"
+#include "ext_ram.h"
 #include "service_discovery.h"
 
 static const char *TAG = "agent-net";
@@ -37,7 +38,7 @@ static const char *TAG = "agent-net";
 
 #ifdef TK_AGENT_STATUS_URL
 
-static tk_agent_http_response response;
+static EXT_RAM_BSS_ATTR tk_agent_http_response response; /* 4 KB kropp: PSRAM */
 static portMUX_TYPE s_origin_lock = portMUX_INITIALIZER_UNLOCKED;
 static char s_direct_origin[64];
 

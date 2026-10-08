@@ -90,6 +90,12 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/torget_lvgl_memory_guard.cmake")
 torget_require_lvgl_pool("${CONFIG_LV_MEM_SIZE_KILOBYTES}")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/torget_lvgl_qrcode_guard.cmake")
 torget_require_lvgl_qrcode("${CONFIG_LV_USE_QRCODE}")
+# Internal-RAM headroom (2026-10-08): EXT_RAM_BSS_ATTR is silently a no-op
+# and the stack line cannot be built without these two values.
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/torget_memory_guard.cmake")
+torget_require_memory_headroom(
+  "${CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY}"
+  "${CONFIG_FREERTOS_USE_TRACE_FACILITY}")
 # Crash and log evidence (OBS-02/03/28/35): an old generated sdkconfig would
 # silently drop the coredump writer, the LVGL warnings and the task watchdog.
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/torget_diagnostics_guard.cmake")

@@ -16,6 +16,7 @@
 #include "project_star_popup.h"
 #include "project_star_style.h"
 #include "torget.h"
+#include "ext_ram.h"
 #include "usage_live_policy.h"
 #include "usage_presenter.h"
 #include "vibepulse_layout.generated.h"
@@ -157,7 +158,8 @@ typedef struct {
   lv_obj_t *cap_api, *cap_break, *cap_paid;
 } value_page;
 
-static struct {
+/* 4 KB objektpekare och sidor: PSRAM (ext_ram.h); attributet före struct. */
+static EXT_RAM_BSS_ATTR struct {
   lv_obj_t *tileview;
   lv_obj_t *tiles[TK_USAGE_SCREEN_VIEWS];
   quota_page quotas[3];

@@ -1083,3 +1083,41 @@ answer) and exits 1; the cap is 570 s, inside the ten-minute window.
 panel for 202, 408 and other refusals. **Verify a delivery** with
 `curl http://<ip>/api/ota/status`: `running_version` answers while the window
 is open, which includes the minutes after the post-update reboot.
+
+### OBS-47 · Internal RAM: one 32 KiB region is the only big block, and every flush mallocs
+`firmware · M · in progress` — memory study 2026-10-08 on `torget-216-02`
+(`v1.1.0-49-g8a83c3a`, link map plus a ten-minute console capture). Internal
+heap is 261 940 B in three regions (202 + 21 + 32 KiB). Free: 211 051 B at
+2.7 s, 173 503 B after the LVGL task starts, 98 000 to 109 000 B in use,
+low-water 58 759 B. **The largest free block is 31 744 B in every probe, for
+both INTERNAL and DMA**: that is the untouched 32 KiB region; the 202 KiB
+region holds no free block above 31 KB any more, its ~70 KB free is
+fragments. **Every display flush allocates 11 520 B of DMA memory**: the draw
+buffers live in PSRAM and `spi_master.c` (IDF 5.5.2, lines 1190 to 1195)
+bounces a non-DMA-capable transmit buffer through a temporary
+`heap_caps_aligned_alloc(MALLOC_CAP_DMA)` per transaction. That is the freeze
+class of 2026-08-14 and 2026-08-16 stated as a mechanism. Where the RAM goes:
+our permanent task stacks 90 112 B (lvgl 16 384, agent-status 10 240,
+interaction-relay 10 240, ota-ui 8 192, four pollers at 6 144, github 5 120,
+the rest 2 048 to 4 096), IDF's own about 26 KB, static `.bss`/`.data`
+85 716 B of which ~42 KB ours, IRAM code about 100 KB of the same SRAM. Not
+problems: LVGL's pool is in PSRAM (60 of 256 KB used), TLS buffers are in
+PSRAM (`MBEDTLS_EXTERNAL_MEM_ALLOC`), TID costs 260 B static.
+**Done (this item's first step):** 48 592 B of static data out of internal
+RAM (link map, `_heap_start` from `0x3fcb6f00` to `0x3fcab268`): 36.7 KB of
+our buffers via `EXT_RAM_BSS_ATTR`, and 12 KB of ESP-IDF's own lwip,
+wpa_supplicant and Wi-Fi statics that the Kconfig value lets IDF place in
+PSRAM by its own rules. If Wi-Fi misbehaves after this lands, that IDF part is
+the first suspect: it is the one piece not chosen here. Plus a once-a-minute
+stack line. **Open, in order:**
+(1) read the stack line for a day and right-size the stacks; (2) move the
+pollers' stacks to PSRAM (`CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY` is
+already `y`): tokens, max-tracker, agent-status, needs-you, merge-queue,
+github, relay, about 50 KB, after an audit that none of them writes flash or
+NVS from its own task (the LVGL task does, via TID's sound and LABS, and must
+stay internal); (3) with that headroom, decide whether the LVGL draw buffers
+go internal (`use_psram=false`, 23 KB fixed) to remove the per-flush malloc
+altogether; (4) low priority: Wi-Fi buffer counts (touches OBS-45) and
+`mdns_free()` after discovery (~6 KB). Measure every step with the `heap:`
+line; stack usage was not measured before this item.
+
