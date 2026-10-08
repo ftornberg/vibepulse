@@ -117,8 +117,10 @@ three notes clear at `TG_AUDIO_VOLUME` 45, ten chimes with the largest DMA
 block never below 31 744 B and no freeze
 ([physical review](superpowers/reviews/2026-10-05-tid-sound-physical.md)).
 Every chime starts 160 ms after the tap: the amplifier needs that long to
-wake. Other units have not been heard. The break's falling cue (2026-10-06) is
-host- and simulator-tested only: **not yet heard on any panel**.
+wake. Other units have not been heard. The break's falling cue was **heard on the same unit**
+(2026-10-07, `v1.1.0-44-gb30d689`): the owner ran a focus phase and then a
+break to their ends and judged the cue good at the unchanged volume
+([physical review](superpowers/reviews/2026-10-07-tid-break-cue-physical.md)).
 
 ## Limits
 
