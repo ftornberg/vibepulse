@@ -8,6 +8,7 @@
 #include "agent_status.h"
 #include "interaction_relay_policy.h"
 #include "needs_you_policy.h"
+#include "merge_queue.h"
 
 void tk_agent_monitor_create(lv_obj_t *app_root);
 void tk_agent_monitor_apply(const tk_agent_snapshot *snapshot, int64_t now_us);
@@ -26,6 +27,8 @@ void tk_agent_monitor_tick(int64_t now_us);
  * root, when another app is in front) hides it. Read-only; the caller holds
  * torget_ui_lock (the LVGL task already does). */
 bool tk_agent_monitor_takeover_visible(void);
+/* The merge card's pulse animation is running (simulator and tests). */
+bool tk_agent_monitor_merge_pulse_running(void);
 
 /* Content-free render diagnostics. Safe to log: counters contain no prompt,
  * command, project, provider, or request identifier. */
@@ -39,6 +42,12 @@ void tk_agent_monitor_render_stats_reset(void);
 
 /* Deterministisk simulatorväg; glastrycket går genom samma köfunktion. */
 void tk_agent_monitor_dismiss_current(void);
+
+/* "Ready to merge": pull requests reviewed by local agent-team orchestrators
+ * that wait for the person (tokenserver /api/merge-queue). */
+void tk_agent_monitor_apply_merge_queue(tk_merge_queue *queue,
+                                        int64_t now_us);
+void tk_agent_monitor_dismiss_merge(void);
 
 /* A "Needs You" verdict left the glass: the human tapped APPROVE / DENY /
  * LEAVE IT on the interactive takeover. The app layer wires this to the signed

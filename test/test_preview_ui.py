@@ -18,6 +18,13 @@ SIM_PATH = ROOT / "sim/main.c"
 RUNNER_PATH = ROOT / "test/run.sh"
 
 EXPECTED_BMPS = {
+    "torget-vibepulse-merge-one.bmp",
+    "torget-vibepulse-merge-many.bmp",
+    "torget-vibepulse-merge-long-title.bmp",
+    "torget-vibepulse-merge-no-title.bmp",
+    "torget-vibepulse-merge-yields-to-waiting.bmp",
+    "torget-vibepulse-merge-after-waiting.bmp",
+    "torget-vibepulse-merge-dismissed.bmp",
     "torget-vibepulse-claude-fable.bmp",
     "torget-vibepulse-claude-all.bmp",
     "torget-vibepulse-codex-weekly.bmp",

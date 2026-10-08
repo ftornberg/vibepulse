@@ -1288,6 +1288,23 @@ pasted above a page or takeover. **Watch for:** approving tiny rounded shapes
 from enlarged simulator previews or testing only bounding boxes and total lit
 pixels.
 
+## 2026-10-07 · A host-tested parser overflowed the stack it would run on
+
+**What happened:** review of #28 (READY TO MERGE, never flashed) found that
+the merge-queue poller's 4096-byte task would have run a parser with a 3.4 KB
+payload struct on its stack, under cJSON's recursion and the HTTP client: a
+stack overflow on the first 200 answer, every boot. **Root cause:** host tests
+run with megabytes of stack, so a parser that is green on the host says
+nothing about a FreeRTOS task; the stack size was copied from a feed with a
+far smaller struct. **The rule now:** a payload struct bigger than a few
+hundred bytes is static (one caller) or caller-owned, never a local, and a
+new poller's stack is sized from the largest frame it runs, render included.
+Also from that review: a pulse is timed from when it reaches the glass, not
+from when the data arrived, and an incomplete or truncated list never proves
+something left. **Guards:** `merge_queue_parse.c` (static scratch), stack
+6144, `test_merge_queue.c` (one test per finding), `test_glass_claim_sim.py`
+(no animation after 45 s).
+
 ## 2026-10-05 · The amplifier wakes after the first note has started
 
 **What happened:** TID's first chime on `torget-216-02` was audible, but the

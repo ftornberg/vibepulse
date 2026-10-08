@@ -3,8 +3,10 @@ import json
 import unittest
 
 from tools.tokenserver.merge_queue import (
+    PUBLIC_PAYLOAD_BYTES,
     MergeQueueMonitor,
     disabled_snapshot,
+    payload_bytes,
     normalize_source,
     parse_source_payload,
 )
@@ -124,6 +126,45 @@ class MonitorTests(unittest.TestCase):
         snap = monitor.snapshot()
         self.assertEqual(snap["count"], 12)
         self.assertEqual(len(snap["prs"]), 8)
+
+    def test_fullest_answer_fits_the_panel_buffer(self):
+        # Sixteen sources (the configuration's limit), 100-character names,
+        # eight pull requests with titles that escape to 12 bytes a glyph.
+        ports = [str(4400 + i) for i in range(16)]
+        answers = {}
+        for i, port in enumerate(ports):
+            name = f"{i:02d}" + "r" * 98
+            answers[int(port)] = answer(
+                f"o/{name}",
+                *((2_147_483_000 + n, "\U0001F680" * 80)
+                  for n in range(1, 9)))
+        monitor = MergeQueueMonitor(ports, opener=opener_for(answers))
+        monitor.poll_once()
+        snap = monitor.snapshot()
+        self.assertEqual(snap["count"], 128)
+        self.assertEqual(len(snap["prs"]), 8)
+        self.assertLessEqual(payload_bytes(snap), PUBLIC_PAYLOAD_BYTES)
+        self.assertLess(PUBLIC_PAYLOAD_BYTES, 4096)
+
+    def test_titles_give_way_last_first(self):
+        # Escaped titles that only just overflow: the first ones survive.
+        opener = opener_for({4401: answer(
+            "o/kvitt", *((n, "ö" * 80) for n in range(1, 9)))})
+        monitor = MergeQueueMonitor(["4401"], opener=opener)
+        monitor.poll_once()
+        snap = monitor.snapshot()
+        titles = [pr["title"] for pr in snap["prs"]]
+        self.assertLessEqual(payload_bytes(snap), PUBLIC_PAYLOAD_BYTES)
+        self.assertIsNotNone(titles[0])
+        self.assertIsNone(titles[-1])
+        kept = [t is not None for t in titles]
+        self.assertEqual(kept, sorted(kept, reverse=True))
+
+    def test_small_answer_keeps_every_title(self):
+        opener = opener_for({4401: answer("o/kvitt", (1, "feat: a"))})
+        monitor = MergeQueueMonitor(["4401"], opener=opener)
+        monitor.poll_once()
+        self.assertEqual(monitor.snapshot()["prs"][0]["title"], "feat: a")
 
     def test_disabled_snapshot(self):
         self.assertEqual(disabled_snapshot(), {"v": 1, "enabled": False})

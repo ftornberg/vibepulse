@@ -110,6 +110,8 @@ PINNED = {
     "vibepulse-settings-about.png": "torget-settings-about-found.bmp",
     "vibepulse-settings-no-address.png": "torget-settings-menu-address-lost.bmp",
     "vibepulse-wifi-setup.png": "torget-wifi-setup-open.bmp",
+    "merge-queue/vibepulse-merge-one.png": "torget-vibepulse-merge-one.bmp",
+    "merge-queue/vibepulse-merge-many.png": "torget-vibepulse-merge-many.bmp",
     # TID (opt-in, 2.16): captured by the TID simulator variant below, with the
     # wall clock pinned by --time-app-captures so the clock face is exact.
     "time-clock.png": "torget-time-clock.bmp",

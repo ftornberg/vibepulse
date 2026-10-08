@@ -79,6 +79,24 @@
 #error "TK_CODEX_PAGES must be 0 or 1"
 #endif
 
+/* READY TO MERGE: pull requests that local agent-team orchestrators have
+ * reviewed (tokenserver /api/merge-queue). On for 2.16, where the card is
+ * captured and reviewed; off for 2.41 V2 until it has been reviewed at
+ * 600 x 450. 0 also leaves out the poller task and its buffers. Compile-time
+ * like TK_CODEX_PAGES: the tokenserver already answers {"enabled": false}
+ * until an orchestrator is added, and the panel then asks only every ten
+ * minutes, so a LABS switch would be a second switch for the same thing. */
+#ifndef TK_MERGE_QUEUE
+#ifdef TORGET_BOARD_241_V2
+#define TK_MERGE_QUEUE 0
+#else
+#define TK_MERGE_QUEUE 1
+#endif
+#endif
+#if TK_MERGE_QUEUE != 0 && TK_MERGE_QUEUE != 1
+#error "TK_MERGE_QUEUE must be 0 or 1"
+#endif
+
 /* Scheduled night dimming (design 2026-09-24). The LABS row NIGHT DIM
  * toggles it; these are the compiled defaults an unchanged secrets.h gets. */
 #ifndef TK_NIGHT_ENABLED_DEFAULT

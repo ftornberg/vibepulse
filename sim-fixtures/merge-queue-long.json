@@ -1,0 +1,1 @@
+{"v": 1, "enabled": true, "count": 1, "incomplete": false, "sources": [{"project": "agent-team-orchestrator", "up": true, "paused": false}], "prs": [{"project": "agent-team-orchestrator", "number": 242, "title": "feat: /api/merge-queue — PR:ar som väntar på att en människa mergar 🚀"}]}

@@ -11,7 +11,8 @@ too: one command moves it onto whatever WiFi you are on today, and one
 button-hold on the panel opens its own settings on the glass.**
 
 Claude Code and Codex usage, live agent activity, and a full-screen
-**NEEDS YOU** alert you can answer with a tap. A three-second hold on the
+**NEEDS YOU** alert you can answer with a tap, and a green **READY TO MERGE**
+card when your review agents have a pull request waiting only for you. A three-second hold on the
 panel's one user button opens **SETTINGS** on the glass — update the firmware,
 teach it a new network, choose Labs displays, or read its address. A ~$30 ESP32-S3 panel plus a
 core, pure-stdlib Python service on your Mac or Windows PC. Local mode needs no
@@ -255,6 +256,28 @@ use the explicit setup command for new installations. The numbers relay and
 interaction relay are different privacy choices and neither is enabled by the
 plugin. Installing the Codex plugin does not enable the encrypted interaction
 relay or the live agent status relay.
+
+### Ready to merge
+
+If you run local agent-team orchestrators that review pull requests, the
+panel can tell you when one is done and only a person can finish it. The
+card borrows the glass the same way a finished agent does, but in its own
+green, so "ready to merge" never reads as "an agent is waiting".
+
+<table>
+<tr>
+<td width="50%"><img src="docs/img/merge-queue/vibepulse-merge-one.png" alt="READY TO MERGE card with the project and the pull request's number and title" width="100%"></td>
+<td width="50%"><img src="docs/img/merge-queue/vibepulse-merge-many.png" alt="READY TO MERGE card for three pull requests: the first number plus two more" width="100%"></td>
+</tr>
+</table>
+
+A new pull request pulses for 45 seconds and then stays as a still card; a
+tap dismisses it until a new one arrives. A **NEEDS YOU** prompt or a
+finished agent always wins the glass. Point the host at each orchestrator's
+loopback port with `vibepulse_setup.py merge-queue add <port>`. Titles stay
+on your LAN and never go to a relay; an orchestrator that is down is
+reported as such instead of counted as zero. The 2.16-inch panel only for
+now; `#define TK_MERGE_QUEUE 0` in `secrets.h` leaves it out of the build.
 
 ### Optional GitHub project pulse
 

@@ -57,6 +57,23 @@ class GlassClaimSimTests(unittest.TestCase):
             self.assertEqual(pulse["returned"], pulse["before"],
                              "after the 45 s pulse the launcher must come back")
 
+            # Ready to merge borrows the glass the same way, in green, and
+            # hands it back at 45 s with no animation left running.
+            merge = {}
+            for tag in ("before", "alert", "held", "returned"):
+                with Image.open(Path(temporary) / f"torget-glass-merge-{tag}.bmp") as im:
+                    im = im.convert("RGB")
+                    self.assertEqual(im.size, (480, 480))
+                    merge[tag] = hashlib.sha256(im.tobytes()).hexdigest()
+                    if tag == "alert":
+                        self.assertEqual(im.getpixel((240, 10)), (63, 185, 80))
+            self.assertNotEqual(merge["alert"], merge["before"],
+                                "the merge card did not reach the glass")
+            self.assertNotEqual(merge["held"], merge["before"],
+                                "the merge pulse must hold the glass for 45 s")
+            self.assertEqual(merge["returned"], merge["before"],
+                             "after the merge pulse the launcher must return")
+
 
 if __name__ == "__main__":
     unittest.main()

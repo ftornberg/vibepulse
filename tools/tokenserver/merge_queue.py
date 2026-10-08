@@ -33,6 +33,12 @@ TIMEOUT_SECONDS = 3.0
 MAX_RESPONSE_BYTES = 256 * 1024
 PUBLIC_PR_LIMIT = 8
 TITLE_MAX_CHARS = 80
+# The panel reads the answer into a 4096-byte buffer. JSON escapes every
+# non-ASCII character as \uXXXX (an emoji as two), so eight 80-character
+# titles alone can pass 8 KB: titles give way, last first, until the whole
+# answer fits. Without any title the fullest answer (eight pull requests,
+# sixteen sources, 100-character names) is about 3.6 KB.
+PUBLIC_PAYLOAD_BYTES = 3840
 _SOURCE_RE = re.compile(r"http://(?:127\.0\.0\.1|localhost):([0-9]{1,5})\Z")
 _REPO_RE = re.compile(r"[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}\Z")
 
@@ -151,7 +157,7 @@ class MergeQueueMonitor:
                 prs.extend({"project": result["project"], **pr}
                            for pr in result["prs"])
         prs.sort(key=lambda pr: (pr["project"], pr["number"]))
-        return {
+        payload = {
             "v": 1,
             "enabled": True,
             # Counts only what answered; never a made-up zero for a source
@@ -159,8 +165,9 @@ class MergeQueueMonitor:
             "count": len(prs),
             "incomplete": not polled or not all(s["up"] for s in sources),
             "sources": sources,
-            "prs": prs[:PUBLIC_PR_LIMIT],
+            "prs": [dict(pr) for pr in prs[:PUBLIC_PR_LIMIT]],
         }
+        return fit_payload(payload)
 
     def run(self) -> None:
         while not self._stop.is_set():
@@ -180,6 +187,23 @@ class MergeQueueMonitor:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=TIMEOUT_SECONDS + 1.0)
+
+
+def payload_bytes(payload: Dict[str, Any]) -> int:
+    """Size on the wire: the tokenserver sends ``json.dumps`` defaults."""
+    return len(json.dumps(payload).encode())
+
+
+def fit_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop titles, last first, until the answer fits PUBLIC_PAYLOAD_BYTES.
+
+    A title is the only free text; the number and project still identify
+    the pull request, and the panel shows ``#N`` without one."""
+    for pr in reversed(payload["prs"]):
+        if payload_bytes(payload) <= PUBLIC_PAYLOAD_BYTES:
+            break
+        pr["title"] = None
+    return payload
 
 
 def disabled_snapshot() -> Dict[str, Any]:

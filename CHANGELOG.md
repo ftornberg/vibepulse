@@ -10,8 +10,22 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 - **Merge queue on the host.** `/api/merge-queue` lists pull requests that
   local agent-team orchestrators have reviewed and that wait for a person to
   merge them (`vibepulse_setup.py merge-queue add <port>`). Loopback sources
-  only, LAN only, a down source flagged instead of counted as zero. The
-  panel does not show it yet.
+  only, LAN only, a down source flagged instead of counted as zero.
+- **READY TO MERGE on the panel (2.16).** The merge queue gets its own card
+  on the completion surface: a green pull-request icon, the project, and
+  `#N · TITLE` (or `#N + K MORE`). A new pull request pulses for 45 s, then
+  the card stays still until a tap dismisses it; dismissed pull requests stay
+  quiet until they leave the queue. NEEDS YOU and a finished agent always
+  take precedence. Strict parser (`merge_queue_parse.c`) and pure policy
+  (`merge_queue_policy.c`) are host-tested; the icon is rasterized from an
+  owner-supplied free SVG into pre-colored I4 at 112 and 32 px. A pulse
+  that arrives behind NEEDS YOU waits for the glass; an orchestrator that is
+  down neither hides its pull requests nor replays them as news; a list cut
+  at eight is never taken as complete. 2.16 only for now
+  (`TK_MERGE_QUEUE`, off by default on 2.41 V2 until reviewed at 600 x 450;
+  `#define TK_MERGE_QUEUE 0` in `secrets.h` leaves it out). The tokenserver
+  keeps the payload within 3840 bytes by dropping titles last first.
+  Simulator only so far: not yet flashed or reviewed on physical glass.
 - **Automation can be left off the agent monitor.** `vibepulse_setup.py
   agents ignore <path>` keeps Claude sessions whose working folder contains
   the path off the agent monitor. A finished headless run (an orchestrator's

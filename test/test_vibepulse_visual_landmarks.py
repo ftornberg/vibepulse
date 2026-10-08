@@ -159,6 +159,13 @@ def dot_runs(image, y, x_end=None):
 
 
 EXPECTED = {
+    "torget-vibepulse-merge-one.bmp",
+    "torget-vibepulse-merge-many.bmp",
+    "torget-vibepulse-merge-long-title.bmp",
+    "torget-vibepulse-merge-no-title.bmp",
+    "torget-vibepulse-merge-yields-to-waiting.bmp",
+    "torget-vibepulse-merge-after-waiting.bmp",
+    "torget-vibepulse-merge-dismissed.bmp",
     "torget-vibepulse-claude-fable.bmp",
     "torget-vibepulse-claude-all.bmp",
     "torget-vibepulse-codex-weekly.bmp",
@@ -1174,6 +1181,31 @@ class VibePulseVisualLandmarkTests(unittest.TestCase):
                     [image.getpixel((240, y)) for y in range(466, 472)],
                     [accent] * 6,
                 )
+
+    def test_merge_card_is_green_and_never_outranks_waiting(self):
+        green = (63, 185, 80)
+        claude = (217, 119, 87)
+        for name in ("one", "many", "long-title", "no-title", "after-waiting"):
+            with self.subTest(name=name):
+                image = self.image(f"torget-vibepulse-merge-{name}.bmp")
+                self.assertEqual(
+                    [image.getpixel((240, y)) for y in range(8, 14)],
+                    [green] * 6,
+                )
+                self.assertEqual(image.getpixel((240, 7)), (0, 0, 0))
+                self.assertEqual(image.getpixel((240, 14)), (0, 0, 0))
+                # The pull-request icon is drawn in the same green.
+                icon = [image.getpixel((x, y))
+                        for y in range(89, 201) for x in range(184, 296)]
+                self.assertGreater(icon.count(green), 400)
+        waiting = self.image("torget-vibepulse-merge-yields-to-waiting.bmp")
+        self.assertEqual(waiting.getpixel((240, 10)), claude)
+        dismissed = self.image("torget-vibepulse-merge-dismissed.bmp")
+        self.assertNotIn(
+            green,
+            {dismissed.getpixel((x, y))
+             for y in range(0, 480, 4) for x in range(0, 480, 4)},
+        )
 
     def test_attention_icons_use_real_provider_assets_inside_exact_box(self):
         claude = self.image("torget-vibepulse-claude-needs-you.bmp")

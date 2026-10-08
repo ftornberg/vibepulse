@@ -169,10 +169,20 @@ PY
 
 cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/app_tokens/github_status_parse.c \
+  ../components/app_tokens/strict_json.c \
   test_github_status.c /tmp/torget-cjson.o \
   -lm \
   -o /tmp/torget-github-status-test
 /tmp/torget-github-status-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/app_tokens/merge_queue_parse.c \
+  ../components/app_tokens/merge_queue_policy.c \
+  ../components/app_tokens/strict_json.c \
+  test_merge_queue.c /tmp/torget-cjson.o \
+  -lm \
+  -o /tmp/torget-merge-queue-test
+/tmp/torget-merge-queue-test
 
 cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/app_tokens/project_star_popup_policy.c \

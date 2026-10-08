@@ -39,6 +39,7 @@
 #include "needs_you_send_policy.h"
 #include "agent_status_parse.h"
 #include "github_status_parse.h"
+#include "merge_queue_parse.h"
 #include "max_tracker_parse.h"
 #include "boot_screen.h"
 #include "ota_ui.h"
@@ -505,6 +506,19 @@ static void apply_battery_fixture(int idx) {
   char text[40];
   tg_batt_power_text(s, &v, text, sizeof text);
   torget_settings_set_power(text);
+}
+
+static void apply_merge_queue_file(const char *file) {
+  size_t len = 0;
+  char *json = read_fixture(file, &len);
+  tk_merge_queue queue;
+  if (json && tk_merge_queue_parse(json, len, &queue)) {
+    tokens_apply_merge_queue(&queue);
+    printf("merge-queue: %s (%d)\n", file, (int)queue.count);
+  } else {
+    printf("merge-queue: %s avvisad\n", file);
+  }
+  free(json);
 }
 
 static void apply_github_file(const char *file, bool unique_event) {
@@ -1484,6 +1498,44 @@ static int run_vibepulse_static_qa(void) {
   dump_frame("vibepulse-claude-swedish-project");
   tk_agent_monitor_dismiss_current();
 
+  /* "Ready to merge": the green card on the completion surface. One PR with
+   * its title, several across projects, an over-long title (dots, and a
+   * glyph the face cannot draw), a PR without a title, then the order of
+   * precedence: a waiting agent outranks the merge card, which comes back
+   * when the agent card is dismissed. Each step dismisses so the next is
+   * news. */
+  apply_merge_queue_file("merge-queue-one.json");
+  dump_frame("vibepulse-merge-one");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-many.json");
+  dump_frame("vibepulse-merge-many");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-long.json");
+  dump_frame("vibepulse-merge-long-title");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-no-title.json");
+  dump_frame("vibepulse-merge-no-title");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-one.json");
+  attention = static_attention_snapshot(
+      TK_AGENT_PROVIDER_CLAUDE, TK_AGENT_WAITING,
+      "capture-claude-over-merge", "Torget");
+  tokens_apply_agent_status(&attention);
+  dump_frame("vibepulse-merge-yields-to-waiting");
+  tk_agent_monitor_dismiss_current();
+  dump_frame("vibepulse-merge-after-waiting");
+  tk_agent_monitor_dismiss_merge();
+  dump_frame("vibepulse-merge-dismissed");
+  apply_merge_queue_file("merge-queue-empty.json");
+
   /* Tourens två tracker-dumpar (case 15-18 i platform_tour_cb) återanvänder
    * NAMNEN "vibepulse-tracker-claude"/"-codex" för en berättande
    * coldstart→full-övergång; static-QA:n här bevisar istället FYRA skilda
@@ -1886,6 +1938,34 @@ static int run_glass_claim_qa(void) {
   usage_screen_tick(pulse_us + 46000000LL);
   torget_wifi_status_foreground();
   dump_frame("glass-pulse-returned");
+
+  /* Ready to merge: same 45 s claim in its own green. The idle snapshot
+   * clears the waiting card first so the surface is free. A tick inside the
+   * animation's last 0.6 s (37 x 1200 ms = 44.4 s < 45 s) must not start a
+   * second run, and after 45 s nothing may still breathe (review of #28). */
+  size_t m_len = 0;
+  char *m_json = read_fixture("merge-queue-one.json", &m_len);
+  tk_merge_queue merge;
+  bool m_ok = m_json && tk_merge_queue_parse(m_json, m_len, &merge);
+  free(m_json);
+  if (!m_ok) return 2;
+  int64_t merge_us = pulse_us + 60000000LL;
+  usage_screen_apply_agent(&idle, merge_us);
+  tk_agent_monitor_dismiss_current();
+  torget_launcher_open();
+  torget_wifi_status_foreground();
+  dump_frame("glass-merge-before");
+  tk_agent_monitor_apply_merge_queue(&merge, merge_us + 1000);
+  dump_frame("glass-merge-alert");
+  usage_screen_tick(merge_us + 1000 + 44800000LL);
+  dump_frame("glass-merge-held");
+  usage_screen_tick(merge_us + 1000 + 46000000LL);
+  torget_wifi_status_foreground();
+  dump_frame("glass-merge-returned");
+  if (tk_agent_monitor_merge_pulse_running()) {
+    printf("FAIL: the merge pulse still runs after its 45 s\n");
+    capture_failures++;
+  }
   return capture_failures == 0 ? 0 : 1;
 }
 
