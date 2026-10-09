@@ -1,6 +1,12 @@
 # VibePulse
 
-[![CI](https://github.com/niclasvestlund-YT/vibepulse/actions/workflows/ci.yml/badge.svg)](https://github.com/niclasvestlund-YT/vibepulse/actions/workflows/ci.yml)
+[![CI](https://github.com/ftornberg/vibepulse/actions/workflows/ci.yml/badge.svg)](https://github.com/ftornberg/vibepulse/actions/workflows/ci.yml)
+
+Continued independently from [niclasvestlund-YT/vibepulse](https://github.com/niclasvestlund-YT/vibepulse)
+by Niclas Vestlund (MIT, see [LICENSE](LICENSE)). History up to v1.1.0 and the
+issue and PR numbers it links to are the original project's; the former fork,
+with its own pull requests and reviews, is archived at
+[ftornberg/vibepulse-fork-archive](https://github.com/ftornberg/vibepulse-fork-archive).
 
 ![VibePulse: quota, a NEEDS YOU alert, and the Max Tracker heatmap](docs/img/hero.png)
 
@@ -585,7 +591,7 @@ shell and in Windows PowerShell 5.1 and 7:
 **Claude Code**
 
 ```
-git clone https://github.com/niclasvestlund-YT/vibepulse.git
+git clone https://github.com/ftornberg/vibepulse.git
 cd vibepulse
 claude "Set up VibePulse for me: help me fill in secrets.h, build and flash the board over USB, and start the tokenserver on this computer."
 ```
@@ -593,7 +599,7 @@ claude "Set up VibePulse for me: help me fill in secrets.h, build and flash the 
 **Codex**
 
 ```
-git clone https://github.com/niclasvestlund-YT/vibepulse.git
+git clone https://github.com/ftornberg/vibepulse.git
 cd vibepulse
 codex "Set up VibePulse for me: help me fill in secrets.h, build and flash the board over USB, and start the tokenserver on this computer."
 ```

@@ -1,7 +1,8 @@
 # Changelog
 
 Notable changes to VibePulse. Release notes for tagged versions are published
-on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
+on the [releases page](https://github.com/ftornberg/vibepulse/releases); v1.1.0 and
+earlier are on the [original project's](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ## Unreleased
 
