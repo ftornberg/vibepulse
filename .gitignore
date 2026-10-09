@@ -43,3 +43,7 @@ docs/img/mockups/*.svg
 # Private board backups and generated V2 configuration.
 /backups/
 /sdkconfig.241-v2*
+
+# A local agent-team orchestrator instance (its own clone, config.env with
+# secrets, work/ and logs/) lives beside the code; never commit it.
+/agent-team*/
