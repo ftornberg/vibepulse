@@ -1,2 +1,2 @@
 # Optional: needed only when the encrypted interaction relay is enabled.
-cryptography==49.0.0
+cryptography==50.0.0
