@@ -509,6 +509,39 @@ capabilities:
       - {field: firmware_enabled, value: "no", source: torget-main-1fad449}
     last_verified: "2026-08-10"
 
+  - id: input.pwr-key
+    name: PWR button on the AXP2101's PWRON input
+    states:
+      soc_capable: not_applicable
+      board_wired: "yes"
+      bsp_support: "no"
+      firmware_enabled: "no"
+      unit_verified: "yes"
+    confidence: measured
+    resources: ["AXP2101 PWRON input", "power rails"]
+    constraints:
+      - "handled by the PMIC itself, not by the SoC or the firmware: a long press cuts the rails"
+      - "verified on torget-216-02 only (2026-10-08): a long press powered the panel off with USB connected and the USB device left the host; a long press of about the same length powered it on again, and a short press did nothing, against the vendor's short-press power-on"
+      - "press duration not timed; the AXP2101 default is in the seconds"
+      - "the firmware cannot see the press before the rails are cut; a clean shutdown path would need the PMIC's IRQ, which is not wired in software"
+    conflicts: []
+    opportunities: ["a real power-off for the RTC and no-network tests", "a clean shutdown notice if the PMU IRQ is ever read"]
+    sources:
+      - waveshare-schematic-2026-08-10
+      - waveshare-bsp-2.0.1
+      - torget-main-1fad449
+      - torget-physical-2026-10-08-pwr-button
+    evidence:
+      - {field: soc_capable, value: not_applicable, source: waveshare-schematic-2026-08-10}
+      - {field: board_wired, value: "yes", source: waveshare-schematic-2026-08-10}
+      - {field: bsp_support, value: "no", source: waveshare-bsp-2.0.1}
+      - {field: firmware_enabled, value: "no", source: torget-main-1fad449}
+      - {field: unit_verified, value: "yes", source: torget-physical-2026-10-08-pwr-button}
+    last_verified: "2026-10-08"
+    verification:
+      unit: torget-216-02
+      test: pwr-long-press-powers-off-with-usb-2026-10-08
+
   - id: input.key3
     name: Active-low KEY3 user button
     states:

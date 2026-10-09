@@ -1,5 +1,19 @@
 schema_version: 1
 sources:
+  - id: torget-physical-2026-10-08-pwr-button
+    kind: physical-test
+    rank: 1
+    title: PWR long press powers the second 2.16 unit off with USB connected
+    publisher: Torget
+    locator: docs/superpowers/reviews/2026-10-08-pwr-button-physical.md
+    revision: findings-2026-10-08; unit=torget-216-02; firmware=v1.1.0-50-g8acb202
+    accessed: "2026-10-08"
+    board_revision: unknown
+    unit: torget-216-02
+    tests:
+      - pwr-long-press-powers-off-with-usb-2026-10-08
+      - pwr-long-press-powers-on-2026-10-08
+
   - id: torget-physical-2026-10-05-tid-sound
     kind: physical-test
     rank: 1

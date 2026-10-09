@@ -23,6 +23,6 @@ units:
     battery: fitted
     microsd: unknown
     antenna: onboard
-    installed_firmware: v1.1.0-40-gaef36a2
-    last_physical_verification: "2026-10-05"
+    installed_firmware: v1.1.0-50-g8acb202
+    last_physical_verification: "2026-10-08"
     secrets: false

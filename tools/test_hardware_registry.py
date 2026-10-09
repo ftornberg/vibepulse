@@ -894,16 +894,18 @@ class RepositoryRegistryTests(unittest.TestCase):
         self.assertEqual(
             verified_ids,
             {"display.amoled", "touch.controller", "radio.wifi-24",
-             "audio.speaker-output"},
+             "audio.speaker-output", "input.pwr-key"},
         )
         for capability_id in verified_ids:
             with self.subTest(capability=capability_id):
                 capability = registry.capabilities[capability_id]
-                # The speaker was heard on the second 2.16 unit only; it
-                # says nothing about torget-home-01 (2026-10-05).
+                # The speaker (2026-10-05) and the PWR button (2026-10-08)
+                # were seen on the second 2.16 unit only; they say nothing
+                # about torget-home-01.
+                second_unit_only = {"audio.speaker-output", "input.pwr-key"}
                 self.assertEqual(
                     capability["verification"]["unit"],
-                    "torget-216-02" if capability_id == "audio.speaker-output"
+                    "torget-216-02" if capability_id in second_unit_only
                     else "torget-home-01",
                 )
                 self.assertTrue(capability["verification"]["test"].strip())
@@ -914,6 +916,7 @@ class RepositoryRegistryTests(unittest.TestCase):
                 expected_source = {
                     "touch.controller": "torget-physical-2026-08-27-vibepulse",
                     "audio.speaker-output": "torget-physical-2026-10-05-tid-sound",
+                    "input.pwr-key": "torget-physical-2026-10-08-pwr-button",
                 }.get(capability_id, "torget-physical-2026-08-06")
                 self.assertEqual(sources, {expected_source})
 
@@ -1035,7 +1038,7 @@ class RepositoryRegistryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout,
-            "OK: 30 capabilities, 16 sources, 2 units\n",
+            "OK: 31 capabilities, 17 sources, 2 units\n",
         )
 
     def test_repository_registry_loads(self):
@@ -1059,6 +1062,7 @@ class RepositoryRegistryTests(unittest.TestCase):
             "usb.device",
             "usb.host",
             "input.key3",
+            "input.pwr-key",
             "input.boot-button",
             "antenna.onboard",
             "antenna.ipex-mod",
@@ -1074,7 +1078,7 @@ class RepositoryRegistryTests(unittest.TestCase):
             "soc.pwm-rmt-twai",
         }
         self.assertEqual(set(registry.capabilities), expected_capabilities)
-        self.assertEqual(len(registry.capabilities), 30)
+        self.assertEqual(len(registry.capabilities), 31)
 
         display = registry.capabilities["display.amoled"]
         self.assertEqual(
@@ -1113,6 +1117,11 @@ class RepositoryRegistryTests(unittest.TestCase):
                 "physical-test", 1,
                 "findings-2026-10-05; unit=torget-216-02; "
                 "firmware=v1.1.0-40-gaef36a2",
+            ),
+            "torget-physical-2026-10-08-pwr-button": (
+                "physical-test", 1,
+                "findings-2026-10-08; unit=torget-216-02; "
+                "firmware=v1.1.0-50-g8acb202",
             ),
             "torget-physical-2026-08-30-vibepulse-stale-recovery": (
                 "physical-test", 1,
