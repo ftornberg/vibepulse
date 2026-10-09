@@ -116,8 +116,9 @@ class MemoryHeadroomConfigTests(unittest.TestCase):
     def test_main_logs_the_stack_line(self) -> None:
         main_c = (ROOT / "main" / "main.c").read_text(encoding="utf-8")
         self.assertIn("uxTaskGetSystemState(", main_c)
-        self.assertIn("stackar kvar (B, lägst först)", main_c)
+        self.assertIn("stackar kvar (B, lägst först) %u/%u", main_c)
         self.assertIn("LÅG STACK", main_c)
+        self.assertIn("stack_is_idf_task(", main_c)
 
 
 if __name__ == "__main__":

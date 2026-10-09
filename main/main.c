@@ -852,13 +852,28 @@ static void corner_probe_off_cb(lv_timer_t *t) {
 /* Stackarnas högvattenlinje (minnesförstudien 2026-10-08, OBS-47): ~90 KB
  * av internminnet är våra egna taskstackar och ingen utom chime var mätt.
  * Alla taskar på en gång via uxTaskGetSystemState (kräver
- * CONFIG_FREERTOS_USE_TRACE_FACILITY, vaktat i roten), de åtta med minst
- * kvar först. Enheten är byte: portSTACK_TYPE är uint8_t på Xtensa. Kallas
- * från LVGL-tasken en gång i minuten; schemaläggaren står still några
+ * CONFIG_FREERTOS_USE_TRACE_FACILITY, vaktat i roten), ALLA skrivs ut (åtta
+ * per rad, lägst först): första versionen visade bara de åtta lägsta, och
+ * det var uteslutande IDF:s egna småtaskar (ipc, idle, sys_evt) — våra
+ * pollrar, som är de vi vill krympa, syntes inte (glaset 2026-10-08).
+ * Enheten är byte: portSTACK_TYPE är uint8_t på Xtensa. Kallas från
+ * LVGL-tasken en gång i minuten; schemaläggaren står still några
  * mikrosekunder per anrop. */
 #define TG_STACK_PROBE_TASKS 32
-#define TG_STACK_PROBE_SHOWN 8
+#define TG_STACK_PROBE_PER_LINE 8
 #define TG_STACK_WARN_BYTES 512
+
+/* IDF:s egna taskar dimensionerar IDF: ipc0 lever med ~390 B kvar av 1 280 av
+ * konstruktion. Varningen gäller bara stackar VI sätter. */
+static bool stack_is_idf_task(const char *name) {
+  static const char *const idf[] = {"ipc0", "ipc1", "IDLE0", "IDLE1",
+                                    "sys_evt", "esp_timer", "Tmr Svc", "tiT",
+                                    "wifi", "mdns", "main", NULL};
+  for (unsigned i = 0; idf[i]; i++)
+    if (strcmp(name, idf[i]) == 0) return true;
+  return false;
+}
+
 static void stack_probe_log(void) {
   static EXT_RAM_BSS_ATTR TaskStatus_t status[TG_STACK_PROBE_TASKS];
   UBaseType_t n = uxTaskGetSystemState(status, TG_STACK_PROBE_TASKS, NULL);
@@ -875,19 +890,25 @@ static void stack_probe_log(void) {
     }
     status[j] = t;
   }
-  char line[192];
-  size_t used = 0;
-  unsigned shown = n < TG_STACK_PROBE_SHOWN ? (unsigned)n : TG_STACK_PROBE_SHOWN;
-  for (unsigned i = 0; i < shown; i++) {
-    int w = snprintf(line + used, sizeof line - used, "%s%s %u", i ? ", " : "",
-                     status[i].pcTaskName, (unsigned)status[i].usStackHighWaterMark);
-    if (w < 0 || (size_t)w >= sizeof line - used) break;
-    used += (size_t)w;
+  unsigned lines = ((unsigned)n + TG_STACK_PROBE_PER_LINE - 1) / TG_STACK_PROBE_PER_LINE;
+  for (unsigned line_no = 0; line_no < lines; line_no++) {
+    char line[192];
+    size_t used = 0;
+    unsigned from = line_no * TG_STACK_PROBE_PER_LINE;
+    unsigned to = from + TG_STACK_PROBE_PER_LINE < (unsigned)n
+                      ? from + TG_STACK_PROBE_PER_LINE : (unsigned)n;
+    for (unsigned i = from; i < to; i++) {
+      int w = snprintf(line + used, sizeof line - used, "%s%s %u", i > from ? ", " : "",
+                       status[i].pcTaskName, (unsigned)status[i].usStackHighWaterMark);
+      if (w < 0 || (size_t)w >= sizeof line - used) break;
+      used += (size_t)w;
+    }
+    ESP_LOGI(TAG, "stackar kvar (B, lägst först) %u/%u: %s", line_no + 1, lines, line);
   }
-  ESP_LOGI(TAG, "stackar kvar (B, lägst först): %s", line);
   for (UBaseType_t i = 0; i < n && status[i].usStackHighWaterMark < TG_STACK_WARN_BYTES; i++)
-    ESP_LOGW(TAG, "LÅG STACK: %s har %u B kvar", status[i].pcTaskName,
-             (unsigned)status[i].usStackHighWaterMark);
+    if (!stack_is_idf_task(status[i].pcTaskName))
+      ESP_LOGW(TAG, "LÅG STACK: %s har %u B kvar", status[i].pcTaskName,
+               (unsigned)status[i].usStackHighWaterMark);
 }
 
 static void tick_cb(lv_timer_t *t) {

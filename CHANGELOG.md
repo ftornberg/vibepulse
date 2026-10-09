@@ -116,11 +116,16 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   ESP-IDF place 12 KB of its own lwip, wpa_supplicant and Wi-Fi statics in
   PSRAM too, by its own choice of what is safe there. Flash-adjacent buffers
   (OTA chunk, Wi-Fi credentials) stay internal. A once-a-minute `stackar kvar` line lists the
-  eight tasks with the least headroom, and `LÅG STACK` warns under 512 B.
+  stack headroom of every task, eight per line, and `LÅG STACK` warns when
+  one of ours is under 512 B (IDF's own small tasks are exempt).
   Both rest on two Kconfig values that `sdkconfig.defaults` seeds and a new
   CMake guard enforces (`CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY`,
   `CONFIG_FREERTOS_USE_TRACE_FACILITY`): an existing `sdkconfig` needs the
-  two lines and `idf.py reconfigure`. Built, not yet flashed.
+  two lines and `idf.py reconfigure`. On `torget-216-02` (2026-10-08,
+  `v1.1.0-50-g8acb202`, maintenance window closed): internal RAM free in use
+  143 to 153 KB against 98 to 109 KB before, the largest free block 57 to
+  65 KB against a pinned 31 744 B, low-water 95 315 B against 58 759 B;
+  Wi-Fi up in 8 s as before.
 - TID's clock moves to the buttons-right pose, the panel's natural resting
   position on the desk, and the timer to buttons up; pomodoro stays at buttons
   left. The rotation values are now measured on the owner's panel (buttons up

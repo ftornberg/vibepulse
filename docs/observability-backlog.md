@@ -1103,8 +1103,14 @@ the rest 2 048 to 4 096), IDF's own about 26 KB, static `.bss`/`.data`
 85 716 B of which ~42 KB ours, IRAM code about 100 KB of the same SRAM. Not
 problems: LVGL's pool is in PSRAM (60 of 256 KB used), TLS buffers are in
 PSRAM (`MBEDTLS_EXTERNAL_MEM_ALLOC`), TID costs 260 B static.
-**Done (this item's first step):** 48 592 B of static data out of internal
-RAM (link map, `_heap_start` from `0x3fcb6f00` to `0x3fcab268`): 36.7 KB of
+**Done (this item's first step, on the glass 2026-10-08, `v1.1.0-50`):**
+48 592 B of static data out of internal RAM (link map, `_heap_start` from
+`0x3fcb6f00` to `0x3fcab268`). Measured on `torget-216-02` with the window
+closed: free 143 215 to 153 135 B (was 98 000 to 109 000), largest block
+57 344 to 65 536 B (was 31 744 in every probe), low-water 95 315 B (was
+58 759), Wi-Fi up in 8 s. The first stack line showed only IDF's own small
+tasks in the eight lowest, so the line now lists every task; our tasks'
+figures are the next thing to read. 36.7 KB of
 our buffers via `EXT_RAM_BSS_ATTR`, and 12 KB of ESP-IDF's own lwip,
 wpa_supplicant and Wi-Fi statics that the Kconfig value lets IDF place in
 PSRAM by its own rules. If Wi-Fi misbehaves after this lands, that IDF part is
