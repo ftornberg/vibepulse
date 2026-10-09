@@ -27,7 +27,7 @@
 # would run a different rule implementation than CI and pass or fail
 # differently; ruff itself refuses to run when the versions disagree, so
 # the gate cannot silently lint with the wrong binary.
-required-version = "==0.15.8"
+required-version = "==0.16.10"
 target-version = "py311"
 extend-exclude = [
     ".venv",
