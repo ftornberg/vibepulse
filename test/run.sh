@@ -34,12 +34,20 @@ fi
 
 # Relay crypto stays an optional runtime dependency, but its security vectors
 # are part of the host gate once this repository is being developed/tested.
+# The version comes from the requirements file itself, so a Dependabot bump
+# of that pin can never leave a second, stale copy behind here.
+crypto_pin=$(sed -n 's/^cryptography==\([0-9][0-9.]*\).*/\1/p' \
+  ../requirements-interaction-relay.txt)
+if [ -z "$crypto_pin" ]; then
+  printf '%s\n' 'ERROR: requirements-interaction-relay.txt pinnar inte cryptography==X.' >&2
+  exit 1
+fi
 if ! "$PYTHON_BIN" -c \
-  'import cryptography; raise SystemExit(0 if cryptography.__version__ == "49.0.0" else 1)' \
-  2>/dev/null
+  'import sys, cryptography; raise SystemExit(0 if cryptography.__version__ == sys.argv[1] else 1)' \
+  "$crypto_pin" 2>/dev/null
 then
   printf '%s\n' \
-    'ERROR: De krypterade interaktionstesterna kräver cryptography 49.0.0.' \
+    "ERROR: De krypterade interaktionstesterna kräver cryptography $crypto_pin." \
     'Kör från Torget-repots rot:' \
     '  .venv/bin/python -m pip install -r requirements-interaction-relay.txt' >&2
   exit 1
