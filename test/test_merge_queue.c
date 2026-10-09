@@ -1,4 +1,6 @@
+#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "../components/app_tokens/merge_queue_parse.h"
@@ -11,6 +13,20 @@ static void check(const char *what, int condition) {
     printf("FAIL %s\n", what);
     failures++;
   }
+}
+
+/* Append to a fixed test buffer, or stop the test run: a fixture that no
+ * longer fits must fail loudly, never wrap `cap - at` and write past it. */
+static void append(char *buf, size_t cap, size_t *at, const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  int n = *at < cap ? vsnprintf(buf + *at, cap - *at, fmt, args) : -1;
+  va_end(args);
+  if (n < 0 || (size_t)n >= cap - *at) {
+    fprintf(stderr, "FAIL test fixture does not fit its buffer (%zu)\n", cap);
+    exit(1);
+  }
+  *at += (size_t)n;
 }
 
 static void rejected_unchanged(const char *what, const char *json) {
@@ -132,15 +148,16 @@ static void test_parse(void) {
       "\"title\":\"a\\u0000b\"}]}");
 
   char nine[2048];
-  int at = snprintf(nine, sizeof nine,
+  size_t at = 0;
+  append(nine, sizeof nine, &at,
       "{\"v\":1,\"enabled\":true,\"count\":9,\"incomplete\":false,"
       "\"sources\":[],\"prs\":[");
   for (int i = 1; i <= 9; i++) {
-    at += snprintf(nine + at, sizeof nine - (size_t)at,
-                   "%s{\"project\":\"k\",\"number\":%d,\"title\":null}",
-                   i > 1 ? "," : "", i);
+    append(nine, sizeof nine, &at,
+           "%s{\"project\":\"k\",\"number\":%d,\"title\":null}",
+           i > 1 ? "," : "", i);
   }
-  snprintf(nine + at, sizeof nine - (size_t)at, "]}");
+  append(nine, sizeof nine, &at, "]}");
   rejected_unchanged("list over capacity", nine);
 }
 
@@ -341,15 +358,16 @@ static void test_long_title_is_cut_on_a_boundary(void) {
         value.up_count == 1 && value.up_projects[0] == tk_mq_project_key("k"));
 
   char many[4096];
-  int w = snprintf(many, sizeof many,
+  size_t w = 0;
+  append(many, sizeof many, &w,
       "{\"v\":1,\"enabled\":true,\"count\":0,\"incomplete\":false,"
       "\"sources\":[");
   for (int i = 0; i <= TK_MQ_SOURCE_CAP; i++) {
-    w += snprintf(many + w, sizeof many - (size_t)w,
-                  "%s{\"project\":null,\"up\":false,\"paused\":false}",
-                  i ? "," : "");
+    append(many, sizeof many, &w,
+           "%s{\"project\":null,\"up\":false,\"paused\":false}",
+           i ? "," : "");
   }
-  snprintf(many + w, sizeof many - (size_t)w, "],\"prs\":[]}");
+  append(many, sizeof many, &w, "],\"prs\":[]}");
   rejected_unchanged("more sources than the configuration allows", many);
   rejected_unchanged("an up source without a project",
       "{\"v\":1,\"enabled\":true,\"count\":0,\"incomplete\":false,"
