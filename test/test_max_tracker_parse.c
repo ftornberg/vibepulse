@@ -3,6 +3,7 @@
  * fixturerna (samma bytes simulatorn cyklar) plus fientlig indata. En
  * fixtur som glider ifrån parsern faller här, på Macen, inte på hyllan.
  */
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,18 +72,31 @@ static void check_rejected_bytes_untouched(const char *what, const char *json,
 /* 20 nollor — en giltig weekMaxed-array när inget testar just den. */
 #define WEEK_MAXED_20 "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
 
+/* Append to a fixed test buffer, or stop the test run: a fixture that no
+ * longer fits must fail loudly, never wrap `cap - at` and write past it. */
+static void append(char *buf, size_t cap, size_t *at, const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  int n = *at < cap ? vsnprintf(buf + *at, cap - *at, fmt, args) : -1;
+  va_end(args);
+  if (n < 0 || (size_t)n >= cap - *at) {
+    fprintf(stderr, "FAIL test fixture does not fit its buffer (%zu)\n", cap);
+    exit(1);
+  }
+  *at += (size_t)n;
+}
+
 /* Bygger en "days"-array med `count` poster, alla [0,0] utom `bad_index`
  * (om >= 0) som får den råa literalen `bad_literal` istället. */
 static void build_days_array(char *buf, size_t cap, int count, int bad_index,
                              const char *bad_literal) {
   size_t offset = 0;
-  offset += (size_t)snprintf(buf + offset, cap - offset, "[");
+  append(buf, cap, &offset, "[");
   for (int i = 0; i < count; i++) {
     const char *entry = (i == bad_index) ? bad_literal : "[0,0]";
-    offset += (size_t)snprintf(buf + offset, cap - offset, "%s%s",
-                               i ? "," : "", entry);
+    append(buf, cap, &offset, "%s%s", i ? "," : "", entry);
   }
-  snprintf(buf + offset, cap - offset, "]");
+  append(buf, cap, &offset, "]");
 }
 
 /* Bygger en fullt giltig provider-JSON runt en färdig days-array, med
