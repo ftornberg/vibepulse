@@ -29,6 +29,15 @@ updates:
     groups:
       workers-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Cloudflare's test pools (@cloudflare/vitest-pool-workers,
+      # @cloudflare/vitest-plugin) declare peer vitest ^4.1.0, so a vitest 5
+      # lockfile fails `npm ci` with ERESOLVE (#6, #7). Lift this when they
+      # support vitest 5; they and vitest then move together.
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
