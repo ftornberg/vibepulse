@@ -1,0 +1,41 @@
+# Weekly version updates. The local agent-team orchestrator reviews every
+# Dependabot PR and merges patch/minor ones itself once CI is green
+# (AUTO_MERGE_DEPENDABOT in its config.env); majors, 0.x minors and red CI
+# wait for a person. Minor and patch updates are grouped per ecosystem so one
+# review covers them (a lesson from kvitt, where single vitest bumps queued
+# up behind each other).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directories:
+      - "/tools/interaction-relay"
+      - "/tools/relay"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      workers-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
