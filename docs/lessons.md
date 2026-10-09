@@ -1412,7 +1412,9 @@ busy for 200 ms, promising "the next poll tries again", which was false for an
 edge. The console shows that lock timing out several times a minute (OBS-44).
 **Not proven:** that the owner's first tap was a snooze. The frozen state was
 lost in the reset; the bug is established from the code and reproduces the
-symptom exactly, the cause of that one evening is inferred. **Fix:** the glass
+symptom exactly, the cause of that one evening is inferred. **Confirmed on the
+glass 2026-10-08** (`v1.1.0-45-ga3bcbbf`): a tap on LATER made the takeover
+disappear and logged `notisen avfärdad`. **Fix:** the glass
 is reconciled against the policy every poll with the pure, host-tested
 `tg_notice_glass`, which also hides a countdown ring left behind when the
 window closed and redraws a takeover whose version line did not get through; a

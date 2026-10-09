@@ -1069,6 +1069,14 @@ per chunk and never wait for the lock on the receive path; consider a larger
 receive window for the OTA socket; give the receive a timeout longer than the
 sender's persist timer. An aborted upload never touches the running slot, so
 the cost is time and a second window, not a bricked panel.
+**2026-10-08, one more data point, no explanation:** receiving on
+`v1.1.0-45-ga3bcbbf` the same unit took a 2 106 832-byte image in 17.4 s
+(about 120 KB/s, first attempt, HTTP 202), with no UI-lock timeout logged
+during the transfer. The differences from the evening before that are known:
+the receiving version (it carries the notice fix of #29), a panel rebooted
+ten minutes earlier, and another day's Wi-Fi. A serial reader was attached,
+as it was for the 129 s upload, so an unread console is not the cause. One
+fast upload does not close this item.
 
 ### OBS-46 · The OTA pusher reported success whatever the panel answered
 `tooling · S · done (2026-10-07)` — `tools/ota-flash.sh` printed

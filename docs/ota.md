@@ -100,7 +100,7 @@ compares against its own running version:
   purpose, so SETTINGS can never open behind the notice.
 - **LATER / any other tap** → snooze (logged `notisen avfärdad med ett
   tryck`); the takeover then leaves the glass at the next half-second poll
-  (host-tested, not yet confirmed on a panel). Until
+  (confirmed on `torget-216-02`, 2026-10-08). Until
   2026-10-07 it stayed drawn with dead pills and KEY3 disabled until a reset;
   the glass is now reconciled against the notice state every poll. The
   takeover returns every hour

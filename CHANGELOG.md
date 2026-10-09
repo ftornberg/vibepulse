@@ -25,7 +25,10 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   (`TK_MERGE_QUEUE`, off by default on 2.41 V2 until reviewed at 600 x 450;
   `#define TK_MERGE_QUEUE 0` in `secrets.h` leaves it out). The tokenserver
   keeps the payload within 3840 bytes by dropping titles last first.
-  Simulator only so far: not yet flashed or reviewed on physical glass.
+  First seen on glass on `torget-216-02` (2026-10-08, `v1.1.0-49-g8a83c3a`):
+  the card came up after the update with two pull requests waiting, and the
+  new poller survived its first fetch with no panic. Not yet reviewed as a
+  static AMOLED frame, and its stack margin is not measured.
 - **Automation can be left off the agent monitor.** `vibepulse_setup.py
   agents ignore <path>` keeps Claude sessions whose working folder contains
   the path off the agent monitor. A finished headless run (an orchestrator's
@@ -87,7 +90,8 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   on the glass with both pills dead and the KEY3 hold disabled until the panel
   was reset. The glass is now reconciled against the notice state every poll,
   which also repairs a show or hide skipped while the UI lock was busy.
-  Host-tested; not yet confirmed on a panel.
+  Confirmed on `torget-216-02` (2026-10-08, `v1.1.0-45-ga3bcbbf`): LATER made
+  the takeover leave the glass and the console logged the snooze.
 - With the buttons down, the 2.16 panel rendered every app as smeared,
   dotted streaks (OBS-42). That pose's MADCTL `0x60` swaps the axes, and its
   panel gap sat on x, where the CO5300 driver adds it to the column window
