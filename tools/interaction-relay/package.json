@@ -15,10 +15,10 @@
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@cloudflare/vitest-pool-workers": "0.23.0",
     "typescript": "7.0.2",
     "vitest": "4.1.11",
-    "wrangler": "4.147.0"
+    "wrangler": "4.149.0"
   },
   "overrides": {
     "sharp": "^0.35.5",
