@@ -77,6 +77,10 @@ if ! "$PYTHON_BIN" -m ruff --version >/dev/null 2>&1; then
     '  .venv/bin/python -m pip install -r requirements-dev.txt' >&2
   exit 1
 fi
+# The pin guard runs before ruff so a half-moved pin (Dependabot bumps
+# requirements-dev.txt, never pyproject.toml) fails with the line to move,
+# not with ruff's own "Required version does not match".
+"$PYTHON_BIN" test_ruff_pin_wiring.py
 (cd .. && "$PYTHON_BIN" -m ruff check .)
 echo "OK: ruff hittade inget"
 
