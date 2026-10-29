@@ -700,14 +700,17 @@ class RepositoryRegistryTests(unittest.TestCase):
         script = (repo / "test/run.sh").read_text(encoding="utf-8")
         self.assertIn("PYTHON_BIN=${PYTHON_BIN:-python3}", script)
         self.assertIn("sys.version_info >= (3, 11)", script)
-        self.assertRegex(
-            script,
-            r"yaml\.__version__\s*==\s*['\"]6\.0\.3['\"]",
-        )
+        # The PyYAML and Pillow releases are read from requirements-dev.txt;
+        # a literal copy here once failed the gate on a Dependabot bump.
+        self.assertIn("yaml_pin=$(pin_of PyYAML)", script)
+        self.assertIn("pillow_pin=$(pin_of Pillow)", script)
+        self.assertIn("../requirements-dev.txt", script)
+        self.assertIn("yaml.__version__ == sys.argv[1]", script)
         self.assertIn("import PIL", script)
-        self.assertRegex(
+        self.assertIn("PIL.__version__ == sys.argv[2]", script)
+        self.assertNotRegex(
             script,
-            r"PIL\.__version__\s*==\s*['\"]12\.3\.0['\"]",
+            r"(?:yaml|PIL)\.__version__\s*==\s*['\"][0-9]",
         )
         self.assertLess(script.index("sys.version_info"), script.index("\ncc "))
 

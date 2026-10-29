@@ -1,6 +1,7 @@
 #!/bin/sh
 # Hosttesterna för Torgets rena kärnor. Kräver en C-kompilator (clang via
-# Xcode CLT, eller gcc) samt Python 3.11+ med PyYAML 6.0.3 och Pillow 12.3.0.
+# Xcode CLT, eller gcc) samt Python 3.11+ med PyYAML och Pillow i exakt de
+# versioner requirements-dev.txt pinnar.
 #
 # Flaggor:
 #   --skip-js  hoppa över Node-lanen (relay + interaction-relay). Enbart för
@@ -18,12 +19,26 @@ for arg in "$@"; do
 done
 
 PYTHON_BIN=${PYTHON_BIN:-python3}
+
+# Every version the gate demands is read from the requirements file that
+# installs it, never kept as a second copy here: a Dependabot bump of one
+# pin once left this script insisting on the old one (cryptography 49.0.0,
+# then Pillow 12.3.0) and the gate refused to start on a green install.
+pin_of() {
+  sed -n "s/^$1==\([0-9][0-9.]*\).*/\1/p" ../requirements-dev.txt
+}
+yaml_pin=$(pin_of PyYAML)
+pillow_pin=$(pin_of Pillow)
+if [ -z "$yaml_pin" ] || [ -z "$pillow_pin" ]; then
+  printf '%s\n' 'ERROR: requirements-dev.txt pinnar inte PyYAML==X och Pillow==X.' >&2
+  exit 1
+fi
 if ! "$PYTHON_BIN" -c \
-  'import PIL, sys, yaml; raise SystemExit(0 if sys.version_info >= (3, 11) and yaml.__version__ == "6.0.3" and PIL.__version__ == "12.3.0" else 1)' \
-  2>/dev/null
+  'import PIL, sys, yaml; raise SystemExit(0 if sys.version_info >= (3, 11) and yaml.__version__ == sys.argv[1] and PIL.__version__ == sys.argv[2] else 1)' \
+  "$yaml_pin" "$pillow_pin" 2>/dev/null
 then
   printf '%s\n' \
-    'ERROR: Hosttesterna kräver Python 3.11+ med PyYAML 6.0.3 och Pillow 12.3.0.' \
+    "ERROR: Hosttesterna kräver Python 3.11+ med PyYAML $yaml_pin och Pillow $pillow_pin." \
     'Kör från Torget-repots rot:' \
     '  python3.12 -m venv .venv' \
     '  . .venv/bin/activate' \
@@ -34,8 +49,6 @@ fi
 
 # Relay crypto stays an optional runtime dependency, but its security vectors
 # are part of the host gate once this repository is being developed/tested.
-# The version comes from the requirements file itself, so a Dependabot bump
-# of that pin can never leave a second, stale copy behind here.
 crypto_pin=$(sed -n 's/^cryptography==\([0-9][0-9.]*\).*/\1/p' \
   ../requirements-interaction-relay.txt)
 if [ -z "$crypto_pin" ]; then
