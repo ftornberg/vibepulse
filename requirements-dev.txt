@@ -1,4 +1,4 @@
 PyYAML==6.0.3
-Pillow==12.3.0
+Pillow==13.0.0
 zeroconf==0.151.5
 ruff==0.17.2
