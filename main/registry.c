@@ -6,12 +6,17 @@
  * skärmen startar i den. Solelkollen och Vibbe/Buddy är egna produkter i egna
  * repon och delas in som companion-inputs när de finns utcheckade —
  * byggena sätter TORGET_HAVE_* och grindar registerposterna här. Utomstående
- * ska aldrig få en app de inte bett om. */
+ * ska aldrig få en app de inte bett om.
+ * TID (components/app_time) bor i det här repot men är opt-in på samma sätt
+ * (TORGET_WITH_TIME, bara 2.16): en färsk klon bygger fortfarande exakt en app. */
 #ifdef TORGET_HAVE_SOLELKOLLEN
 #include "app_solelkollen.h"
 #endif
 #ifdef TORGET_HAVE_BUDDY
 #include "app_buddy.h"
+#endif
+#ifdef TORGET_HAVE_TIME
+#include "app_time.h"
 #endif
 
 /*
@@ -32,6 +37,9 @@ const torget_app_t *const torget_apps[] = {
 #endif
 #ifdef TORGET_HAVE_BUDDY
   &vibbe_app,
+#endif
+#ifdef TORGET_HAVE_TIME
+  &time_app,
 #endif
 };
 

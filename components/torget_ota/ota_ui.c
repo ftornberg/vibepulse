@@ -199,6 +199,10 @@ bool torget_ota_ui_notice_visible(void) {
   return ui.rendered_state == TG_OTA_UI_NOTICE;
 }
 
+bool torget_ota_ui_visible(void) {
+  return ui.rendered_state != TG_OTA_UI_HIDDEN;
+}
+
 static const char *state_word(tg_ota_ui_state state) {
   switch (state) {
     case TG_OTA_UI_OPEN:       return "READY";
@@ -328,13 +332,14 @@ void torget_ota_ui_set(tg_ota_ui_state state, unsigned percent,
   torget_ui_unlock();
 }
 
-void torget_ota_ui_set_version(const char *version) {
-  if (!ui.overlay || !version) return;
-  if (!torget_ui_try_lock(200)) return;
+bool torget_ota_ui_set_version(const char *version) {
+  if (!ui.overlay || !version) return false;
+  if (!torget_ui_try_lock(200)) return false;
   /* Dedupe under låset: vakten återpushar körande version varje halvsekund
    * (så en avbruten uppladdnings inkommande rad självläker tillbaka) och
    * oförändrad text får inte bli en invalidering per poll. */
   if (strcmp(lv_label_get_text(ui.version), version) != 0)
     lv_label_set_text(ui.version, version);
   torget_ui_unlock();
+  return true;
 }

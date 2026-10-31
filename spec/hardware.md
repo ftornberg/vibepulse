@@ -40,7 +40,8 @@ PMU AXP2101 (0x34; `power.axp2101`), RTC **PCF85063ATL** (0x51;
 `rtc.pcf85063atl`), IMU QMI8658 (0x6A/0x6B), kodek ES8311/ES7210
 (0x18/0x40, komponentdefaults).
 
-**Övrigt:** BOOT=GPIO0, KEY3=GPIO18 (aktiv låg), RTC_INT=13, IMU_INT=17/21,
+**Övrigt:** BOOT=GPIO0, KEY3=GPIO18 (aktiv låg), PWR till AXP2101:s PWRON
+(ingen SoC-pinne; `input.pwr-key`), RTC_INT=13, IMU_INT=17/21,
 SYS_OUT=16, TF-kort SDMMC 1-bit (CMD=1, CLK=2, D0=3), USB=19/20, UART0=43/44,
 audio MCLK=42/BCLK=9/LRCK=45/DSDIN=8/ASDOUT=10/PA=46.
 
@@ -61,6 +62,14 @@ och kontrollera mot ESP_OK. Diagnosen ställdes med gdb över den inbyggda
 USB-JTAG:en mot den levande hängningen — `openocd -f board/esp32s3-builtin.cfg`
 plus `xtensa-esp32s3-elf-gdb build/solglance.elf`, och glöm inte att döda
 openocd före nästa flashning (samma USB-enhet).
+
+## PWR-knappen (verifierad på torget-216-02 2026-10-08; `input.pwr-key`)
+
+- **Långt tryck stänger av panelen, även med USB i.** Spänningen bryts av
+  PMU:n: USB-enheten försvann från Macen. Firmwaren ser inget innan dess.
+- **Start kräver också ett långt tryck**, ungefär lika långt som avstängningen;
+  ett kort tryck gör inget (ägaren 2026-10-08, mot leverantörens "kort tryck").
+  Starten bör vara en riktig strömstart (RTC-vägen, `tid från RTC`), ej läst.
 
 ## WiFi-fakta (verifierade på hårdvara 2026-08-06)
 

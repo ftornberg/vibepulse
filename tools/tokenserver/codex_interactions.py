@@ -7,30 +7,21 @@ separates private adapter data from the bounded panel ``view``.
 
 from __future__ import annotations
 
-import shlex
 import unicodedata
 from typing import Any, Dict, Optional
 
 if __package__:
     from .agent_status import sanitize_project
-    from .interactions import approval_view, approvable_tool
+    from .interactions import (approval_view, approvable_tool,
+                               shell_command_is_safe)
 else:  # direct execution, same convention as tokenserver.py
     from agent_status import sanitize_project
-    from interactions import approval_view, approvable_tool
+    from interactions import (approval_view, approvable_tool,
+                              shell_command_is_safe)
 
 
 _QUESTION_FIELDS = frozenset({"question", "header", "options"})
 _OPTION_FIELDS = frozenset({"label", "description", "recommended"})
-_SAFE_BUILD_TARGETS = frozenset({"all", "build", "test", "check"})
-_SAFE_NPM_FLAGS = frozenset({"--silent", "--if-present", "--ignore-scripts"})
-_SAFE_GIT_STATUS_FLAGS = frozenset({"--short", "-s", "--branch", "-b",
-                                    "--porcelain"})
-_SAFE_GIT_LOG_SHOW_FLAGS = frozenset({"--oneline", "--decorate", "--graph",
-                                      "--stat", "--patch", "--no-color"})
-_SAFE_GIT_DIFF_FLAGS = frozenset({"--stat", "--name-only", "--name-status",
-                                  "--check", "--no-color", "--cached", "--staged"})
-
-
 def _is_control_free(value: str) -> bool:
     try:
         value.encode("utf-8")
@@ -50,136 +41,10 @@ def _text_is_valid(value: Any, maximum_bytes: Optional[int] = None) -> bool:
     return maximum_bytes is None or len(encoded) <= maximum_bytes
 
 
-def _plain_arguments(arguments: list[str]) -> bool:
-    return all(not argument.startswith("-") for argument in arguments)
-
-
-def _make_or_ninja_is_safe(arguments: list[str]) -> bool:
-    for argument in arguments:
-        if argument.casefold() not in _SAFE_BUILD_TARGETS:
-            return False
-    return True
-
-
-def _cmake_build_is_safe(arguments: list[str]) -> bool:
-    if len(arguments) < 2 or arguments[0].casefold() != "--build" or \
-            arguments[1].startswith("-"):
-        return False
-    index = 2
-    while index < len(arguments):
-        argument = arguments[index].casefold()
-        if argument == "--verbose":
-            index += 1
-        elif argument in {"--parallel", "-j"}:
-            index += 1
-            if index < len(arguments) and not arguments[index].startswith("-"):
-                if not arguments[index].isdigit():
-                    return False
-                index += 1
-        elif argument == "--config":
-            index += 1
-            if index >= len(arguments) or arguments[index].startswith("-"):
-                return False
-            index += 1
-        elif argument == "--target":
-            index += 1
-            targets = 0
-            while index < len(arguments) and not arguments[index].startswith("-"):
-                if arguments[index].casefold() not in _SAFE_BUILD_TARGETS:
-                    return False
-                targets += 1
-                index += 1
-            if not targets:
-                return False
-        elif argument.startswith("--target="):
-            if argument.partition("=")[2] not in _SAFE_BUILD_TARGETS:
-                return False
-            index += 1
-        else:
-            return False
-    return True
-
-
-def _npm_is_safe(arguments: list[str]) -> bool:
-    if not arguments:
-        return False
-    if arguments[0].casefold() == "test":
-        flags = arguments[1:]
-    elif len(arguments) >= 2 and arguments[0].casefold() == "run" and \
-            arguments[1].casefold() in {"test", "build"}:
-        flags = arguments[2:]
-    else:
-        return False
-    return all(flag.casefold() in _SAFE_NPM_FLAGS for flag in flags)
-
-
-def _git_is_safe(arguments: list[str]) -> bool:
-    if not arguments:
-        return False
-    subcommand = arguments[0].casefold()
-    tail = arguments[1:]
-    if subcommand == "status":
-        return all(flag.casefold() in _SAFE_GIT_STATUS_FLAGS for flag in tail)
-    if subcommand == "branch":
-        return not tail or tail == ["--show-current"]
-    if subcommand in {"log", "show"}:
-        return all(not argument.startswith("-") or
-                   argument.casefold() in _SAFE_GIT_LOG_SHOW_FLAGS
-                   for argument in tail)
-    if subcommand != "diff":
-        return False
-    paths_only = False
-    for argument in tail:
-        if paths_only:
-            continue
-        if argument == "--":
-            paths_only = True
-        elif argument.startswith("-") and \
-                argument.casefold() not in _SAFE_GIT_DIFF_FLAGS:
-            return False
-    return True
-
-
-def _codex_shell_command_is_safe(command: Any) -> bool:
-    """Permit only small, read-only shapes within the coarse base allowlist."""
-    if not isinstance(command, str):
-        return False
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        return False
-    if not tokens:
-        return False
-    if tokens[0] == "./test/run.sh":
-        return len(tokens) == 1
-    family = tokens[0].casefold()
-    arguments = tokens[1:]
-    if family in {"make", "ninja"}:
-        return _make_or_ninja_is_safe(arguments)
-    if family == "cmake":
-        return _cmake_build_is_safe(arguments)
-    if family == "npm":
-        return _npm_is_safe(arguments)
-    if family == "git":
-        return _git_is_safe(arguments)
-    if family in {"ls", "cat", "head", "tail", "wc", "grep", "rg"}:
-        return _plain_arguments(arguments)
-    if family == "pytest":
-        return _plain_arguments(arguments)
-    if family in {"python", "python3"}:
-        return len(arguments) >= 2 and arguments[:2] == ["-m", "unittest"] \
-            and _plain_arguments(arguments[2:])
-    if family == "cargo":
-        return len(arguments) >= 1 and arguments[0].casefold() in {"test", "build"} \
-            and _plain_arguments(arguments[1:])
-    if family == "go":
-        return len(arguments) >= 1 and arguments[0].casefold() == "test" and \
-            _plain_arguments(arguments[1:])
-    if family == "ctest":
-        return _plain_arguments(arguments)
-    if family == "idf.py":
-        return len(arguments) == 1 and arguments[0].casefold() == "build"
-    return False
+# The strict shell classifier now lives in interactions.py so Claude and
+# Codex approvals are judged by the same shapes; the old name stays for
+# the explicit belt-and-braces call below.
+_codex_shell_command_is_safe = shell_command_is_safe
 
 
 def _identity(cwd: Any, session_id: Any,

@@ -340,8 +340,12 @@ for forbidden in (
 assert "completion_pulse_start" in monitor
 assert "completion_pulse_stop" in monitor
 assert "#define COMPLETION_PULSE_CYCLE_MS 1200U" in monitor
-assert "TK_COMPLETION_PULSE_MS / COMPLETION_PULSE_CYCLE_MS" in monitor, \
+# The agent card breathes for its whole PULSE phase; the merge card reuses
+# the same runner for what is left of its own pulse.
+assert "completion_pulse_run(TK_COMPLETION_PULSE_MS)" in monitor, \
     "pulse repeat count must fill the PULSE phase exactly"
+assert "ms / COMPLETION_PULSE_CYCLE_MS" in monitor, \
+    "the pulse runs whole cycles of the configured length"
 assert monitor.count("lv_anim_start") == 1, "one pulse animation, no more"
 assert monitor.count("lv_obj_set_style_border_opa") >= 4, \
     "pulse must drive outline and ring, and stop must restore both"

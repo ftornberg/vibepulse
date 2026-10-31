@@ -19,4 +19,8 @@
  */
 void sg_rotation_start(lv_indev_t *touch);
 
+/* Nuvarande kvartsvarv från boot (0-3), eller -1 när rotationen inte körs
+ * (V2 eller ingen IMU). Skrivskyddad; ändrar inget. */
+int sg_rotation_quadrant(void);
+
 #endif

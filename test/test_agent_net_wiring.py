@@ -169,8 +169,9 @@ status_screen = usage_screen[
 ]
 assert "ui.agent_snapshot.pending =" not in status_screen
 assert "ui.agent_snapshot = *snapshot" not in status_screen
-assert re.search(r"static\s+tk_agent_http_response\s+response\s*;", source), (
-    "the 1536-byte response state must live in static .bss"
+assert re.search(r"static\s+EXT_RAM_BSS_ATTR\s+tk_agent_http_response\s+response\s*;", source), (
+    "the 4 KB response state must be static (not on the task stack) and in "
+    "PSRAM (memory study 2026-10-08, platform/ext_ram.h)"
 )
 assert re.search(
     r'#define\s+AGENT_TASK_STACK_BYTES\s+\(10\s*\*\s*1024\)', source

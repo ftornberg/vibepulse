@@ -24,14 +24,23 @@ review. Revisit the approval count when a second active maintainer joins.
 
 ## Applying or updating the rules
 
-The existing repository ruleset ID is `20918258`. After reviewing changes to the
-JSON, apply them from the repository root with an account that can manage rules:
+The rules live in `.github/rulesets/` (`dev.json`, `main.json`). On a
+repository without them yet (this one became standalone on 2026-10-09), create
+them once from the repository root with an account that can manage rules:
 
 ```sh
-gh api --method PUT \
-  repos/niclasvestlund-YT/vibepulse/rulesets/20918258 \
+gh api --method POST repos/ftornberg/vibepulse/rulesets \
+  --input .github/rulesets/dev.json
+gh api --method POST repos/ftornberg/vibepulse/rulesets \
   --input .github/rulesets/main.json
-gh api repos/niclasvestlund-YT/vibepulse/rulesets/20918258
+```
+
+After reviewing a change to the JSON, update a ruleset in place by its ID
+(`gh api repos/ftornberg/vibepulse/rulesets` lists them):
+
+```sh
+gh api --method PUT repos/ftornberg/vibepulse/rulesets/<id> \
+  --input .github/rulesets/dev.json
 ```
 
 Inspect the returned configuration to confirm it matches the intended rules.

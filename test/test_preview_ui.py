@@ -18,6 +18,13 @@ SIM_PATH = ROOT / "sim/main.c"
 RUNNER_PATH = ROOT / "test/run.sh"
 
 EXPECTED_BMPS = {
+    "torget-vibepulse-merge-one.bmp",
+    "torget-vibepulse-merge-many.bmp",
+    "torget-vibepulse-merge-long-title.bmp",
+    "torget-vibepulse-merge-no-title.bmp",
+    "torget-vibepulse-merge-yields-to-waiting.bmp",
+    "torget-vibepulse-merge-after-waiting.bmp",
+    "torget-vibepulse-merge-dismissed.bmp",
     "torget-vibepulse-claude-fable.bmp",
     "torget-vibepulse-claude-all.bmp",
     "torget-vibepulse-codex-weekly.bmp",
@@ -105,6 +112,9 @@ EXPECTED_BMPS = {
     "torget-vibepulse-value-both.bmp",
     "torget-vibepulse-value-uneven.bmp",
     "torget-vibepulse-value-solo.bmp",
+    "torget-vibepulse-battery-charging.bmp",
+    "torget-vibepulse-battery-full.bmp",
+    "torget-vibepulse-battery-critical.bmp",
     "torget-vibepulse-needs-you-attract.bmp",
     "torget-vibepulse-needs-you-question.bmp",
     "torget-vibepulse-needs-you-question-long.bmp",
@@ -256,10 +266,22 @@ class PreviewWiringTests(unittest.TestCase):
         self.assertIn("fclose", self.sim)
 
     def test_runner_preflights_exact_pillow_pin(self):
+        # The pin lives in requirements-dev.txt alone. The runner reads it
+        # from there and refuses any other release; a literal copy here once
+        # made a Dependabot bump of that file fail the gate (12.3.0 -> 13.0.0).
+        requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+        self.assertRegex(requirements, r"(?m)^Pillow==[0-9][0-9.]*\s*$")
+        self.assertRegex(requirements, r"(?m)^PyYAML==[0-9][0-9.]*\s*$")
         self.assertIn("import PIL", self.runner)
-        self.assertRegex(
+        self.assertIn("pillow_pin=$(pin_of Pillow)", self.runner)
+        self.assertIn("yaml_pin=$(pin_of PyYAML)", self.runner)
+        self.assertIn("../requirements-dev.txt", self.runner)
+        self.assertIn("PIL.__version__ == sys.argv[2]", self.runner)
+        self.assertIn('"$yaml_pin" "$pillow_pin"', self.runner)
+        self.assertNotRegex(
             self.runner,
-            r"PIL\.__version__\s*==\s*['\"]12\.3\.0['\"]",
+            r"PIL\.__version__\s*==\s*['\"][0-9]",
+            "the Pillow release must not be hardcoded in the runner",
         )
         self.assertIn('"$PYTHON_BIN" test_preview_ui.py', self.runner)
 

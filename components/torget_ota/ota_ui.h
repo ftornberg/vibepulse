@@ -45,12 +45,19 @@ void torget_ota_ui_set(tg_ota_ui_state state, unsigned percent,
  * måste vara atomärt. */
 bool torget_ota_ui_notice_visible(void);
 
+/* Är overlayn uppe i NÅGOT läge? Samma låsfria läsning som ovan. Underhålls-
+ * vakten jämför den med vad som borde synas och gömmer en overlay som blivit
+ * kvar utan notis och utan fönster. */
+bool torget_ota_ui_visible(void);
+
 /* Versionsraden under ringen: den KÖRANDE versionen när fönstret öppnas,
  * den INKOMMANDE så fort uppladdningens metadata är läst — svaret på "vad
  * är det som installeras?". Bara enhetens egna fakta, aldrig påhitt.
  * Tar UI-låset med samma 200 ms-regel som set(); ett tappat försök är
  * kosmetik och nästa anrop skriver om. Samma trådregel som set(). */
-void torget_ota_ui_set_version(const char *version);
+/* Svarar false när raden inte kunde sättas (UI-låset upptaget): anroparen
+ * gör om försöket vid nästa poll. */
+bool torget_ota_ui_set_version(const char *version);
 
 /* Notisens avfärdande: overlayn slukar touch, och ett tryck i NOTICE-läget
  * sätter en atomär flagga som tjänstens vakt konsumerar (LVGL-tasken får

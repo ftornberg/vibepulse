@@ -93,7 +93,8 @@ class SettingsDesignTests(unittest.TestCase):
         # successful fetch. A row that says something false is worse than a
         # row that is not there.
         about_rows = design["aboutRows"]
-        self.assertEqual(about_rows, ["FIRMWARE", "ADDRESS"])
+        self.assertEqual(about_rows,
+                         ["FIRMWARE", "ADDRESS", "POWER", "CLOCK"])
 
         # The regression this file exists for: the last label/value pair must
         # clear the BACK control, not merely avoid overlapping it. Counted

@@ -67,4 +67,56 @@
 #error "TK_GITHUB_SOUND_ENABLED must be 0 or 1"
 #endif
 
+/* The Codex pages (CODEX · WEEKLY and, with MAX TRACKER, the Codex
+ * tracker). 1 shows them as before; 0 hides them for a Claude-only desk.
+ * Compile-time on purpose: LABS switches are for things a fresh panel may
+ * want to try, this is "I don't use that provider". Needs You, the Codex
+ * agent feed and the tokenserver's Codex route are unaffected. */
+#ifndef TK_CODEX_PAGES
+#define TK_CODEX_PAGES 1
+#endif
+#if TK_CODEX_PAGES != 0 && TK_CODEX_PAGES != 1
+#error "TK_CODEX_PAGES must be 0 or 1"
+#endif
+
+/* READY TO MERGE: pull requests that local agent-team orchestrators have
+ * reviewed (tokenserver /api/merge-queue). On for 2.16, where the card is
+ * captured and reviewed; off for 2.41 V2 until it has been reviewed at
+ * 600 x 450. 0 also leaves out the poller task and its buffers. Compile-time
+ * like TK_CODEX_PAGES: the tokenserver already answers {"enabled": false}
+ * until an orchestrator is added, and the panel then asks only every ten
+ * minutes, so a LABS switch would be a second switch for the same thing. */
+#ifndef TK_MERGE_QUEUE
+#ifdef TORGET_BOARD_241_V2
+#define TK_MERGE_QUEUE 0
+#else
+#define TK_MERGE_QUEUE 1
+#endif
+#endif
+#if TK_MERGE_QUEUE != 0 && TK_MERGE_QUEUE != 1
+#error "TK_MERGE_QUEUE must be 0 or 1"
+#endif
+
+/* Scheduled night dimming (design 2026-09-24). The LABS row NIGHT DIM
+ * toggles it; these are the compiled defaults an unchanged secrets.h gets. */
+#ifndef TK_NIGHT_ENABLED_DEFAULT
+#define TK_NIGHT_ENABLED_DEFAULT 1
+#endif
+#if TK_NIGHT_ENABLED_DEFAULT != 0 && TK_NIGHT_ENABLED_DEFAULT != 1
+#error "TK_NIGHT_ENABLED_DEFAULT must be 0 or 1"
+#endif
+#ifndef TG_NIGHT_START_HHMM
+#define TG_NIGHT_START_HHMM 2300
+#endif
+#ifndef TG_NIGHT_END_HHMM
+#define TG_NIGHT_END_HHMM 700
+#endif
+
+/* The firmware's local time, as a POSIX TZ string. The RTC and SNTP keep
+ * UTC; this only decides what "23:00" means for the night schedule and
+ * what the RUNS OUT line prints. Default: Europe/Stockholm rules. */
+#ifndef TG_TIMEZONE
+#define TG_TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3"
+#endif
+
 #endif

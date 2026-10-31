@@ -40,7 +40,7 @@ Clone the repository into a
 stable path that will still exist after the next sign-in:
 
 ```powershell
-git clone https://github.com/niclasvestlund-YT/vibepulse.git $HOME\vibepulse
+git clone https://github.com/ftornberg/vibepulse.git $HOME\vibepulse
 Set-Location $HOME\vibepulse
 git status --short
 ```

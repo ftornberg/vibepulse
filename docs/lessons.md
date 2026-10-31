@@ -1288,6 +1288,44 @@ pasted above a page or takeover. **Watch for:** approving tiny rounded shapes
 from enlarged simulator previews or testing only bounding boxes and total lit
 pixels.
 
+## 2026-10-07 · A host-tested parser overflowed the stack it would run on
+
+**What happened:** review of #28 (READY TO MERGE, never flashed) found that
+the merge-queue poller's 4096-byte task would have run a parser with a 3.4 KB
+payload struct on its stack, under cJSON's recursion and the HTTP client: a
+stack overflow on the first 200 answer, every boot. **Root cause:** host tests
+run with megabytes of stack, so a parser that is green on the host says
+nothing about a FreeRTOS task; the stack size was copied from a feed with a
+far smaller struct. **The rule now:** a payload struct bigger than a few
+hundred bytes is static (one caller) or caller-owned, never a local, and a
+new poller's stack is sized from the largest frame it runs, render included.
+Also from that review: a pulse is timed from when it reaches the glass, not
+from when the data arrived, and an incomplete or truncated list never proves
+something left. **Guards:** `merge_queue_parse.c` (static scratch), stack
+6144, `test_merge_queue.c` (one test per finding), `test_glass_claim_sim.py`
+(no animation after 45 s).
+
+## 2026-10-05 · The amplifier wakes after the first note has started
+
+**What happened:** TID's first chime on `torget-216-02` was audible, but the
+first of its three notes was barely heard, "as if it takes a moment to wake
+up". **Root cause:** `es8311_enable()` in `esp_codec_dev` starts the codec,
+drives the amplifier enable pin (GPIO46) and unmutes in the same instant,
+with no settling delay; the engine wrote the 180 ms C6 straight after
+`esp_codec_dev_open()`, so it played while the amplifier came up. **Fix:**
+every chime leads with `TG_AUDIO_LEAD_FRAMES` (160 ms) of silence (#22); on
+the glass all three notes were then equally clear. **Rule:** after powering
+an amplifier through a codec driver, write silence before the content; never
+judge volume from a first note that may be playing into a waking amplifier.
+
+**Also learned:** opening the 2.16's USB-Serial-JTAG port with DTR and RTS
+set low before `open()` still reset the panel once
+(`rst:0x15 (USB_UART_CHIP_RESET)`), as on the 2.41 V2. Tell the owner a
+console capture restarts the panel, and open the port once for the whole
+capture. And a heap probe that compares "before and after" a short task can
+be fooled by an unrelated periodic allocation: the engine's leak warning fired
+on a dip that recurs every minute or two with no sound at all (OBS-43).
+
 ## 2026-09-13 · A test suite paid for a poll it never needed
 
 **What happened:** the tokenserver suite took 92 s and the plugin suite 48 s on
@@ -1353,3 +1391,38 @@ tests, both firmware profiles in CI, isolated hardware registries, the
 Automatic rotation, board-safe OTA, physical answer replies and sustained
 motion/network stress remain separate follow-ups; they were not established
 by displaying usage.
+
+## 2026-10-07 · A dismissed takeover stayed on the glass and swallowed every tap
+
+**What happened:** on `torget-216-02` (`v1.1.0-40-gaef36a2`) the UPDATE READY
+takeover ignored both pills: UPDATE did not open the window (port 80 stayed
+closed, the pusher kept waiting) and LATER did not close it. A KEY3 hold does
+nothing while the takeover is visible, by design, so the panel had no way out
+but a reset. After a USB reset the same takeover answered the first UPDATE tap.
+**Root cause:** the maintenance task drove the overlay from one-shot edges.
+`tg_notice_update` answers SHOW and HIDE only at a transition, and a
+dismissing tap goes through `tg_notice_dismiss`, which clears `showing`
+without any HIDE at all: the next `tg_notice_update` sees "not showing, nag
+clock running" and answers NONE. So one tap anywhere outside the UPDATE pill
+left the overlay drawn while the policy called it dismissed; every later tap
+was drained and ignored because taps count only while `showing`, and KEY3
+stayed disabled because that gate reads the glass. The same split could come
+from the other direction: `torget_ota_ui_set` skips a frame when the UI lock is
+busy for 200 ms, promising "the next poll tries again", which was false for an
+edge. The console shows that lock timing out several times a minute (OBS-44).
+**Not proven:** that the owner's first tap was a snooze. The frozen state was
+lost in the reset; the bug is established from the code and reproduces the
+symptom exactly, the cause of that one evening is inferred. **Confirmed on the
+glass 2026-10-08** (`v1.1.0-45-ga3bcbbf`): a tap on LATER made the takeover
+disappear and logged `notisen avfärdad`. **Fix:** the glass
+is reconciled against the policy every poll with the pure, host-tested
+`tg_notice_glass`, which also hides a countdown ring left behind when the
+window closed and redraws a takeover whose version line did not get through; a
+snooze now logs `notisen avfärdad med ett tryck`. **Rule:** when a UI call may skip its work
+(a timed lock, a dedupe), drive it from the state it should reach, asked again
+every poll, never from the event that changed the state. And test the tap that
+says no: the policy test asserted "freshly dismissed stays hidden" by checking
+that no new SHOW came, which is true while the pixels are still there.
+**Also learned:** `ioreg -p IOUSB -l` shows an ESP32-S3's MAC as its USB serial
+number without opening the port, so you can tell which panel is attached
+without resetting it; and "the power cable" may end in a hub on the Mac.

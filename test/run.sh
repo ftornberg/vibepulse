@@ -1,6 +1,7 @@
 #!/bin/sh
 # Hosttesterna för Torgets rena kärnor. Kräver en C-kompilator (clang via
-# Xcode CLT, eller gcc) samt Python 3.11+ med PyYAML 6.0.3 och Pillow 12.3.0.
+# Xcode CLT, eller gcc) samt Python 3.11+ med PyYAML och Pillow i exakt de
+# versioner requirements-dev.txt pinnar.
 #
 # Flaggor:
 #   --skip-js  hoppa över Node-lanen (relay + interaction-relay). Enbart för
@@ -18,12 +19,26 @@ for arg in "$@"; do
 done
 
 PYTHON_BIN=${PYTHON_BIN:-python3}
+
+# Every version the gate demands is read from the requirements file that
+# installs it, never kept as a second copy here: a Dependabot bump of one
+# pin once left this script insisting on the old one (cryptography 49.0.0,
+# then Pillow 12.3.0) and the gate refused to start on a green install.
+pin_of() {
+  sed -n "s/^$1==\([0-9][0-9.]*\).*/\1/p" ../requirements-dev.txt
+}
+yaml_pin=$(pin_of PyYAML)
+pillow_pin=$(pin_of Pillow)
+if [ -z "$yaml_pin" ] || [ -z "$pillow_pin" ]; then
+  printf '%s\n' 'ERROR: requirements-dev.txt pinnar inte PyYAML==X och Pillow==X.' >&2
+  exit 1
+fi
 if ! "$PYTHON_BIN" -c \
-  'import PIL, sys, yaml; raise SystemExit(0 if sys.version_info >= (3, 11) and yaml.__version__ == "6.0.3" and PIL.__version__ == "12.3.0" else 1)' \
-  2>/dev/null
+  'import PIL, sys, yaml; raise SystemExit(0 if sys.version_info >= (3, 11) and yaml.__version__ == sys.argv[1] and PIL.__version__ == sys.argv[2] else 1)' \
+  "$yaml_pin" "$pillow_pin" 2>/dev/null
 then
   printf '%s\n' \
-    'ERROR: Hosttesterna kräver Python 3.11+ med PyYAML 6.0.3 och Pillow 12.3.0.' \
+    "ERROR: Hosttesterna kräver Python 3.11+ med PyYAML $yaml_pin och Pillow $pillow_pin." \
     'Kör från Torget-repots rot:' \
     '  python3.12 -m venv .venv' \
     '  . .venv/bin/activate' \
@@ -34,12 +49,18 @@ fi
 
 # Relay crypto stays an optional runtime dependency, but its security vectors
 # are part of the host gate once this repository is being developed/tested.
+crypto_pin=$(sed -n 's/^cryptography==\([0-9][0-9.]*\).*/\1/p' \
+  ../requirements-interaction-relay.txt)
+if [ -z "$crypto_pin" ]; then
+  printf '%s\n' 'ERROR: requirements-interaction-relay.txt pinnar inte cryptography==X.' >&2
+  exit 1
+fi
 if ! "$PYTHON_BIN" -c \
-  'import cryptography; raise SystemExit(0 if cryptography.__version__ == "49.0.0" else 1)' \
-  2>/dev/null
+  'import sys, cryptography; raise SystemExit(0 if cryptography.__version__ == sys.argv[1] else 1)' \
+  "$crypto_pin" 2>/dev/null
 then
   printf '%s\n' \
-    'ERROR: De krypterade interaktionstesterna kräver cryptography 49.0.0.' \
+    "ERROR: De krypterade interaktionstesterna kräver cryptography $crypto_pin." \
     'Kör från Torget-repots rot:' \
     '  .venv/bin/python -m pip install -r requirements-interaction-relay.txt' >&2
   exit 1
@@ -56,6 +77,10 @@ if ! "$PYTHON_BIN" -m ruff --version >/dev/null 2>&1; then
     '  .venv/bin/python -m pip install -r requirements-dev.txt' >&2
   exit 1
 fi
+# The pin guard runs before ruff so a half-moved pin (Dependabot bumps
+# requirements-dev.txt, never pyproject.toml) fails with the line to move,
+# not with ruff's own "Required version does not match".
+"$PYTHON_BIN" test_ruff_pin_wiring.py
 (cd .. && "$PYTHON_BIN" -m ruff check .)
 echo "OK: ruff hittade inget"
 
@@ -67,16 +92,20 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
   -o /tmp/torget-core-test
 /tmp/torget-core-test
 
-# Both the legacy header fallback and fresh-install template seed.
+# Both the legacy header fallback and fresh-install template seed, with and
+# without the Codex pages (TK_CODEX_PAGES).
 for labs_default in 0 1; do
   for github_default in 0 1 2 3; do
-    cc -std=c11 -Wall -Wextra -Werror -O1 \
-      -DTK_LABS_ANALYTICS_DEFAULT=$labs_default \
-      -DTK_GITHUB_SCREEN_ENABLED=$((github_default & 1)) \
-      -DTK_GITHUB_NOTIFICATIONS_ENABLED=$(((github_default >> 1) & 1)) \
-      ../components/app_tokens/labs_features.c test_labs_features.c \
-      -o /tmp/torget-labs-test
-    /tmp/torget-labs-test
+    for codex_pages in 0 1; do
+      cc -std=c11 -Wall -Wextra -Werror -O1 \
+        -DTK_LABS_ANALYTICS_DEFAULT=$labs_default \
+        -DTK_GITHUB_SCREEN_ENABLED=$((github_default & 1)) \
+        -DTK_GITHUB_NOTIFICATIONS_ENABLED=$(((github_default >> 1) & 1)) \
+        -DTK_CODEX_PAGES=$codex_pages \
+        ../components/app_tokens/labs_features.c test_labs_features.c \
+        -o /tmp/torget-labs-test
+      /tmp/torget-labs-test
+    done
   done
 done
 
@@ -165,10 +194,20 @@ PY
 
 cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/app_tokens/github_status_parse.c \
+  ../components/app_tokens/strict_json.c \
   test_github_status.c /tmp/torget-cjson.o \
   -lm \
   -o /tmp/torget-github-status-test
 /tmp/torget-github-status-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/app_tokens/merge_queue_parse.c \
+  ../components/app_tokens/merge_queue_policy.c \
+  ../components/app_tokens/strict_json.c \
+  test_merge_queue.c /tmp/torget-cjson.o \
+  -lm \
+  -o /tmp/torget-merge-queue-test
+/tmp/torget-merge-queue-test
 
 cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/app_tokens/project_star_popup_policy.c \
@@ -285,6 +324,53 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 /tmp/torget-boot-health-policy-test
 
 cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/torget_power/battery_policy.c \
+  test_battery_policy.c \
+  -o /tmp/torget-battery-policy-test
+/tmp/torget-battery-policy-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/torget_power/night_policy.c \
+  test_night_policy.c \
+  -o /tmp/torget-night-policy-test
+/tmp/torget-night-policy-test
+
+# Glasets anspråk: Needs You tar fram VibePulse över en annan app och går
+# tillbaka efter svaret. Ren regel, delad byte-identiskt av target och sim.
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../platform/glass_claim.c \
+  test_glass_claim.c \
+  -o /tmp/torget-glass-claim-test
+/tmp/torget-glass-claim-test
+
+# Ljudets regler och tongenerator: ren C, delad av motorn på panelen.
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/torget_audio/audio_policy.c \
+  test_audio_policy.c \
+  -lm \
+  -o /tmp/torget-audio-policy-test
+/tmp/torget-audio-policy-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/app_time/time_core.c \
+  test_time_core.c \
+  -o /tmp/torget-time-core-test
+/tmp/torget-time-core-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/app_time/time_core.c \
+  ../components/app_time/time_present.c \
+  test_time_present.c \
+  -o /tmp/torget-time-present-test
+/tmp/torget-time-present-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/torget_power/clock_policy.c \
+  test_clock_policy.c \
+  -o /tmp/torget-clock-policy-test
+/tmp/torget-clock-policy-test
+
+cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/torget_net/net_source_policy.c \
   test_net_source_policy.c \
   -lm \
@@ -338,8 +424,11 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 "$PYTHON_BIN" test_project_star_assets.py
 "$PYTHON_BIN" test_target_tls_memory.py
 "$PYTHON_BIN" test_buddy_opt_in.py
+"$PYTHON_BIN" test_display_rotation_gap.py
+"$PYTHON_BIN" test_time_app_wiring.py
 "$PYTHON_BIN" test_lvgl_layer_safety.py
 "$PYTHON_BIN" test_lvgl_memory_config.py
+"$PYTHON_BIN" test_memory_headroom_config.py
 "$PYTHON_BIN" test_overlay_memory_budget.py
 "$PYTHON_BIN" test_lvgl_qrcode_config.py
 "$PYTHON_BIN" test_wifi_onboarding_design.py
@@ -349,6 +438,7 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 "$PYTHON_BIN" test_firmware_diagnostics.py
 "$PYTHON_BIN" test_ota_reopen_wiring.py
 "$PYTHON_BIN" test_ota_sender_gates.py
+"$PYTHON_BIN" test_ota_sender_result.py
 # Backupen AGENTS.md kräver före varje historikomskrivning. Testet bygger
 # syntetiska repon med git och kör verktyget mot dem på riktigt. Halva
 # svaret ligger dock i CI: tre av de fem defekter granskningen hittade i
@@ -368,16 +458,20 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 "$PYTHON_BIN" test_interaction_relay_net_source.py
 "$PYTHON_BIN" test_vibepulse_codex_plugin.py
 "$PYTHON_BIN" test_vibepulse_setup_claude_only.py
+"$PYTHON_BIN" test_vibepulse_setup_agents.py
 
 cd ..
 "$PYTHON_BIN" -m unittest tools.agent_assets.test_build_agent_images -v
 "$PYTHON_BIN" -m unittest tools.wifi_status_assets.test_build_wifi_status_assets -v
+"$PYTHON_BIN" -m unittest tools.speaker_assets.test_build_speaker_assets -v
 "$PYTHON_BIN" -m unittest tools.vibepulse_studio.test_design \
   tools.vibepulse_studio.test_server -v
 "$PYTHON_BIN" tools/vibepulse_studio/design.py --check
 "$PYTHON_BIN" test/test_vibepulse_studio_wiring.py
 "$PYTHON_BIN" test/test_vibepulse_visual_landmarks.py
 "$PYTHON_BIN" test/test_labs_render.py
+"$PYTHON_BIN" test/test_time_app_sim.py
+"$PYTHON_BIN" test/test_glass_claim_sim.py
 "$PYTHON_BIN" test/test_docs_frame_drift.py
 "$PYTHON_BIN" test/test_board_profiles.py
 "$PYTHON_BIN" test/test_shared_amoled_skill.py

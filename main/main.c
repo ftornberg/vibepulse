@@ -12,8 +12,12 @@
 #include <inttypes.h>
 #include <stdatomic.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "ext_ram.h"
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -43,7 +47,15 @@
 #include "esp_lv_adapter.h"
 #include "lvgl.h"
 
+#include "app_tokens_config.h"
+#include "axp2101.h"
+#include "battery_badge.h"
+#include "battery_policy.h"
 #include "boot_health.h"
+#include "clock_policy.h"
+#include "corner_probe.h"
+#include "labs_features.h"
+#include "night_policy.h"
 #include "boot_screen.h"
 #include "button_arbitration.h"
 #include "settings_menu.h"
@@ -52,7 +64,10 @@
 #include "needs_you_net.h"
 #include "ota_service.h"
 #include "ota_ui.h"
+#include "pcf85063.h"
 #include "rotation.h"
+#include "audio.h"
+#include "audio_policy.h"
 #include "secrets.h"
 #include "torget.h"
 #include "vibepulse_recovery.h"
@@ -83,6 +98,13 @@ static const char *TAG = "torget";
 #define BRIGHT_STEP_UP   8   /* per 100 ms-tick: 0→100 på 1,3 s */
 #define BRIGHT_STEP_DOWN 1   /* per 100 ms-tick: 100→20 på 8 s */
 
+/* Nattschemat (del B): en tredje källa till ljusmålet, bredvid
+ * inaktivitetsregeln och batteritaket. Lägsta källan vinner. */
+static const tg_night_schedule s_night_schedule = { TG_NIGHT_START_HHMM, TG_NIGHT_END_HHMM };
+static bool s_night_active;
+static bool s_night_time_valid;
+static bool s_night_logged_once;
+
 /* Delat tillstånd. Skrivs av apptaskarna (via torget_keep_awake under
  * UI-låset), läses av LVGL-tasken. */
 static int64_t s_last_activity_us;
@@ -90,6 +112,165 @@ static int64_t s_last_touch_us;
 static int     s_brightness;         /* faktisk nivå just nu, rampad av tick_cb */
 static int     s_bright_target = -1; /* mål; loggas bara när det byter */
 static lv_indev_t *s_touch;
+
+/* Batteriet: pollas var 5 s av en låg task; policyn körs där, resultatet
+ * publiceras till LVGL-tasken under UI-låset. Ljustaket läses av tick_cb
+ * som ett tak — det kan bara sänka ljusmålet, aldrig lyfta det. */
+#define POWER_POLL_MS 5000
+static volatile int s_batt_bright_cap = 100;
+
+/* Klockan: RTC:n läses EN gång vid boot innan nätet, och skrivs tillbaka
+ * efter varje lyckad SNTP-synk (SNTP:s synk-callback flaggar, power-tasken
+ * som redan äger I2C-trafiken efter boot skriver). Flaggorna finns på
+ * båda korten (ABOUT CLOCK och nattschemat läser dem) men bara 2.16 har en
+ * RTC-väg som sätter s_rtc_applied; på V2 står den kvar på false.
+ *
+ * s_clock_kept: systemklockan överlever mjuka omstarter (esp_restart efter
+ * OTA, panik, vakthund, LABS-omstart) eftersom tidssyscallen räknar på
+ * RTC-timern. Då är klockan giltig för nattschemat redan innan SNTP svarat,
+ * och RTC:n lämnas orörd (aldrig bakåt). Varifrån den klockan kom (RTC,
+ * NTP) sparas i RTC-minne som överlever samma omstarter, så ABOUT säger
+ * samma sak efter omstarten som före; först när det minnet saknar sitt
+ * märke (första omstarten efter en uppgradering) står raden på NOT SET
+ * tills första synken. Komplementet gör ett slumpvärde efter strömpåslag
+ * ogiltigt, som för HTTP-återhämtningen nedan. */
+static volatile bool s_rtc_applied;
+static volatile bool s_rtc_write_pending;
+/* Satt av SNTP:s synk-callback (eller återställd ur RTC-minnet nedan);
+ * läses av LVGL-tasken för ABOUT CLOCK och nattschemat. */
+static volatile bool s_time_synced;
+static bool s_clock_kept;
+#define TG_CLOCK_PROV_MAGIC 0x434C4B31u /* "CLK1" */
+#define TG_CLOCK_PROV_RTC 1u
+#define TG_CLOCK_PROV_NTP 2u
+RTC_NOINIT_ATTR static uint32_t s_clock_prov_magic;
+RTC_NOINIT_ATTR static uint32_t s_clock_prov_flags;
+RTC_NOINIT_ATTR static uint32_t s_clock_prov_flags_inverse;
+
+static void clock_provenance_save(void) {
+  uint32_t f = (s_rtc_applied ? TG_CLOCK_PROV_RTC : 0u) | (s_time_synced ? TG_CLOCK_PROV_NTP : 0u);
+  s_clock_prov_flags = f;
+  s_clock_prov_flags_inverse = ~f;
+  s_clock_prov_magic = TG_CLOCK_PROV_MAGIC;
+}
+
+#ifndef TORGET_BOARD_241_V2
+static tg_batt_policy s_batt;
+static bool s_rtc_present;
+
+static void clock_start(void) {
+  if (bsp_i2c_init() != ESP_OK || tg_pcf85063_init(bsp_i2c_get_handle()) != ESP_OK) {
+    ESP_LOGW(TAG, "ingen RTC att läsa, tiden väntar på SNTP");
+    return;
+  }
+  s_rtc_present = true;
+  tg_rtc_reading r;
+  if (tg_pcf85063_read(&r) != ESP_OK) {
+    ESP_LOGW(TAG, "RTC svarar inte, tiden väntar på SNTP");
+    return;
+  }
+  if (!tg_rtc_reading_trusted(&r)) {
+    ESP_LOGW(TAG, "RTC opålitlig (OS=%d, UTC-märkt=%d, år %d), tiden väntar på SNTP",
+             r.os ? 1 : 0, r.utc_marked ? 1 : 0, r.civil.year);
+    return;
+  }
+  const tg_civil c = r.civil;
+  /* Aldrig bakåt: bara en osatt systemklocka (år < 2026) får RTC-tiden. */
+  time_t now = time(NULL);
+  struct tm sys;
+  gmtime_r(&now, &sys);
+  if (sys.tm_year + 1900 >= 2026) {
+    ESP_LOGI(TAG, "systemklockan är redan satt, RTC:n lämnas orörd");
+    return;
+  }
+  int64_t epoch = tg_civil_to_epoch(&c);
+  if (epoch < 0) {
+    ESP_LOGW(TAG, "RTC gav ett ogiltigt datum, tiden väntar på SNTP");
+    return;
+  }
+  struct timeval tv = { .tv_sec = (time_t)epoch, .tv_usec = 0 };
+  settimeofday(&tv, NULL);
+  s_rtc_applied = true;
+  clock_provenance_save();
+  ESP_LOGI(TAG, "tid från RTC: %04d-%02d-%02d %02d:%02d UTC",
+           c.year, c.month, c.day, c.hour, c.minute);
+}
+
+/* Kallas från power_task när SNTP flaggat en lyckad synk. Skrivningen
+ * väntar in nästa hela sekund, så RTC:n (som bara räknar sekunder) får
+ * den utan avrundningsfel — restfelet är en FreeRTOS-tick plus I2C-tiden.
+ * Att power_task hinner dit några sekunder efter synken spelar ingen roll:
+ * det är klockan i skrivögonblicket som skrivs, inte synkens. */
+static void clock_write_back(void) {
+  if (!s_rtc_present) return;
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  if (tv.tv_usec > 0) {
+    vTaskDelay(pdMS_TO_TICKS((1000000 - tv.tv_usec) / 1000 + 1));
+    gettimeofday(&tv, NULL);
+  }
+  tg_civil c;
+  if (!tg_epoch_to_civil((int64_t)tv.tv_sec, &c)) return;
+  esp_err_t err = tg_pcf85063_write(&c);
+  if (err == ESP_OK) ESP_LOGI(TAG, "RTC uppdaterad från SNTP");
+  else ESP_LOGW(TAG, "RTC kunde inte skrivas: %s", esp_err_to_name(err));
+}
+/* Inget tillstånd loggat än: första pollen loggar alltid, även okänd. */
+static int s_batt_logged = -1;
+
+static void power_task(void *arg) {
+  (void)arg;
+  for (;;) {
+    tg_batt_sample s = tg_axp2101_read();
+    tg_batt_verdict v = tg_batt_update(&s_batt, &s, esp_timer_get_time());
+    s_batt_bright_cap = v.bright_cap;
+    /* Bara tillståndsbyten loggas, inte varje procentsteg. Siffran följer
+     * bara med på batteri och låg; en saknad mätare skrivs aldrig som 0 %. */
+    if ((int)v.state != s_batt_logged) {
+      s_batt_logged = v.state;
+      if ((v.state == TG_BATT_ON_BATTERY || v.state == TG_BATT_LOW) && v.percent >= 0)
+        ESP_LOGI(TAG, "batteri: %s %d %%", tg_batt_state_name(v.state), v.percent);
+      else
+        ESP_LOGI(TAG, "batteri: %s", tg_batt_state_name(v.state));
+    }
+    /* ABOUT-texten byggs varje poll så spänningen hålls levande; settern
+     * avduplicerar, så en oförändrad text kostar bara låset. Mappningen är
+     * ren policy (tg_batt_power_text), låst i test/test_battery_policy.c. */
+    char text[40];
+    tg_batt_power_text(&s, &v, text, sizeof text);
+    torget_ui_lock();
+    if (v.changed) torget_battery_badge_set(v.state, v.percent);
+    torget_settings_set_power(text);
+    torget_ui_unlock();
+    /* Del C bygger avstängningen; här bara varningen. */
+    if (v.shutdown)
+      ESP_LOGW(TAG, "batteri: avstängning begärd men inte kompilerad in (del C)");
+    if (s_rtc_write_pending) {
+      s_rtc_write_pending = false;
+      clock_write_back();
+    }
+    vTaskDelay(pdMS_TO_TICKS(POWER_POLL_MS));
+  }
+}
+#endif
+
+/* Efter UI-bygget (brickan och menyn måste finnas). bsp_i2c_init är
+ * idempotent (BSP:n vaktar med i2c_initialized), så anropet efter
+ * sg_rotation_start återanvänder samma buss. 2.41 V2 har en annan
+ * PMU-koppling och ingen batteripolicy än: ingen task, taket står kvar på
+ * 100 och brickan skapas inte. */
+static void power_start(void) {
+#ifndef TORGET_BOARD_241_V2
+  if (bsp_i2c_init() != ESP_OK || tg_axp2101_init(bsp_i2c_get_handle()) != ESP_OK) {
+    /* ABOUT POWER lämnas tom: menyn ritar streck, det ärliga för "ingen
+     * PMU att läsa". */
+    ESP_LOGW(TAG, "ingen PMU att läsa, batteriikonen visar okänd");
+    return;
+  }
+  if (xTaskCreate(power_task, "power", 3072, NULL, 2, NULL) != pdPASS)
+    ESP_LOGW(TAG, "power-tasken kunde inte skapas, batteriikonen visar okänd");
+#endif
+}
 
 static EventGroupHandle_t s_net_events;
 #define WIFI_GOT_IP BIT0
@@ -205,6 +386,27 @@ uint8_t torget_wifi_signal_bars(void) {
 }
 
 void torget_keep_awake(void) { s_last_activity_us = esp_timer_get_time(); }
+
+int torget_orientation(void) { return sg_rotation_quadrant(); }
+
+/* Plattformens ljudbeslut (spec 2026-10-02): natt och OTA-fönster vet bara
+ * värdlagret, så regeln gäller alla appar. Motorn lånar hårdvaran per signal. */
+bool torget_audio_play(tg_audio_cue cue) {
+  tg_audio_state s = {
+#if defined(TK_TID_SOUND) && TK_TID_SOUND && !defined(TORGET_BOARD_241_V2)
+    .built = true,
+#endif
+    .night = s_night_active,
+    .ota_busy = torget_ota_service_maintenance_open(),
+    .playing = tg_audio_engine_playing(),
+    .disabled = tg_audio_engine_disabled(),
+  };
+  tg_audio_verdict v = tg_audio_allowed(&s, cue);
+  if (v == TG_AUDIO_OK && tg_audio_engine_start_cue(cue)) return true;
+  ESP_LOGI(TAG, "ljud nekat: %s",
+           tg_audio_verdict_name(v == TG_AUDIO_OK ? TG_AUDIO_BUSY : v));
+  return false;
+}
 
 void torget_update_available(const char *version) {
   torget_ota_service_update_available(version);
@@ -573,16 +775,34 @@ static void wifi_start(void) {
   }
 }
 
+/* Körs i lwIP-tasken vid VARJE lyckad synk: den första (som sync_wait
+ * nedan väntar på), en sen första synk efter att väntan gett upp, och de
+ * timvisa omsynkerna (CONFIG_LWIP_SNTP_UPDATE_DELAY). Flaggan läses-och-
+ * nollas av power_task; kapplöpningen är godartad — som värst går en
+ * skrivning förlorad och nästa synk tar den. */
+static void time_synced_cb(struct timeval *tv) {
+  (void)tv;
+  bool first = !s_time_synced;
+  s_time_synced = true;
+  s_rtc_write_pending = true;
+  clock_provenance_save();
+  if (!first) ESP_LOGI(TAG, "tid omsynkad från SNTP");
+}
+
 /* TLS kräver en rimlig klocka: utan tid är serverns certifikat "ännu inte
- * giltigt" och varje HTTPS-hämtning faller. Kortets RTC är inte batteri-
- * backad, så SNTP är förutsättningen för NET_READY. */
+ * giltigt" och varje HTTPS-hämtning faller. RTC:n (med reservmatning
+ * enligt schemat, del B) kan ge tiden vid boot; SNTP är ändå vägen till en
+ * klocka som certifikaten litar på, och varje lyckad synk skrivs tillbaka
+ * till RTC:n via time_synced_cb. */
 static void time_sync(void) {
   esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+  cfg.sync_cb = time_synced_cb;
   ESP_ERROR_CHECK(esp_netif_sntp_init(&cfg));
-  if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(20000)) != ESP_OK)
+  if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(20000)) != ESP_OK) {
     ESP_LOGW(TAG, "ingen tid från SNTP ännu, apparnas hämtningar får vänta på den");
-  else
+  } else {
     ESP_LOGI(TAG, "tid synkad");
+  }
 }
 
 /* Plattformens nättask: koppla upp, synka tid, släpp fram apparna
@@ -621,6 +841,76 @@ static void wifi_signal_task(void *arg) {
 
 /* ------------------------------------------------------- LVGL-tasken, 10 Hz */
 
+#ifdef TG_CORNER_PROBE_AT_BOOT
+static void corner_probe_off_cb(lv_timer_t *t) {
+  (void)t;
+  torget_corner_probe_hide();
+  ESP_LOGI(TAG, "hörnsonden nedtagen");
+}
+#endif
+
+/* Stackarnas högvattenlinje (minnesförstudien 2026-10-08, OBS-47): ~90 KB
+ * av internminnet är våra egna taskstackar och ingen utom chime var mätt.
+ * Alla taskar på en gång via uxTaskGetSystemState (kräver
+ * CONFIG_FREERTOS_USE_TRACE_FACILITY, vaktat i roten), ALLA skrivs ut (åtta
+ * per rad, lägst först): första versionen visade bara de åtta lägsta, och
+ * det var uteslutande IDF:s egna småtaskar (ipc, idle, sys_evt) — våra
+ * pollrar, som är de vi vill krympa, syntes inte (glaset 2026-10-08).
+ * Enheten är byte: portSTACK_TYPE är uint8_t på Xtensa. Kallas från
+ * LVGL-tasken en gång i minuten; schemaläggaren står still några
+ * mikrosekunder per anrop. */
+#define TG_STACK_PROBE_TASKS 32
+#define TG_STACK_PROBE_PER_LINE 8
+#define TG_STACK_WARN_BYTES 512
+
+/* IDF:s egna taskar dimensionerar IDF: ipc0 lever med ~390 B kvar av 1 280 av
+ * konstruktion. Varningen gäller bara stackar VI sätter. */
+static bool stack_is_idf_task(const char *name) {
+  static const char *const idf[] = {"ipc0", "ipc1", "IDLE0", "IDLE1",
+                                    "sys_evt", "esp_timer", "Tmr Svc", "tiT",
+                                    "wifi", "mdns", "main", NULL};
+  for (unsigned i = 0; idf[i]; i++)
+    if (strcmp(name, idf[i]) == 0) return true;
+  return false;
+}
+
+static void stack_probe_log(void) {
+  static EXT_RAM_BSS_ATTR TaskStatus_t status[TG_STACK_PROBE_TASKS];
+  UBaseType_t n = uxTaskGetSystemState(status, TG_STACK_PROBE_TASKS, NULL);
+  if (n == 0) {
+    ESP_LOGW(TAG, "stackar: fler än %d taskar, ingen mätning", TG_STACK_PROBE_TASKS);
+    return;
+  }
+  for (UBaseType_t i = 1; i < n; i++) { /* insättningssortering, n ~ 25 */
+    TaskStatus_t t = status[i];
+    UBaseType_t j = i;
+    while (j > 0 && status[j - 1].usStackHighWaterMark > t.usStackHighWaterMark) {
+      status[j] = status[j - 1];
+      j--;
+    }
+    status[j] = t;
+  }
+  unsigned lines = ((unsigned)n + TG_STACK_PROBE_PER_LINE - 1) / TG_STACK_PROBE_PER_LINE;
+  for (unsigned line_no = 0; line_no < lines; line_no++) {
+    char line[192];
+    size_t used = 0;
+    unsigned from = line_no * TG_STACK_PROBE_PER_LINE;
+    unsigned to = from + TG_STACK_PROBE_PER_LINE < (unsigned)n
+                      ? from + TG_STACK_PROBE_PER_LINE : (unsigned)n;
+    for (unsigned i = from; i < to; i++) {
+      int w = snprintf(line + used, sizeof line - used, "%s%s %u", i > from ? ", " : "",
+                       status[i].pcTaskName, (unsigned)status[i].usStackHighWaterMark);
+      if (w < 0 || (size_t)w >= sizeof line - used) break;
+      used += (size_t)w;
+    }
+    ESP_LOGI(TAG, "stackar kvar (B, lägst först) %u/%u: %s", line_no + 1, lines, line);
+  }
+  for (UBaseType_t i = 0; i < n && status[i].usStackHighWaterMark < TG_STACK_WARN_BYTES; i++)
+    if (!stack_is_idf_task(status[i].pcTaskName))
+      ESP_LOGW(TAG, "LÅG STACK: %s har %u B kvar", status[i].pcTaskName,
+               (unsigned)status[i].usStackHighWaterMark);
+}
+
 static void tick_cb(lv_timer_t *t) {
   (void)t;
   int64_t now = esp_timer_get_time();
@@ -655,6 +945,11 @@ static void tick_cb(lv_timer_t *t) {
              (unsigned)render_stats.ring_updates,
              (unsigned)render_stats.unchanged_ticks);
     tk_agent_monitor_render_stats_reset();
+    static int stack_probe;
+    if (++stack_probe >= 6) { /* var 60:e sekund */
+      stack_probe = 0;
+      stack_probe_log();
+    }
     /* Tidig varning INNAN glaset fryser: panelflushen behöver ett
      * sammanhängande DMA-block på DISPLAY_FLUSH_ROWS×480×2 byte. Faller
      * största DMA-blocket mot det taket dör nästa flush i NO_MEM och hela
@@ -710,6 +1005,13 @@ static void tick_cb(lv_timer_t *t) {
   };
   tg_button_outputs key3_out;
   tg_button_arbitrate(&key3_in, &key3_out);
+  /* Brickan göms när en övertagning äger glaset. Needs You och
+   * klarpulsen bor i appträdet UNDER topplagret, så de måste frågas
+   * uttryckligen; SETTINGS lyfter sig själv över brickan varje tick. */
+  torget_battery_badge_set_covered(key3_in.notice_visible ||
+                                   key3_in.maintenance_open ||
+                                   key3_in.setup_owns_input ||
+                                   tk_agent_monitor_takeover_visible());
 
   /* Verkställandet följer skiljedomens ordning: menyns lyft FÖRE dess
    * stängning, och båda före knappkedjans utdata. */
@@ -746,6 +1048,7 @@ static void tick_cb(lv_timer_t *t) {
     char ip[16];
     bool have_ip = ip_text_copy(ip, sizeof ip);
     torget_settings_open(desc ? desc->version : NULL, have_ip ? ip : NULL);
+    torget_settings_set_clock(tg_clock_text(s_rtc_applied, s_time_synced));
   }
 
   /* Menyns val, utfört av den som äger fönsterordningen. Menyn rör aldrig
@@ -765,6 +1068,40 @@ static void tick_cb(lv_timer_t *t) {
   int target = ((now - s_last_activity_us) > NIGHT_AFTER_US
                 && (now - s_last_touch_us) > WAKE_HOLD_US)
                ? BRIGHT_NIGHT : BRIGHT_DAY;
+
+  /* Nattschemat: utvärderas på hel sekund, aldrig varje tick. Utan giltig
+   * klocka (varken RTC eller NTP) gäller det inte alls. */
+  static int64_t s_night_checked_us;
+  if (now - s_night_checked_us >= 1000000LL) {
+    s_night_checked_us = now;
+    time_t now_s = time(NULL);
+    struct tm lt;
+    localtime_r(&now_s, &lt);
+    bool time_valid = s_time_synced || s_rtc_applied || s_clock_kept;
+    bool night = tg_night_applies(&s_night_schedule,
+                                  tk_labs_active(TK_LABS_NIGHT_DIM),
+                                  time_valid, lt.tm_hour, lt.tm_min);
+    /* Loggas när beslutet ELLER klockans giltighet byter: första ticken kan
+     * gå före clock_start, och en dagtidsboot hade annars lämnat "klocka
+     * saknas" stående i loggen fast RTC:n gav tiden. */
+    if (night != s_night_active || time_valid != s_night_time_valid || !s_night_logged_once) {
+      s_night_active = night;
+      s_night_time_valid = time_valid;
+      s_night_logged_once = true;
+      char hhmm[6] = "--:--"; /* ingen påhittad tid i loggen utan klocka */
+      if (time_valid) snprintf(hhmm, sizeof hhmm, "%02d:%02d", lt.tm_hour, lt.tm_min);
+      ESP_LOGI(TAG, "natt: %s (%s, schema %04d–%04d, %s)",
+               night ? "dimmar" : "dag", hhmm,
+               TG_NIGHT_START_HHMM, TG_NIGHT_END_HHMM,
+               time_valid ? "klocka giltig" : "klocka saknas");
+    }
+  }
+  if (s_night_active && (now - s_last_touch_us) > WAKE_HOLD_US && target > BRIGHT_NIGHT)
+    target = BRIGHT_NIGHT;
+
+  /* Ljustaket från batteripolicyn: lägsta källan vinner, ingen kan lyfta. */
+  int cap = s_batt_bright_cap;
+  if (cap < target) target = cap;
   if (target != s_bright_target) {
     s_bright_target = target;
     ESP_LOGI(TAG, "ljusmål: %d %%", target);
@@ -899,22 +1236,26 @@ static void display_start(void) {
 /* MADCTL-vridningen ur BSP:ns bsp_display_rotation_set — den läser BSP:ns
  * statiska handles som aldrig sätts när vi startar displayen själva.
  *
- * PLUS panelens gap: CO5300-glasets fönster börjar på kontrollerkolumn 6
- * (initsekvensens CASET är 0x0006..0x01DD) och drivrutinen adderar
- * x_gap/y_gap till varje adressfönster — men BSP:n justerar aldrig gapet
- * vid rotation. I bootläget 0xA0 går mappningen jämnt ut; i andra lägen
- * hamnar 6-pixelremsan oskriven vid en kant (den vita linjen, hittad på
- * foto 2026-08-06 i läge 0xC0). Konstanterna nedan kalibreras med P24-
- * metoden: ETT strukturerat fyrlägestest, en konstant per läge — aldrig
- * fotoforensik. Ser du en ljus kantlinje i ett läge: justera det lägets
- * par (6 på den axel linjen sitter, spegelvänt om den flyttar till
- * motsatt kant). */
+ * PLUS panelens gap: i ett speglat läge blir en 6-pixelremsa oskriven vid en
+ * kant (den vita linjen, hittad på foto 2026-08-06 i läge 0xC0), och
+ * drivrutinen adderar x_gap/y_gap rakt på varje adressfönster — men BSP:n
+ * justerar aldrig gapet vid rotation. (BSP 2.0.1 initierar CASET/RASET
+ * 0x0000..0x01DF, utan offset; en äldre kommentar här påstod att glaset
+ * började på kolumn 6.)
+ *
+ * REGEL (OBS-42, 2026-09-30): i ett MV-läge (0x20, axlarna bytta) är x_gap
+ * ALLTID 0. Drivrutinen vet inte att MV bytt axlarna, så x_gap hamnar på
+ * den axel som tar slut vid 479: fönstret kapas medan varje rad ändå bär 480
+ * pixlar, och varje rad i ett 12-radersband spiller över 6 pixlar på nästa
+ * — hela glaset blir sidledes utsmetade, prickiga streck (knapparna nedåt,
+ * 0x60, som hade {6, 0}). test/test_display_rotation_gap.py pinnar regeln.
+ * Ser du en ljus kantlinje i ett läge: justera det lägets y-gap. */
 #ifndef TORGET_BOARD_241_V2
 esp_err_t torget_display_rotation_set(bsp_display_rotation_t rotation) {
   static const uint8_t MADCTL[4] = { 0x00, 0x60, 0xC0, 0xA0 };
   static const int GAP[4][2] = { /* {x_gap, y_gap} per läge */
     {0, 0},  /* 0x00 */
-    {6, 0},  /* 0x60 */
+    {0, 6},  /* 0x60 — MV: gapet på y, aldrig x (OBS-42); glasverifierat 2026-09-30 */
     {0, 6},  /* 0xC0 — linjen satt i botten: skjut raderna +6 */
     {0, 0},  /* 0xA0 — bootläget, verifierat rent */
   };
@@ -1079,6 +1420,30 @@ void app_main(void) {
     nvs = nvs_flash_init();
   }
   ESP_ERROR_CHECK(nvs);
+  /* Lokal tid för nattschemat och RUNS OUT-raden. Klockan hålls i UTC. */
+  setenv("TZ", TG_TIMEZONE, 1);
+  tzset();
+  ESP_LOGI(TAG, "tidszon: %s", TG_TIMEZONE);
+  {
+    time_t now = time(NULL);
+    struct tm sys;
+    gmtime_r(&now, &sys);
+    if (sys.tm_year + 1900 >= 2026) {
+      s_clock_kept = true;
+      bool prov_ok = s_clock_prov_magic == TG_CLOCK_PROV_MAGIC &&
+                     s_clock_prov_flags == ~s_clock_prov_flags_inverse;
+      if (prov_ok) {
+        s_rtc_applied = (s_clock_prov_flags & TG_CLOCK_PROV_RTC) != 0;
+        s_time_synced = (s_clock_prov_flags & TG_CLOCK_PROV_NTP) != 0;
+      }
+      ESP_LOGI(TAG, "klockan behållen över omstarten: %04d-%02d-%02d %02d:%02d UTC (källa %s)",
+               sys.tm_year + 1900, sys.tm_mon + 1, sys.tm_mday, sys.tm_hour, sys.tm_min,
+               prov_ok ? tg_clock_text(s_rtc_applied, s_time_synced) : "okänd");
+    } else {
+      /* Strömpåslag: RTC-minnet är slump, börja om. */
+      s_clock_prov_magic = 0;
+    }
+  }
   reboot_ledger_note(rr);
   coredump_note();
 
@@ -1126,6 +1491,13 @@ void app_main(void) {
   s_last_activity_us = esp_timer_get_time();
 
   torget_ui_lock();
+  /* Batteribrickan FÖRST på topplagret: allt som skapas där efter den —
+   * bootskärmen, nätlagret, SETTINGS, OTA — ritas över den. Bootskärmen
+   * täcker den alltså tills den river sig. Needs You bor i appträdet under
+   * topplagret och göms i stället via tick_cb:s täckpredikat. */
+  overlay_cost_mark();
+  torget_battery_badge_create();
+  overlay_cost_report("battery");
   /* Bootskärmen FÖRE apparna och FÖRE OTA-overlayn: apparnas halvbyggda
    * NO DATA-vyer göms bakom den, och READY-ringen vinner alltid över den
    * i lagerordningen. */
@@ -1155,7 +1527,25 @@ void app_main(void) {
   torget_ota_ui_create();
   overlay_cost_report("ota");
   lv_timer_create(tick_cb, TICK_EVERY_MS, NULL);
+#ifdef TG_CORNER_PROBE_AT_BOOT
+  /* Mätläge (docs/adding-a-display.md): hörnsonden visas i två minuter
+   * efter boot så ägaren kan läsa av glasets hörnradie; sedan tas den bort
+   * och panelen är sig lik. Slås på med TG_CORNER_PROBE_AT_BOOT i
+   * secrets.h för EN mätboot, aldrig i ett bygge som ska stå på hyllan. */
+  torget_corner_probe_show();
+  lv_timer_t *probe_off = lv_timer_create(corner_probe_off_cb, 120 * 1000, NULL);
+  lv_timer_set_repeat_count(probe_off, 1);
+#endif
   torget_ui_unlock();
+  /* Batteripollningen EFTER brickan och menyn: tasken (prio 2) går före
+   * app_main (prio 1), och en första övergång publicerad innan widgetarna
+   * fanns hade tappats — brickan hade stått på okänd till nästa ändring. */
+  power_start();
+#ifndef TORGET_BOARD_241_V2
+  /* RTC:n FÖRE nätet: en betrodd avläsning ger apparna rätt tid direkt,
+   * och SNTP får sedan alltid sista ordet. */
+  clock_start();
+#endif
 
   /* Fysisk sanning i loggen: KEY3:s råa nivå vid boot. Låg utan finger =
    * pinnen är inte att lita på förrän knappolicyns väpning släppt igenom

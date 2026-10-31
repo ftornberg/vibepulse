@@ -16,6 +16,7 @@
 #include "project_star_popup.h"
 #include "project_star_style.h"
 #include "torget.h"
+#include "ext_ram.h"
 #include "usage_live_policy.h"
 #include "usage_presenter.h"
 #include "vibepulse_layout.generated.h"
@@ -157,7 +158,8 @@ typedef struct {
   lv_obj_t *cap_api, *cap_break, *cap_paid;
 } value_page;
 
-static struct {
+/* 4 KB objektpekare och sidor: PSRAM (ext_ram.h); attributet före struct. */
+static EXT_RAM_BSS_ATTR struct {
   lv_obj_t *tileview;
   lv_obj_t *tiles[TK_USAGE_SCREEN_VIEWS];
   quota_page quotas[3];
@@ -774,6 +776,7 @@ static void refresh_live_header(lv_obj_t *halo, lv_obj_t *context,
 }
 
 static void refresh_header(quota_page *page, int64_t now_us) {
+  if (!page->tile) return; /* Codex Weekly with TK_CODEX_PAGES 0 */
   bool stale = ui.stale || page->quota_stale;
   refresh_live_header(page->halo, page->context, &page->halo_initialized,
                       &page->halo_visible, &page->context_initialized,
@@ -829,6 +832,7 @@ static bool apply_today_bar(quota_page *page,
 }
 
 static void apply_quota(quota_page *page, const tk_tokens *tokens) {
+  if (!page->tile) return; /* Codex Weekly with TK_CODEX_PAGES 0 */
   usage_quota_page_view view = {0};
   usage_presenter_build_quota_page(tokens, page->scope, &view);
   const usage_card_view *quota = &view.quota;
@@ -989,6 +993,7 @@ static void position_stat_unit(lv_obj_t *value_obj, lv_obj_t *unit_obj) {
 }
 
 static void apply_tracker_page(tracker_page *page, const tk_max_tracker *t) {
+  if (!page->tile) return; /* LABS tracker off, or Codex hidden */
   const tk_mt_provider *src = page->codex ? &t->codex : &t->claude;
   page->data = *src;
   page->coding_streak_days = t->coding_streak_days;
@@ -1022,12 +1027,17 @@ void usage_screen_create(lv_obj_t *root) {
                     USAGE_QUOTA_CLAUDE_MODEL, USAGE_PROVIDER_CLAUDE);
   create_quota_page(&ui.quotas[1], VIEW_CLAUDE_ALL,
                     USAGE_QUOTA_CLAUDE_ALL, USAGE_PROVIDER_CLAUDE);
-  create_quota_page(&ui.quotas[2], VIEW_CODEX_WEEKLY,
-                    USAGE_QUOTA_CODEX_WEEK, USAGE_PROVIDER_CODEX);
+  /* TK_CODEX_PAGES 0 leaves quotas[2] and trackers[1] uncreated (tile
+   * NULL); apply_* and refresh_* skip such pages, as they already did for
+   * the LABS-off tracker pages. */
+  if (TK_CODEX_PAGES)
+    create_quota_page(&ui.quotas[2], VIEW_CODEX_WEEKLY,
+                      USAGE_QUOTA_CODEX_WEEK, USAGE_PROVIDER_CODEX);
   if (tk_labs_active(TK_LABS_BURN_RATE)) create_burn_rate_page();
   if (tk_labs_active(TK_LABS_TRACKER)) {
     create_tracker_page(&ui.trackers[0], VIEW_TRACKER_CLAUDE, false);
-    create_tracker_page(&ui.trackers[1], VIEW_TRACKER_CODEX, true);
+    if (TK_CODEX_PAGES)
+      create_tracker_page(&ui.trackers[1], VIEW_TRACKER_CODEX, true);
   }
   if (tk_labs_active(TK_LABS_GITHUB)) create_github_page();
   if (tk_labs_active(TK_LABS_VALUE)) create_value_page();

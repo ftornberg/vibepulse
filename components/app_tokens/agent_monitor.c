@@ -9,7 +9,9 @@
 #include "agent_monitor_policy.h"
 #include "needs_you_policy.h"
 #include "interaction_relay_policy.h"
+#include "merge_queue_policy.h"
 #include "torget.h"
+#include "ext_ram.h"
 #include "vibepulse_layout.generated.h"
 
 extern const lv_font_t plex_attention_18;
@@ -38,6 +40,13 @@ extern const lv_font_t plex_headline_48;
  * restrained red the design law allows — for DENY, and DENY only. */
 #define COL_DIM     lv_color_hex(0x5C687B)
 #define COL_RED     lv_color_hex(0xE5484D)
+/* The "ready to merge" card's own accent: a green that reads apart from both
+ * provider colors, because no agent is waiting — a person is. Matches the
+ * pre-colored merge glyph (tools/agent_assets/build-agent-images.py). */
+#define VP_COLOR_MERGE 0x3FB950
+#define COL_MERGE   lv_color_hex(VP_COLOR_MERGE)
+/* attention_provider value for the merge card (providers are 0 and 1). */
+#define ATTENTION_MERGE 2
 
 typedef struct {
   lv_obj_t *root;
@@ -46,6 +55,7 @@ typedef struct {
   lv_obj_t *icon_ring;
   lv_obj_t *claude_icon;
   lv_obj_t *codex_icon;
+  lv_obj_t *merge_icon;
   lv_obj_t *title;
   lv_obj_t *project;
   lv_obj_t *detail;
@@ -134,13 +144,27 @@ typedef struct {
   char request_id[TK_PENDING_ID_CAP];
 } needs_you_key;
 
-static struct {
+/* 8 KB tillstånd: PSRAM (ext_ram.h). Attributet står FÖRE struct — efter
+ * klammern binder det till typen, och gcc lägger då variabeln internt igen. */
+static EXT_RAM_BSS_ATTR struct {
   completion_view completion;
   needs_you_view needs_you;
   tk_needs_you_state needs_you_state;
   tk_ir_policy interaction_policy;
   needs_you_key needs_you_rendered;
   bool needs_you_visible; /* read by render_completion to yield the screen */
+  bool glass_claimed;     /* Needs You or a pulse holds the glass claim */
+  bool completion_pulsing; /* a DONE/waiting card is in its pulse phase */
+  int attention_provider;  /* provider of a waiting card, ATTENTION_MERGE, or -1 */
+  int agent_attention;     /* provider of a waiting agent card, or -1 */
+  bool completion_visible; /* an agent DONE/waiting/error card is up */
+  tk_mq_state merge;
+  bool merge_visible;      /* the merge card owns the completion surface */
+  bool merge_pulsing;
+  bool merge_painted;      /* labels hold the merge card (completion may overwrite) */
+  uint32_t merge_painted_sig;
+  uint32_t merge_anim_epoch; /* pulse epoch the running animation belongs to, 0 = none */
+  int attention_shown;     /* what the platform was last told, or -1 */
   ny_stage stage;
   char stage_id[TK_PENDING_ID_CAP]; /* the interaction the stage belongs to */
   char echo[TK_PENDING_TITLE_CAP];  /* the approved item, for the payoff beat */
@@ -205,8 +229,12 @@ static void completion_pulse_stop(void) {
   lv_obj_set_style_border_opa(mon.completion.icon_ring, LV_OPA_COVER, 0);
 }
 
-static void completion_pulse_start(void) {
+/* Breathe for about `ms` (whole cycles, at least one), then rest at full
+ * opacity. */
+static void completion_pulse_run(uint32_t ms) {
   completion_pulse_stop();
+  uint32_t cycles = ms / COMPLETION_PULSE_CYCLE_MS;
+  if (cycles == 0) cycles = 1;
   lv_anim_t anim;
   lv_anim_init(&anim);
   lv_anim_set_var(&anim, &mon.completion);
@@ -214,11 +242,20 @@ static void completion_pulse_start(void) {
   lv_anim_set_values(&anim, LV_OPA_COVER, COMPLETION_PULSE_MIN_OPA);
   lv_anim_set_duration(&anim, COMPLETION_PULSE_CYCLE_MS / 2);
   lv_anim_set_playback_duration(&anim, COMPLETION_PULSE_CYCLE_MS / 2);
-  lv_anim_set_repeat_count(&anim,
-                           TK_COMPLETION_PULSE_MS / COMPLETION_PULSE_CYCLE_MS);
+  lv_anim_set_repeat_count(&anim, cycles);
   lv_anim_set_path_cb(&anim, lv_anim_path_ease_in_out);
   lv_anim_start(&anim);
 }
+
+static void completion_pulse_start(void) {
+  completion_pulse_run(TK_COMPLETION_PULSE_MS);
+}
+
+static uint64_t monitor_now_ms(int64_t now_us) {
+  return now_us > 0 ? (uint64_t)now_us / 1000u : 0;
+}
+
+static void sync_glass(void);
 
 static void render_completion(uint64_t now_ms) {
   tk_completion_phase phase = tk_completion_phase_at(&mon.queue, now_ms);
@@ -229,13 +266,27 @@ static void render_completion(uint64_t now_ms) {
    * render key means the pulse cleanly reappears the moment the takeover
    * leaves. */
   bool visible = event && phase != TK_COMPLETION_HIDDEN && !mon.needs_you_visible;
+  /* Before the render-key early return: the pulse ending (45 s) changes no
+   * pixel of the card, yet it must hand the glass back. */
+  mon.completion_pulsing = visible && phase == TK_COMPLETION_PULSE;
+  mon.completion_visible = visible;
+  mon.agent_attention = event && phase != TK_COMPLETION_HIDDEN &&
+                                event->state == TK_AGENT_WAITING
+                            ? event->provider : -1;
+  sync_glass();
   if (!tk_completion_render_key_update(&mon.rendered_completion, event,
                                        visible)) return;
+  /* Either way the shared surface no longer holds the merge card's paint,
+   * nor (once this card pulses) its animation. */
+  mon.merge_painted = false;
+  mon.merge_visible = false;
+  mon.merge_anim_epoch = 0;
   if (!visible) {
     completion_pulse_stop();
     lv_obj_add_flag(mon.completion.root, LV_OBJ_FLAG_HIDDEN);
     return;
   }
+  lv_obj_add_flag(mon.completion.merge_icon, LV_OBJ_FLAG_HIDDEN);
 
   int provider = event->provider;
   lv_color_t accent = provider == TK_AGENT_PROVIDER_CLAUDE
@@ -294,11 +345,147 @@ static void render_completion(uint64_t now_ms) {
              provider == TK_AGENT_PROVIDER_CLAUDE
                  ? "CLAUDE FINISHED" : "CODEX FINISHED");
   }
+  lv_obj_set_style_text_font(mon.completion.title, &plex_attention_52, 0);
   lv_label_set_text(mon.completion.title, title);
   lv_label_set_text(mon.completion.detail, detail);
   /* Ny alert eller nytt tillstånd på skärmen = ny puls. Startar även när
    * antalet i samma tillstånd växer — ny information förtjänar en andning. */
   completion_pulse_start();
+}
+
+/* ------------------------------------------------------------ merge card */
+
+/* The "ready to merge" card. It paints the completion surface — no layer of
+ * its own — whenever that surface is free: Needs You and an agent card both
+ * outrank it, since an agent can be waiting on the person right now while a
+ * reviewed pull request can wait a minute. Same rhythm as a waiting card:
+ * pulse (and borrow the glass) for TK_MQ_PULSE_MS when news arrives, then
+ * static inside VibePulse until tapped away. */
+static uint32_t merge_signature(const tk_mq_pr *lead, int32_t count) {
+  uint32_t hash = tk_mq_key(lead) ^ (uint32_t)count * 2654435761u;
+  if (lead->has_title) {
+    for (const char *c = lead->title; *c; c++) {
+      hash = (hash ^ (uint8_t)*c) * 16777619u;
+    }
+  }
+  return hash;
+}
+
+/* Take the merge card off the surface (it is never painted under Needs You
+ * or an agent card). */
+static void merge_hide(void) {
+  mon.merge_pulsing = false;
+  if (!mon.merge_visible) return;
+  mon.merge_visible = false;
+  mon.merge_painted = false;
+  if (mon.merge_anim_epoch) {
+    completion_pulse_stop();
+    mon.merge_anim_epoch = 0;
+  }
+  lv_obj_add_flag(mon.completion.merge_icon, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(mon.completion.root, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* Each pulse runs exactly once, for what is left of it: started when its
+ * epoch first reaches the glass (or resumed after an agent card borrowed the
+ * surface and its animation), stopped when the phase turns static. Never
+ * restarted by a tick near its end. */
+static void merge_sync_pulse(uint64_t now_ms) {
+  if (mon.merge_pulsing) {
+    if (mon.merge_anim_epoch != mon.merge.pulse_epoch) {
+      uint64_t until = mon.merge.pulse_until_ms;
+      completion_pulse_run(until > now_ms ? (uint32_t)(until - now_ms) : 0);
+      mon.merge_anim_epoch = mon.merge.pulse_epoch;
+    }
+  } else if (mon.merge_anim_epoch) {
+    completion_pulse_stop();
+    mon.merge_anim_epoch = 0;
+  }
+}
+
+static void render_merge(uint64_t now_ms) {
+  bool surface_free = !mon.needs_you_visible && !mon.completion_visible;
+  /* An owed pulse starts when the card actually reaches the glass. */
+  if (surface_free && tk_mq_lead(&mon.merge)) tk_mq_shown(&mon.merge, now_ms);
+  tk_mq_phase phase = tk_mq_phase_at(&mon.merge, now_ms);
+  const tk_mq_pr *lead = tk_mq_lead(&mon.merge);
+  bool visible = surface_free && phase != TK_MQ_HIDDEN && lead;
+
+  if (!visible) {
+    merge_hide();
+    sync_glass();
+    return;
+  }
+
+  mon.merge_pulsing = phase == TK_MQ_PULSE;
+  mon.merge_visible = true;
+  sync_glass();
+  int32_t count = mon.merge.queue.count;
+  uint32_t signature = merge_signature(lead, count);
+  if (mon.merge_painted && mon.merge_painted_sig == signature) {
+    merge_sync_pulse(now_ms);
+    return;
+  }
+  mon.merge_painted = true;
+  mon.merge_painted_sig = signature;
+
+  completion_view *v = &mon.completion;
+  lv_obj_remove_flag(v->root, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_foreground(v->root);
+  lv_obj_add_flag(v->claude_icon, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(v->codex_icon, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_remove_flag(v->merge_icon, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_style_border_color(v->outline, COL_MERGE, 0);
+  lv_obj_set_style_border_color(v->icon_ring, COL_MERGE, 0);
+
+  /* plex_attention_18 draws A–Z and space only: no count up here. */
+  lv_label_set_text(v->provider, count == 1 ? "PULL REQUEST" : "PULL REQUESTS");
+  lv_obj_set_style_text_color(v->provider, COL_MERGE, 0);
+  /* 48 px, not the agent card's 52: READY TO MERGE at 52 runs to 10 px of
+   * the outline. Same face Needs You uses for its one-word heroes. */
+  lv_obj_set_style_text_font(v->title, &plex_headline_48, 0);
+  lv_label_set_text(v->title, "READY TO MERGE");
+
+  char project[TK_AGENT_PROJECT_CAP];
+  tk_agent_monitor_project_label(lead->project, project, sizeof project);
+  lv_label_set_text(v->project, project);
+  lv_obj_set_style_text_color(v->project, COL_MERGE, 0);
+  lv_obj_remove_flag(v->project, LV_OBJ_FLAG_HIDDEN);
+
+  char detail[TK_MQ_TITLE_CAP + 32];
+  if (count > 1) {
+    snprintf(detail, sizeof detail, "#%ld + %ld MORE", (long)lead->number,
+             (long)(count - 1));
+  } else if (lead->has_title) {
+    char title[TK_MQ_TITLE_CAP];
+    tk_mq_title_label(lead->title, title, sizeof title);
+    snprintf(detail, sizeof detail, "#%ld \xC2\xB7 %s", (long)lead->number,
+             title);
+  } else {
+    snprintf(detail, sizeof detail, "#%ld", (long)lead->number);
+  }
+  lv_label_set_text(v->detail, detail);
+  merge_sync_pulse(now_ms);
+}
+
+void tk_agent_monitor_apply_merge_queue(tk_merge_queue *queue,
+                                        int64_t now_us) {
+  if (!queue) return;
+  uint64_t now_ms = monitor_now_ms(now_us);
+  if (tk_mq_apply(&mon.merge, queue, now_ms)) {
+    mon.merge_painted = false; /* news: repaint */
+  }
+  render_merge(now_ms);
+}
+
+bool tk_agent_monitor_merge_pulse_running(void) {
+  return mon.merge_anim_epoch != 0 &&
+         lv_anim_get(&mon.completion, completion_pulse_exec) != NULL;
+}
+
+void tk_agent_monitor_dismiss_merge(void) {
+  tk_mq_dismiss(&mon.merge);
+  render_merge(mon.queue.last_now_ms);
 }
 
 static void completion_event(lv_event_t *event) {
@@ -313,8 +500,13 @@ static void completion_event(lv_event_t *event) {
     mon.suppress_click = false;
     return;
   }
+  if (mon.merge_visible) {
+    tk_agent_monitor_dismiss_merge();
+    return;
+  }
   tk_completion_queue_dismiss(&mon.queue);
   render_completion(mon.queue.last_now_ms);
+  render_merge(mon.queue.last_now_ms); /* a waiting merge card comes next */
 }
 
 static void create_completion(lv_obj_t *app_root) {
@@ -364,6 +556,13 @@ static void create_completion(lv_obj_t *app_root) {
 
   view->codex_icon = create_codex_icon(view->root, 184, 89);
 
+  /* Same 112 px slot as the pets; pre-colored, never recolored. */
+  view->merge_icon = lv_image_create(view->root);
+  lv_image_set_src(view->merge_icon, &tk_img_merge);
+  lv_obj_remove_flag(view->merge_icon, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_pos(view->merge_icon, 184, 89);
+  lv_obj_add_flag(view->merge_icon, LV_OBJ_FLAG_HIDDEN);
+
   view->title = label(view->root, &plex_attention_52, COL_WHITE);
   lv_obj_set_pos(view->title, 14, 246);
   lv_obj_set_size(view->title, 452, 68);
@@ -378,6 +577,9 @@ static void create_completion(lv_obj_t *app_root) {
   view->detail = label(view->root, &plex_ui_14, COL_MUTED);
   lv_obj_set_pos(view->detail, 20, 365);
   lv_obj_set_size(view->detail, 440, 25);
+  /* One line, never a wrap clipped mid-glyph: a pull request title can be
+   * longer than the row. The agent lines are short and unaffected. */
+  lv_label_set_long_mode(view->detail, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_style_text_align(view->detail, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_letter_space(view->detail, 2, 0);
 
@@ -897,7 +1099,7 @@ static void ny_set_provider(needs_you_view *v, bool codex,
 /* Paint the stage the policy and the human's tap put us in. Reads
  * tk_needs_you_view_of; decides nothing. Repaints only when what is on the
  * glass actually changes, so ticks between polls are free. */
-static void render_needs_you(void) {
+static void render_needs_you_view(void) {
   needs_you_view *v = &mon.needs_you;
   const tk_pending_interaction *p = &mon.snapshot.pending;
   int64_t now_us = mon.rendered_at_us;
@@ -1131,19 +1333,85 @@ void tk_agent_monitor_needs_you_tap(void) {
   }
 }
 
+/* VibePulse, the app this monitor paints into. Declared here rather than by
+ * including app_tokens.h, which would pull the whole app into the monitor. */
+extern const torget_app_t tokens_app;
+
+/* Needs You must be SEEN before its timeout, also when another app is on the
+ * glass: its root lives in VibePulse's page tree and would render hidden. The
+ * visible takeover claims the glass (the platform brings VibePulse forward);
+ * when it ends, after the payoff beat, it releases the claim and the platform
+ * returns to what was showing unless the person navigated meanwhile. Only
+ * Needs You claims: the DONE pulse is transient and needs no answer. */
+/* The glass claim and the attention icon, recomputed after every render of
+ * either surface. Claim while the Needs You takeover is visible or a DONE/
+ * waiting card pulses (10 s / 45 s); release when both end, so another app
+ * comes back while a waiting card sits static inside VibePulse. The waiting
+ * card lights the platform's attention icon (TID shows it above the clock)
+ * until Claude works again or the card is dismissed. */
+static void sync_glass(void) {
+  /* A waiting agent outranks the merge card for TID's icon too. */
+  mon.attention_provider = mon.agent_attention >= 0 ? mon.agent_attention
+                           : mon.merge_visible       ? ATTENTION_MERGE
+                                                     : -1;
+  bool want = mon.needs_you_visible || mon.completion_pulsing ||
+              mon.merge_pulsing;
+  if (want && !mon.glass_claimed) {
+    mon.glass_claimed = true;
+    torget_glass_claim(&tokens_app);
+  } else if (!want && mon.glass_claimed) {
+    mon.glass_claimed = false;
+    torget_glass_release(&tokens_app);
+  }
+  if (mon.attention_provider != mon.attention_shown) {
+    mon.attention_shown = mon.attention_provider;
+    if (mon.attention_provider == TK_AGENT_PROVIDER_CLAUDE)
+      torget_attention_set(&tokens_app, &tk_img_claude_32, VP_COLOR_CLAUDE);
+    else if (mon.attention_provider == TK_AGENT_PROVIDER_CODEX)
+      torget_attention_set(&tokens_app, &tk_img_codex_32, VP_COLOR_CODEX);
+    else if (mon.attention_provider == ATTENTION_MERGE)
+      torget_attention_set(&tokens_app, &tk_img_merge_32, VP_COLOR_MERGE);
+    else
+      torget_attention_set(&tokens_app, NULL, 0);
+  }
+}
+
+static void render_needs_you(void) {
+  render_needs_you_view();
+  /* A takeover that comes up on its own path (a relay prompt, a tap) takes
+   * the merge card off at once, not on the next tick. Showing it again is
+   * render_merge's call, with the completion state current. */
+  if (mon.needs_you_visible) merge_hide();
+  sync_glass();
+}
+
 void tk_agent_monitor_needs_you_press(tk_needs_you_verdict verdict) {
   needs_you_resolve(verdict);
 }
 
-void tk_agent_monitor_create(lv_obj_t *app_root) {
-  memset(&mon, 0, sizeof mon);
-  tk_ir_policy_init(&mon.interaction_policy);
-  create_completion(app_root);
-  create_needs_you(app_root);
+/* Shown = the object and every ancestor lack LV_OBJ_FLAG_HIDDEN. Walks the
+ * flags only, so it answers before the first layout pass too. */
+static bool shown_on_glass(const lv_obj_t *obj) {
+  if (!obj) return false;
+  for (; obj; obj = lv_obj_get_parent(obj))
+    if (lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return false;
+  return true;
 }
 
-static uint64_t monitor_now_ms(int64_t now_us) {
-  return now_us > 0 ? (uint64_t)now_us / 1000u : 0;
+bool tk_agent_monitor_takeover_visible(void) {
+  return shown_on_glass(mon.needs_you.root) ||
+         shown_on_glass(mon.completion.root);
+}
+
+void tk_agent_monitor_create(lv_obj_t *app_root) {
+  memset(&mon, 0, sizeof mon);
+  mon.attention_provider = -1;
+  mon.attention_shown = -1;
+  mon.agent_attention = -1;
+  tk_ir_policy_init(&mon.interaction_policy);
+  tk_mq_init(&mon.merge);
+  create_completion(app_root);
+  create_needs_you(app_root);
 }
 
 static void select_pending(uint64_t now_ms) {
@@ -1163,6 +1431,7 @@ static void apply_provider_render(int64_t now_us) {
   tk_completion_queue_apply(&mon.queue, &mon.snapshot, now_ms);
   render_needs_you(); /* it decides whether completion yields the glass */
   render_completion(now_ms);
+  render_merge(now_ms);
 
   const tk_agent_provider_status *providers[2] = {
       &mon.snapshot.claude, &mon.snapshot.codex,
@@ -1210,14 +1479,21 @@ void tk_agent_monitor_apply_relay(const tk_pending_interaction *pending,
 }
 
 void tk_agent_monitor_tick(int64_t now_us) {
-  if (!mon.has_snapshot) return;
+  if (!mon.has_snapshot) {
+    /* The merge feed can arrive before any agent snapshot; its pulse must
+     * still end and hand the glass back. */
+    render_merge(monitor_now_ms(now_us));
+    return;
+  }
   mon.rendered_at_us = now_us;
   select_pending(monitor_now_ms(now_us));
   render_needs_you();
-  render_completion(now_us > 0 ? (uint64_t)now_us / 1000ULL : 0);
+  render_completion(monitor_now_ms(now_us));
+  render_merge(monitor_now_ms(now_us));
 }
 
 void tk_agent_monitor_dismiss_current(void) {
   tk_completion_queue_dismiss(&mon.queue);
   render_completion(mon.queue.last_now_ms);
+  render_merge(mon.queue.last_now_ms);
 }

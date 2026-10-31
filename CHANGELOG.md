@@ -1,18 +1,188 @@
 # Changelog
 
 Notable changes to VibePulse. Release notes for tagged versions are published
-on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
+on the [releases page](https://github.com/ftornberg/vibepulse/releases); v1.1.0 and
+earlier are on the [original project's](https://github.com/niclasvestlund-YT/vibepulse/releases).
 
 ## Unreleased
 
+### Added
+
+- **Merge queue on the host.** `/api/merge-queue` lists pull requests that
+  local agent-team orchestrators have reviewed and that wait for a person to
+  merge them (`vibepulse_setup.py merge-queue add <port>`). Loopback sources
+  only, LAN only, a down source flagged instead of counted as zero.
+- **READY TO MERGE on the panel (2.16).** The merge queue gets its own card
+  on the completion surface: a green pull-request icon, the project, and
+  `#N · TITLE` (or `#N + K MORE`). A new pull request pulses for 45 s, then
+  the card stays still until a tap dismisses it; dismissed pull requests stay
+  quiet until they leave the queue. NEEDS YOU and a finished agent always
+  take precedence. Strict parser (`merge_queue_parse.c`) and pure policy
+  (`merge_queue_policy.c`) are host-tested; the icon is rasterized from an
+  owner-supplied free SVG into pre-colored I4 at 112 and 32 px. A pulse
+  that arrives behind NEEDS YOU waits for the glass; an orchestrator that is
+  down neither hides its pull requests nor replays them as news; a list cut
+  at eight is never taken as complete. 2.16 only for now
+  (`TK_MERGE_QUEUE`, off by default on 2.41 V2 until reviewed at 600 x 450;
+  `#define TK_MERGE_QUEUE 0` in `secrets.h` leaves it out). The tokenserver
+  keeps the payload within 3840 bytes by dropping titles last first.
+  First seen on glass on `torget-216-02` (2026-10-08, `v1.1.0-49-g8a83c3a`):
+  the card came up after the update with two pull requests waiting, and the
+  new poller survived its first fetch with no panic. Not yet reviewed as a
+  static AMOLED frame, and its stack margin is not measured.
+- **Automation can be left off the agent monitor.** `vibepulse_setup.py
+  agents ignore <path>` keeps Claude sessions whose working folder contains
+  the path off the agent monitor. A finished headless run (an orchestrator's
+  reviewer, say) ends on `end_turn` with no `result` line, so it pulsed as
+  NEEDS YOU for two hours and took a followed-transcript slot from a real
+  session. Filtered at discovery; token and cost totals still count it.
+
+- **TID can chime.** Three rising notes (C6, E6, G6) when a timer or a
+  focus phase ends, also while another app is on the glass; silent during
+  the night schedule and the maintenance window. A speaker symbol in TID turns
+  it on and off. A new platform engine, `components/torget_audio`, borrows
+  I2S and the ES8311 codec per chime behind a DMA-margin check and returns
+  them; it is compiled in only with `TK_TID_SOUND`. Heard on `torget-216-02`
+  (2026-10-05): all three notes clear at volume 45, ten chimes with the DMA
+  margin intact. Every chime leads with 160 ms of silence so the amplifier
+  wakes before the first note.
+- **A pomodoro break ends with its own cue.** Two falling, lower notes (G5,
+  E5) tell "back to work" apart from the three rising notes that end a focus
+  phase or a timer. Heard on `torget-216-02` (2026-10-07, `v1.1.0-44-gb30d689`):
+  the owner judged it good at the unchanged volume 45.
+- **The waiting pulse comes forward too, and TID shows who is waiting.**
+  When Claude finishes an answer, asks a question or needs permission, its
+  pulsing NEEDS YOU card now borrows the glass from another app for its pulse
+  (45 s; a DONE card 10 s) and hands it back, while the card stays static in
+  VibePulse. A new host API, `torget_attention_set()` /
+  `torget_attention_icon()`, lets an app light a small icon for others to show:
+  TID puts the orange Claude mark above its clock until Claude works again.
+  Verified on the owner's 2.16 panel (2026-09-30, `v1.1.0-37-g7d28aa8`).
+- **Needs You comes forward from any app.** Its takeover lives in VibePulse's
+  page tree, so with another app or the launcher in front it rendered into a
+  hidden root and timed out back to the terminal unseen. A visible Needs You
+  now claims the glass: the platform brings VibePulse forward and, once the
+  answer's payoff beat ends, returns to what was showing, unless you
+  navigated yourself meanwhile. Only Needs You claims; the DONE pulse does
+  not. New host API `torget_glass_claim()` / `torget_glass_release()`, rule in
+  `platform/glass_claim.c` (host-tested). On the owner's 2.16 panel
+  (2026-09-26, `v1.1.0-32-g96d6947`) NEEDS YOU came up over TID's clock for a
+  manual-mode request, offering only to dismiss it, and TID came back after
+  it was dismissed.
+- A corner probe for measuring an AMOLED's rounded active-area corners:
+  `./sim/build/torget-sim --corner-probe` renders it, and
+  `TG_CORNER_PROBE_AT_BOOT` in `secrets.h` shows it for two minutes after
+  boot on one measuring OTA. Documented in `docs/adding-a-display.md`.
+- **TID, an opt-in launcher app for the 2.16 panel** (`TORGET_WITH_TIME`, off by
+  default): the side the panel stands on chooses a digital clock, a pomodoro
+  timer or a 20/40/50 minute timer, with a ring for the seconds or the time
+  left. Simulator-reviewed only, silent, not yet flashed; see
+  [`docs/time-app.md`](docs/time-app.md). The platform gains one read-only host
+  function, `torget_orientation()`.
+
+### Fixed
+
+- **`tools/ota-flash.sh` no longer reports a failed upload as a success.** It
+  printed its "202" line and exited 0 whatever the panel answered, also after
+  an HTTP 408. It now exits 0 only for 202, names the failure otherwise, and
+  allows 570 s instead of 300 s, since a healthy upload was seen to take 224 s.
+- **UPDATE READY no longer goes deaf after a tap on LATER.** A tap outside the
+  UPDATE pill dismissed the notice without hiding it, so the takeover stayed
+  on the glass with both pills dead and the KEY3 hold disabled until the panel
+  was reset. The glass is now reconciled against the notice state every poll,
+  which also repairs a show or hide skipped while the UI lock was busy.
+  Confirmed on `torget-216-02` (2026-10-08, `v1.1.0-45-ga3bcbbf`): LATER made
+  the takeover leave the glass and the console logged the snooze.
+- With the buttons down, the 2.16 panel rendered every app as smeared,
+  dotted streaks (OBS-42). That pose's MADCTL `0x60` swaps the axes, and its
+  panel gap sat on x, where the CO5300 driver adds it to the column window
+  and overruns the 480-pixel axis. The gap moves to y, and a guard test pins
+  that no axis-swapped mode carries an x gap. Verified clean on the owner's
+  2.16 panel in all four poses (2026-09-30).
+- The battery badge sits one badge width further from the right edge
+  (margin 50 px instead of the footer's 22 px). At 22 px the panel's
+  rounded bezel clipped the body and nub, seen at the glass on 2026-09-25.
+  The two README frames are re-captured.
+- A fuel gauge reading 0 % that no voltage reading below 3.5 V confirms
+  (cell at 3.5 V or more, or the VBAT ADC off) is treated as "no number"
+  instead of an empty battery. An unconfigured or disabled
+  gauge could otherwise walk the panel to LOW and, after 30 s, CRITICAL on a
+  full cell; with the shutdown of part C that would have powered it off.
+  Found in the owner's review of the part A plan (#5, point 2).
+
 ### Changed
 
+- **48.6 KB of static data moved from internal RAM to PSRAM** (link map:
+  85 716 to 37 124 B), and the panel now logs its task stacks. The 2026-10-08 memory study (OBS-47) found
+  internal RAM at ~100 KB free in use with the largest free block pinned at
+  31 744 B; the HTTP bodies, the parsed payloads and the two big UI state
+  structs are plain CPU data and now carry `EXT_RAM_BSS_ATTR`
+  (`platform/ext_ram.h`): 36.7 KB of ours. The same Kconfig value lets
+  ESP-IDF place 12 KB of its own lwip, wpa_supplicant and Wi-Fi statics in
+  PSRAM too, by its own choice of what is safe there. Flash-adjacent buffers
+  (OTA chunk, Wi-Fi credentials) stay internal. A once-a-minute `stackar kvar` line lists the
+  stack headroom of every task, eight per line, and `LÅG STACK` warns when
+  one of ours is under 512 B (IDF's own small tasks are exempt).
+  Both rest on two Kconfig values that `sdkconfig.defaults` seeds and a new
+  CMake guard enforces (`CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY`,
+  `CONFIG_FREERTOS_USE_TRACE_FACILITY`): an existing `sdkconfig` needs the
+  two lines and `idf.py reconfigure`. On `torget-216-02` (2026-10-08,
+  `v1.1.0-50-g8acb202`, maintenance window closed): internal RAM free in use
+  143 to 153 KB against 98 to 109 KB before, the largest free block 57 to
+  65 KB against a pinned 31 744 B, low-water 95 315 B against 58 759 B;
+  Wi-Fi up in 8 s as before.
+- TID's clock moves to the buttons-right pose, the panel's natural resting
+  position on the desk, and the timer to buttons up; pomodoro stays at buttons
+  left. The rotation values are now measured on the owner's panel (buttons up
+  0, left 1, right 3) instead of guessed.
+- TID's seconds ring always moves clockwise: odd minutes fill it, even minutes
+  empty it from 12 o'clock, instead of snapping from full to empty every
+  minute. RESET's touch area grows from 200 x 56 to 260 x 84 px. TID takes
+  VibePulse's palette: Claude-orange accent and the softer off-white
+  (`0xD9DCE2`) for its big digits, as pure white was too sharp. All from the
+  owner's first look at the physical panel.
+- **Claude and Codex approvals now share one shell-command classifier.**
+  The Claude path used to judge a Bash permission by its first word and the
+  absence of shell metacharacters alone, so `git branch -D main`,
+  `make -f evil.mk`, `git diff --output=…` and `pytest -p plugin` were
+  APPROVE-able from the panel. The strict shape check the Codex adapter
+  already applied (flags against small allowlists, argument positions) now
+  lives in `interactions.py` and gates both providers. Read-only shapes
+  (`git status --short`, `npm test --silent`, `make test`, plain `pytest`)
+  are unchanged. Found in the 2026-09-22 security review.
+- `.github-token` in the repository root, which the tokenserver reads for
+  the optional GitHub stargazer poll, is now git-ignored.
 - Encrypted live-status publishing runs at most every five seconds instead of
   two, reducing normal host status uploads by 60%. Changed activity can appear
   up to three seconds later; approval delivery and signed expiry are unchanged.
 
 ### Added
 
+- `TK_CODEX_PAGES 0` in `secrets.h` hides the Codex pages (CODEX · WEEKLY
+  and the Codex Max Tracker page) for a Claude-only desk. Compile-time;
+  Needs You and the Codex agent feed are unaffected. Default 1, nothing
+  changes for existing installs.
+- **Battery badge.** With the optional cell fitted, the 2.16 panel shows
+  charge state and the PMU's own percentage bottom-right on every page,
+  caps brightness at the night level below 20 %, and lists power in
+  SETTINGS → ABOUT. The AXP2101 charge profile is untouched; the only
+  write enables the voltage measurement.
+  A NIGHT DIM row in LABS lands with it; the schedule follows below.
+- **RTC clock and scheduled night dimming.** The 2.16 panel takes its time
+  from the onboard PCF85063 on a power-on boot when the reading is
+  trustworthy — oscillator flag clear, year 2026 or later, and the chip's
+  RAM byte marked by this firmware, so a vendor demo's local-time value is
+  never applied as UTC (its backup supply is on the schematic, not yet
+  verified through a power loss) — keeps a clock and its source over a
+  soft restart, writes
+  NTP time back to the RTC after every sync including the hourly resyncs,
+  and shows the clock source in SETTINGS → ABOUT. The LABS row NIGHT DIM now
+  dims the glass to the night level between `TG_NIGHT_START_HHMM` and
+  `TG_NIGHT_END_HHMM` (23:00–07:00 by default) whenever the clock is valid.
+  Local time comes from the new `TG_TIMEZONE` (Europe/Stockholm rules by
+  default), which also makes the RUNS OUT line local instead of UTC. The
+  schedule and the local RUNS OUT time apply on the 2.41 V2 too, once NTP
+  has synced: its NIGHT DIM row is the same switch. The V2 has no RTC path.
 - Owner photographs of the working 2.41 V2, disclosed Waveshare affiliate
   product links, and a [coming-soon hardware list](README.md#coming-soon--hardware-on-the-workbench).
   AMOLED 1.75/1.8/1.91 ports are planned; RGB matrix hardware is experimental.

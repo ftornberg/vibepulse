@@ -28,6 +28,7 @@
 #include "tokens_net_recovery_policy.h"
 #include "poll_backoff_policy.h"
 #include "torget.h"
+#include "ext_ram.h"
 #include "torget_http.h"
 
 static const char *TAG = "tokens";
@@ -98,7 +99,7 @@ static void recovery_task(void *arg) {
 
 static void net_task(void *arg) {
   (void)arg;
-  static char body[BODY_MAX]; /* på .bss, inte på taskens stack */
+  static EXT_RAM_BSS_ATTR char body[BODY_MAX]; /* i PSRAM, inte på stacken */
   size_t len;
 
   torget_net_wait();
@@ -222,7 +223,7 @@ static void net_task(void *arg) {
 
 static void max_tracker_task(void *arg) {
   (void)arg;
-  static char body[MT_BODY_MAX]; /* på .bss, inte på taskens stack */
+  static EXT_RAM_BSS_ATTR char body[MT_BODY_MAX]; /* i PSRAM, inte på stacken */
   size_t len;
 
   torget_net_wait();

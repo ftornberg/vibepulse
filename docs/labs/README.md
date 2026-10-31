@@ -12,7 +12,10 @@ firmware installation.
 
 A fresh installation from `secrets.h.example` starts with three quota pages
 and their reset information, local activity when the provider supplies it,
-and SETTINGS. Missing data stays unavailable; it is never a made-up zero.
+and SETTINGS. A Claude-only desk can hide the Codex pages (CODEX · WEEKLY
+and the Codex Max Tracker page) with `#define TK_CODEX_PAGES 0` in
+`secrets.h`; it is compile-time, not a LABS switch, and leaves Needs You
+and the Codex agent feed alone. Missing data stays unavailable; it is never a made-up zero.
 Answering on the panel, cloud relays and sound remain separate opt-ins.
 
 Use the [setup guide](../agent-setup.md) for installation. You do not need
@@ -22,8 +25,9 @@ using quotas.
 ## Add features on the display
 
 Hold KEY3 for three seconds, then tap **LABS**. Tap a row to switch it ON or
-OFF. **MORE** opens the GitHub choices; **BACK** returns to analytics and
-**SETTINGS** returns to the main menu. KEY3 closes any of these pages.
+OFF. **MORE** opens the GitHub choices; **SETTINGS** returns to the main
+menu, and LABS from SETTINGS reopens the analytics choices. KEY3 closes any
+of these pages.
 
 Choices are saved immediately. **RESTART TO APPLY** means the saved choices
 differ from the currently running pages: power-cycle the display when ready.
@@ -38,6 +42,7 @@ install a provider plugin, or configure anything on the computer.
 | API VALUE | API-equivalent value page | Current model prices; plan cost for a multiple | Off |
 | GITHUB PAGE | Repository stars and forks | One public repository in tokenserver | Off |
 | STAR POPUP | New-star moments, independent of the page | The same repository feed | Off |
+| NIGHT DIM | Scheduled night dimming to the night brightness level, 23:00–07:00 (`TG_NIGHT_START_HHMM` / `TG_NIGHT_END_HHMM` in `secrets.h`); local time per `TG_TIMEZONE`. A touch still wakes the glass for 30 s | Nothing on the computer; the panel needs a valid clock (RTC or NTP) | On |
 
 The ON label is a saved display preference, not a claim that its data source
 is ready. Configure the computer first using the linked guides. Missing data
@@ -50,6 +55,12 @@ burn rate, Max Tracker and Value enabled on their first upgrade. The fresh
 sample explicitly sets this default to `0`. The existing GitHub macros seed
 their two independent choices. Copying a new sample over an old configuration
 is a new seed, not a migration; retain your existing `secrets.h` when upgrading.
+A panel upgraded from a five-switch firmware keeps its saved choices for those
+five and gets NIGHT DIM from the compiled default (On, unless
+`TK_NIGHT_ENABLED_DEFAULT 0`) until it is toggled on the panel. A panel
+downgraded to a five-switch firmware after toggling on this one finds its
+LABS record read-only (defaults shown, COULD NOT SAVE) until it is toggled
+again on a matching firmware.
 
 After the first successful save, the versioned `vp_labs` NVS record overrides
 all these defaults in both directions and survives firmware updates. Full NVS

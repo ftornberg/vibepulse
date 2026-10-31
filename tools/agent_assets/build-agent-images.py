@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import math
+from itertools import pairwise
 from collections import deque
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -210,6 +212,84 @@ def build_mascot(pose: str, cell: int) -> tuple[bytes, int, int]:
     return bytes(palette + packed), width, height
 
 
+# "Ready to merge": the pull request icon in assets/source/pull-request.svg
+# (24 x 24 viewBox, 1.5 stroke, round caps and joins), drawn here from the
+# same geometry so the build needs no SVG renderer. Strokes are stamped as
+# discs along the flattened path — exactly a round-capped, round-joined
+# stroke — at 8x and box-filtered down to the native size, then stored as
+# I4 with fifteen pre-colored alpha steps of the merge green: smooth edges,
+# no runtime recolor or scaling.
+MERGE_GREEN_RGB = (0x3F, 0xB9, 0x50)  # #3FB950
+PR_STROKE = 1.5
+# Cropped viewBox (x, y, size): the drawing spans 3.25..20.75 with its stroke;
+# the margin keeps the nodes clear of the round icon ring on the card.
+PR_VIEW = (1.0, 1.0, 22.0)
+
+
+def _cubic(p0, p1, p2, p3, steps: int = 48):
+    return [tuple((1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b +
+                  3 * (1 - t) * t * t * c + t ** 3 * d
+                  for a, b, c, d in zip(p0, p1, p2, p3, strict=True))
+            for t in (i / steps for i in range(steps + 1))]
+
+
+def _line(p0, p1, steps: int = 32):
+    return [(p0[0] + (p1[0] - p0[0]) * i / steps,
+             p0[1] + (p1[1] - p0[1]) * i / steps) for i in range(steps + 1)]
+
+
+def _circle(center, radius: float, steps: int = 96):
+    return [(center[0] + radius * math.cos(2 * math.pi * i / steps),
+             center[1] + radius * math.sin(2 * math.pi * i / steps))
+            for i in range(steps + 1)]
+
+
+def pull_request_paths():
+    corner = (18, 12)
+    return [
+        _line((6, 8), (6, 16)),
+        _line((18, 16), corner)
+        + _cubic(corner, (18, 9.17156), (18, 7.75735), (17.1213, 6.87867))
+        + _cubic((17.1213, 6.87867), (16.2426, 5.99999), (14.8284, 5.99999),
+                 (12, 5.99999))
+        + _line((12, 5.99999), (11, 5.99999)),
+        _cubic((11, 5.99999), (11, 5.29976), (12.9943, 3.99152),
+               (13.5, 3.49999)),
+        _cubic((11, 5.99999), (11, 6.70022), (12.9943, 8.00846),
+               (13.5, 8.49999)),
+        _circle((6, 18), 2),
+        _circle((6, 6), 2),
+        _circle((18, 18), 2),
+    ]
+
+
+def build_pull_request(size: int, supersample: int = 8) -> bytes:
+    x0, y0, view = PR_VIEW
+    scale = size * supersample / view
+    radius = PR_STROKE / 2 * scale
+    big = Image.new("L", (size * supersample, size * supersample), 0)
+    draw = ImageDraw.Draw(big)
+    for path in pull_request_paths():
+        points = [((x - x0) * scale, (y - y0) * scale) for x, y in path]
+        for (ax, ay), (bx, by) in pairwise(points):
+            steps = max(1, int(math.hypot(bx - ax, by - ay) / (radius / 4)))
+            for i in range(steps + 1):
+                x = ax + (bx - ax) * i / steps
+                y = ay + (by - ay) * i / steps
+                draw.ellipse([x - radius, y - radius, x + radius, y + radius],
+                             fill=255)
+    alpha = big.resize((size, size), Image.Resampling.BOX)
+    palette = bytearray(16 * 4)
+    for index in range(1, 16):  # index 0 stays fully transparent
+        r, g, b = MERGE_GREEN_RGB
+        palette[index * 4:index * 4 + 4] = bytes((b, g, r, index * 17))
+    levels = [round(value / 17) for value in alpha.tobytes()]
+    packed = bytearray()
+    for offset in range(0, len(levels), 2):
+        packed.append((levels[offset] << 4) | levels[offset + 1])
+    return bytes(palette + packed)
+
+
 MASCOTS = (
     ("tk_img_mascot_asking_4", "asking", 4),
     ("tk_img_mascot_neutral_4", "neutral", 4),
@@ -251,6 +331,8 @@ def render_generated_sources() -> tuple[str, str]:
     codex_64 = build_codex(64)
     claude_32 = build_claude(32)
     codex_32 = build_codex(32)
+    merge = build_pull_request(112)
+    merge_32 = build_pull_request(32)
     mascots = [(name, *build_mascot(pose, cell))
                for name, pose, cell in MASCOTS]
     mascot_externs = "".join(
@@ -266,6 +348,10 @@ extern const lv_image_dsc_t tk_img_codex_64;
 extern const lv_image_dsc_t tk_img_claude_32;
 extern const lv_image_dsc_t tk_img_codex_32;
 
+/* Merge queue card: the pull request icon, pre-colored merge green. */
+extern const lv_image_dsc_t tk_img_merge;
+extern const lv_image_dsc_t tk_img_merge_32;
+
 /* Needs You takeover: the Claude pet, one pose per emotive beat, pre-colored
  * at integer pixel scales. */
 {mascot_externs}
@@ -277,6 +363,8 @@ extern const lv_image_dsc_t tk_img_codex_32;
     source += c_array("tk_img_codex_64_data", codex_64)
     source += c_array("tk_img_claude_32_data", claude_32)
     source += c_array("tk_img_codex_32_data", codex_32)
+    source += c_array("tk_img_merge_data", merge)
+    source += c_array("tk_img_merge_32_data", merge_32)
     for name, data, _, _ in mascots:
         source += c_array(f"{name}_data", data)
     source += "\n"
@@ -290,6 +378,10 @@ extern const lv_image_dsc_t tk_img_codex_32;
                          "LV_COLOR_FORMAT_A8", 32, len(claude_32), 32)
     source += descriptor("tk_img_codex_32", "tk_img_codex_32_data",
                          "LV_COLOR_FORMAT_I4", 16, len(codex_32), 32)
+    source += descriptor("tk_img_merge", "tk_img_merge_data",
+                         "LV_COLOR_FORMAT_I4", 112 // 2, len(merge), 112)
+    source += descriptor("tk_img_merge_32", "tk_img_merge_32_data",
+                         "LV_COLOR_FORMAT_I4", 32 // 2, len(merge_32), 32)
     for name, data, width, height in mascots:
         source += descriptor(name, f"{name}_data", "LV_COLOR_FORMAT_I4",
                              width // 2, len(data), width, height)

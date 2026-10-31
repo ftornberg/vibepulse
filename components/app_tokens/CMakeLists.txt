@@ -7,11 +7,12 @@ set(TK_APP_TOKEN_SRCS
        "agent_status_source_policy.c"
        "agent_monitor.c" "agent_assets.c"
        "github_status_parse.c" "project_star_popup_policy.c"
+       "merge_queue_parse.c" "merge_queue_policy.c" "strict_json.c"
        "project_star_assets.c" "project_star_chime.c" "project_star_popup.c"
        "agent_net_policy.c" "tokens_net_recovery_policy.c"
        "poll_backoff_policy.c"
        "net.c" "agent_net.c" "needs_you_net.c"
-       "github_net.c"
+       "github_net.c" "merge_queue_net.c"
        "max_tracker_parse.c" "max_tracker_presenter.c")
 if(CONFIG_TK_VIBEPULSE_INTERACTION_RELAY OR CONFIG_TK_VIBEPULSE_AGENT_STATUS_RELAY)
   # Shape contracts (not values): URL=https origin, mailbox

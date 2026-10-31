@@ -971,3 +971,167 @@ level compiles `ESP_LOGD` out — so this is a *latent* leak that OBS-28's
 on a relay-enabled build, clamp the `HTTP_CLIENT` tag
 (`esp_log_level_set("HTTP_CLIENT", ESP_LOG_INFO)`) rather than trusting
 the operator to remember.
+
+### OBS-41 · Startup mDNS tracebacks on a host with two interfaces on one subnet
+`tokenserver · S · open` — observed 2026-09-24 on a fresh macOS install
+(first `vibepulse_macos_service.py install`, zeroconf 0.150.0): within
+three seconds of `starting:` the log carries two full Python tracebacks,
+`Error with socket N ((<addr>, 5353))): [Errno 65] No route to host`,
+one per LAN address (WiFi `en0` and wired `en6`, both on `192.168.1.0/24`).
+Two seconds later `local VibePulse discovery advertised via mDNS` and the
+panel-facing endpoints are fine, so the advertiser recovered by itself,
+yet `smoke.py` counts the two tracebacks for the life of the log and warns
+on every run. A healthy first start therefore looks like an incident.
+**Fix:** treat zeroconf's transient `sendto` failure at start as a
+one-line WARNING transition (interface, address, errno) instead of letting
+its traceback reach the log, or exclude zeroconf's own socket errors from
+the smoke test's traceback count. Verify against a two-interface host.
+
+### OBS-42 · With the buttons down every app renders as smeared, dotted streaks
+`firmware · S · done (2026-09-30), verified on the glass` — seen
+on the owner's 2.16 panel on 2026-09-25 and photographed on 2026-09-30:
+standing the panel on its button edge turned every app (VibePulse, TID,
+Needs You) into horizontally smeared, dotted streaks with a dotted column
+where a vertical line should be; the other three poses were clean. That
+pose is auto-rotation quadrant 2, MADCTL `0x60` (MV|MX), and the gap table in
+`torget_display_rotation_set` gave it `{6, 0}`. The CO5300 driver adds
+`x_gap` straight to CASET and does not know MV has swapped the axes, so the
+column window ran to 485 on an axis that ends at 479; the controller clamps
+the window while every row still carries 480 pixels, and within each
+12-row flush band each row spills six more pixels into the next (a
+sawtooth, which is why the streaks restart instead of forming one diagonal).
+The table's comment also claimed the init CASET starts at column 6; BSP
+2.0.1 sends `0x0000..0x01DF`. **Fix:** `0x60` gets `{0, 6}`, and
+`test/test_display_rotation_gap.py` pins that no MV mode ever carries an
+`x_gap`. **Verified:** on 2026-09-30 the owner's 2.16 panel ran
+`v1.1.0-35-g8b72b1a` (OTA): clean with the buttons down, the other three
+poses still clean, no edge line.
+
+### OBS-43 · A periodic internal-heap dip trips the audio leak warning
+`firmware · S · open` — seen on `torget-216-02` (`v1.1.0-40-gaef36a2`,
+2026-10-05) while verifying TID's chime: every one to two minutes the
+`heap:` probe shows internal free about 10 KB lower and the largest DMA block
+at 31 744 B instead of 34 816 B, for 30 to 110 s, then both recover by
+themselves. It happens with no chime at all (186, 276 and 368 s into the
+capture), so it is not the audio engine; most likely a periodic network fetch
+(TLS) holding buffers. When a chime ends inside such a dip, the engine's
+`möjlig ljudläcka` warning fires on a coincidence (once in ten chimes). The
+margin stays far above the 11 520 B flush and the 21 248 B audio gate.
+**Also:** the engine's real DMA cost is 3 072 B, twice the spec's 1 536 B
+estimate; the gate still covers it. **Fix:** name the periodic allocator (log
+the poller start/end next to the heap probe, or `heap_caps_dump` at the dip),
+and make the leak check compare against the block measured *after* a short
+settle, or only warn when two chimes in a row end lower.
+
+### OBS-44 · Renders hold the UI lock past 200 ms and nothing names the holder
+`firmware · S · open` — seen on `torget-216-02` on 2026-10-07, on both
+`v1.1.0-40-gaef36a2` and `v1.1.0-44-gb30d689`: the console logs
+`esp_lv_adapter_lock(751): Failed to acquire LVGL lock` at error level several
+times a minute (16 times in about six minutes of capture). Five of them land
+197 to 300 ms after a `tokens:` fetch line, so one holder is the redraw that
+follows a `/api/tokens` payload; the others cluster while the UPDATE READY
+takeover or the RECEIVING ring is on the glass, which points at full-screen
+redraws. The failing callers are the timed ones (`torget_ui_try_lock(200)`):
+the OTA overlay, the Wi-Fi setup overlay and the boot screen. They skip the
+frame by design, which is only safe when the same call is made again on the
+next poll. One caller was not: the takeover's show and hide were one-shot
+edges, fixed 2026-10-07 by reconciling the glass against the policy every poll
+(`tg_notice_glass`, see [lessons.md](lessons.md)). **Not known:** which render
+holds the lock, for how long at worst, and whether touch input waits behind it.
+**Fix:** time the lock hold in the adapter's render loop and log the longest
+one next to the `heap:` probe; name the caller in the timeout line (a wrapper
+around `torget_ui_try_lock` that logs its tag at warning level instead of the
+adapter's anonymous error); then decide whether the tokens redraw should be
+split. Audit the remaining timed callers (`wifi_setup_ui.c`, `boot_screen.c`) for the
+same one-shot assumption.
+
+### OBS-45 · OTA uploads crawl and break off with 408, and nothing says why
+`firmware · M · open` — seen on `torget-216-02` on 2026-10-07. Receiving on
+`v1.1.0-40-gaef36a2` a 2 MB image took 129 s; receiving on
+`v1.1.0-44-gb30d689` three uploads in a row ended in HTTP 408
+`upload interrupted` after 25, 61 and 18 s, and the fourth went through in
+224 s (about 9 KB/s). The link was healthy at rest: 60 pings of 1 400 bytes,
+no loss, 9 ms average, the Mac on wired Ethernet. A 408 is the handler's
+`httpd_req_recv` timing out, so the panel saw no data for 5 s in mid-stream.
+**Hypothesis, not measured:** the handler redraws the RECEIVING ring after
+every 4 096-byte chunk and each redraw may wait up to 200 ms for the UI lock
+(OBS-44), so the panel reads slowly; its TCP receive window is 5 760 bytes
+(`tcp rx win` in the boot log), so the window keeps closing; when one window
+update is lost over Wi-Fi the sender's persist timer (5 s minimum on macOS)
+meets the server's 5 s receive timeout and the panel gives up first. **Not
+known:** whether the app on the glass matters (the fourth attempt ran with
+VibePulse in front, but so may the others have), and whether an unread USB
+console slows the panel (the 129 s upload had a serial reader attached, the
+failures did not). **Fix:** measure first: log bytes, elapsed time and the
+longest gap between chunks when an upload ends or breaks, and count how often
+the ring redraw lost the lock. Then: redraw the ring per percent instead of
+per chunk and never wait for the lock on the receive path; consider a larger
+receive window for the OTA socket; give the receive a timeout longer than the
+sender's persist timer. An aborted upload never touches the running slot, so
+the cost is time and a second window, not a bricked panel.
+**2026-10-08, one more data point, no explanation:** receiving on
+`v1.1.0-45-ga3bcbbf` the same unit took a 2 106 832-byte image in 17.4 s
+(about 120 KB/s, first attempt, HTTP 202), with no UI-lock timeout logged
+during the transfer. The differences from the evening before that are known:
+the receiving version (it carries the notice fix of #29), a panel rebooted
+ten minutes earlier, and another day's Wi-Fi. A serial reader was attached,
+as it was for the 129 s upload, so an unread console is not the cause. One
+fast upload does not close this item.
+
+### OBS-46 · The OTA pusher reported success whatever the panel answered
+`tooling · S · done (2026-10-07)` — `tools/ota-flash.sh` printed
+`202 = avbilden vald för nästa boot` and exited 0 after every upload, also the
+three that ended in HTTP 408 (OBS-45), so a background run reported
+"completed" and the failure was found only by asking the panel for its
+version. Its 300 s cap was also close to cutting the 224 s upload that did get
+through. **Fix:** the script reads the HTTP status, prints the success line
+and exits 0 only for 202, names the failure otherwise (408, 403, 401, no
+answer) and exits 1; the cap is 570 s, inside the ten-minute window.
+`test/test_ota_sender_result.py` runs the real script against a stand-in
+panel for 202, 408 and other refusals. **Verify a delivery** with
+`curl http://<ip>/api/ota/status`: `running_version` answers while the window
+is open, which includes the minutes after the post-update reboot.
+
+### OBS-47 · Internal RAM: one 32 KiB region is the only big block, and every flush mallocs
+`firmware · M · in progress` — memory study 2026-10-08 on `torget-216-02`
+(`v1.1.0-49-g8a83c3a`, link map plus a ten-minute console capture). Internal
+heap is 261 940 B in three regions (202 + 21 + 32 KiB). Free: 211 051 B at
+2.7 s, 173 503 B after the LVGL task starts, 98 000 to 109 000 B in use,
+low-water 58 759 B. **The largest free block is 31 744 B in every probe, for
+both INTERNAL and DMA**: that is the untouched 32 KiB region; the 202 KiB
+region holds no free block above 31 KB any more, its ~70 KB free is
+fragments. **Every display flush allocates 11 520 B of DMA memory**: the draw
+buffers live in PSRAM and `spi_master.c` (IDF 5.5.2, lines 1190 to 1195)
+bounces a non-DMA-capable transmit buffer through a temporary
+`heap_caps_aligned_alloc(MALLOC_CAP_DMA)` per transaction. That is the freeze
+class of 2026-08-14 and 2026-08-16 stated as a mechanism. Where the RAM goes:
+our permanent task stacks 90 112 B (lvgl 16 384, agent-status 10 240,
+interaction-relay 10 240, ota-ui 8 192, four pollers at 6 144, github 5 120,
+the rest 2 048 to 4 096), IDF's own about 26 KB, static `.bss`/`.data`
+85 716 B of which ~42 KB ours, IRAM code about 100 KB of the same SRAM. Not
+problems: LVGL's pool is in PSRAM (60 of 256 KB used), TLS buffers are in
+PSRAM (`MBEDTLS_EXTERNAL_MEM_ALLOC`), TID costs 260 B static.
+**Done (this item's first step, on the glass 2026-10-08, `v1.1.0-50`):**
+48 592 B of static data out of internal RAM (link map, `_heap_start` from
+`0x3fcb6f00` to `0x3fcab268`). Measured on `torget-216-02` with the window
+closed: free 143 215 to 153 135 B (was 98 000 to 109 000), largest block
+57 344 to 65 536 B (was 31 744 in every probe), low-water 95 315 B (was
+58 759), Wi-Fi up in 8 s. The first stack line showed only IDF's own small
+tasks in the eight lowest, so the line now lists every task; our tasks'
+figures are the next thing to read. 36.7 KB of
+our buffers via `EXT_RAM_BSS_ATTR`, and 12 KB of ESP-IDF's own lwip,
+wpa_supplicant and Wi-Fi statics that the Kconfig value lets IDF place in
+PSRAM by its own rules. If Wi-Fi misbehaves after this lands, that IDF part is
+the first suspect: it is the one piece not chosen here. Plus a once-a-minute
+stack line. **Open, in order:**
+(1) read the stack line for a day and right-size the stacks; (2) move the
+pollers' stacks to PSRAM (`CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY` is
+already `y`): tokens, max-tracker, agent-status, needs-you, merge-queue,
+github, relay, about 50 KB, after an audit that none of them writes flash or
+NVS from its own task (the LVGL task does, via TID's sound and LABS, and must
+stay internal); (3) with that headroom, decide whether the LVGL draw buffers
+go internal (`use_psram=false`, 23 KB fixed) to remove the per-flush malloc
+altogether; (4) low priority: Wi-Fi buffer counts (touches OBS-45) and
+`mdns_free()` after discovery (~6 KB). Measure every step with the `heap:`
+line; stack usage was not measured before this item.
+

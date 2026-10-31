@@ -38,6 +38,7 @@ import json
 import math
 import re
 import secrets
+import shlex
 import threading
 import time
 import unicodedata
@@ -322,7 +323,156 @@ def approvable_tool(tool_name: Any, tool_input: Any) -> bool:
     command = command_of(tool_input)
     if not command or _COMMAND_CHAINING.search(command):
         return False
-    return bool(_APPROVABLE_COMMAND.match(command))
+    return bool(_APPROVABLE_COMMAND.match(command)) and \
+        shell_command_is_safe(command)
+
+
+# The prefix regex above names the FAMILY; these decide the SHAPE. A recognised
+# first word with a mutating flag ("git branch -D", "make -f evil.mk",
+# "git diff --output=...") is not a safe command, so the flags are checked
+# against small allowlists here. One classifier for both providers: the Codex
+# adapter used to be the only caller, which left the Claude path with the
+# prefix regex alone (security review 2026-09-22).
+_SAFE_BUILD_TARGETS = frozenset({"all", "build", "test", "check"})
+_SAFE_NPM_FLAGS = frozenset({"--silent", "--if-present", "--ignore-scripts"})
+_SAFE_GIT_STATUS_FLAGS = frozenset({"--short", "-s", "--branch", "-b",
+                                    "--porcelain"})
+_SAFE_GIT_LOG_SHOW_FLAGS = frozenset({"--oneline", "--decorate", "--graph",
+                                      "--stat", "--patch", "--no-color"})
+_SAFE_GIT_DIFF_FLAGS = frozenset({"--stat", "--name-only", "--name-status",
+                                  "--check", "--no-color", "--cached", "--staged"})
+
+
+def _plain_arguments(arguments: list[str]) -> bool:
+    return all(not argument.startswith("-") for argument in arguments)
+
+
+def _make_or_ninja_is_safe(arguments: list[str]) -> bool:
+    for argument in arguments:
+        if argument.casefold() not in _SAFE_BUILD_TARGETS:
+            return False
+    return True
+
+
+def _cmake_build_is_safe(arguments: list[str]) -> bool:
+    if len(arguments) < 2 or arguments[0].casefold() != "--build" or \
+            arguments[1].startswith("-"):
+        return False
+    index = 2
+    while index < len(arguments):
+        argument = arguments[index].casefold()
+        if argument == "--verbose":
+            index += 1
+        elif argument in {"--parallel", "-j"}:
+            index += 1
+            if index < len(arguments) and not arguments[index].startswith("-"):
+                if not arguments[index].isdigit():
+                    return False
+                index += 1
+        elif argument == "--config":
+            index += 1
+            if index >= len(arguments) or arguments[index].startswith("-"):
+                return False
+            index += 1
+        elif argument == "--target":
+            index += 1
+            targets = 0
+            while index < len(arguments) and not arguments[index].startswith("-"):
+                if arguments[index].casefold() not in _SAFE_BUILD_TARGETS:
+                    return False
+                targets += 1
+                index += 1
+            if not targets:
+                return False
+        elif argument.startswith("--target="):
+            if argument.partition("=")[2] not in _SAFE_BUILD_TARGETS:
+                return False
+            index += 1
+        else:
+            return False
+    return True
+
+
+def _npm_is_safe(arguments: list[str]) -> bool:
+    if not arguments:
+        return False
+    if arguments[0].casefold() == "test":
+        flags = arguments[1:]
+    elif len(arguments) >= 2 and arguments[0].casefold() == "run" and \
+            arguments[1].casefold() in {"test", "build"}:
+        flags = arguments[2:]
+    else:
+        return False
+    return all(flag.casefold() in _SAFE_NPM_FLAGS for flag in flags)
+
+
+def _git_is_safe(arguments: list[str]) -> bool:
+    if not arguments:
+        return False
+    subcommand = arguments[0].casefold()
+    tail = arguments[1:]
+    if subcommand == "status":
+        return all(flag.casefold() in _SAFE_GIT_STATUS_FLAGS for flag in tail)
+    if subcommand == "branch":
+        return not tail or tail == ["--show-current"]
+    if subcommand in {"log", "show"}:
+        return all(not argument.startswith("-") or
+                   argument.casefold() in _SAFE_GIT_LOG_SHOW_FLAGS
+                   for argument in tail)
+    if subcommand != "diff":
+        return False
+    paths_only = False
+    for argument in tail:
+        if paths_only:
+            continue
+        if argument == "--":
+            paths_only = True
+        elif argument.startswith("-") and \
+                argument.casefold() not in _SAFE_GIT_DIFF_FLAGS:
+            return False
+    return True
+
+
+def shell_command_is_safe(command: Any) -> bool:
+    """Permit only small, read-only shapes within the coarse base allowlist."""
+    if not isinstance(command, str):
+        return False
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return False
+    if not tokens:
+        return False
+    if tokens[0] == "./test/run.sh":
+        return len(tokens) == 1
+    family = tokens[0].casefold()
+    arguments = tokens[1:]
+    if family in {"make", "ninja"}:
+        return _make_or_ninja_is_safe(arguments)
+    if family == "cmake":
+        return _cmake_build_is_safe(arguments)
+    if family == "npm":
+        return _npm_is_safe(arguments)
+    if family == "git":
+        return _git_is_safe(arguments)
+    if family in {"ls", "cat", "head", "tail", "wc", "grep", "rg"}:
+        return _plain_arguments(arguments)
+    if family == "pytest":
+        return _plain_arguments(arguments)
+    if family in {"python", "python3"}:
+        return len(arguments) >= 2 and arguments[:2] == ["-m", "unittest"] \
+            and _plain_arguments(arguments[2:])
+    if family == "cargo":
+        return len(arguments) >= 1 and arguments[0].casefold() in {"test", "build"} \
+            and _plain_arguments(arguments[1:])
+    if family == "go":
+        return len(arguments) >= 1 and arguments[0].casefold() == "test" and \
+            _plain_arguments(arguments[1:])
+    if family == "ctest":
+        return _plain_arguments(arguments)
+    if family == "idf.py":
+        return len(arguments) == 1 and arguments[0].casefold() == "build"
+    return False
 
 
 def question_view(question: Dict[str, Any],

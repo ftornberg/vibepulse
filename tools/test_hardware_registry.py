@@ -581,6 +581,9 @@ class RepositoryRegistryTests(unittest.TestCase):
             {
                 "solelkollen_app": "TORGET_HAVE_SOLELKOLLEN",
                 "vibbe_app": "TORGET_HAVE_BUDDY",
+                # TID lives in this repository but is opt-in (TORGET_WITH_TIME,
+                # 2.16 only), so it too must stay behind its own guard.
+                "time_app": "TORGET_HAVE_TIME",
             },
         )
 
@@ -697,14 +700,17 @@ class RepositoryRegistryTests(unittest.TestCase):
         script = (repo / "test/run.sh").read_text(encoding="utf-8")
         self.assertIn("PYTHON_BIN=${PYTHON_BIN:-python3}", script)
         self.assertIn("sys.version_info >= (3, 11)", script)
-        self.assertRegex(
-            script,
-            r"yaml\.__version__\s*==\s*['\"]6\.0\.3['\"]",
-        )
+        # The PyYAML and Pillow releases are read from requirements-dev.txt;
+        # a literal copy here once failed the gate on a Dependabot bump.
+        self.assertIn("yaml_pin=$(pin_of PyYAML)", script)
+        self.assertIn("pillow_pin=$(pin_of Pillow)", script)
+        self.assertIn("../requirements-dev.txt", script)
+        self.assertIn("yaml.__version__ == sys.argv[1]", script)
         self.assertIn("import PIL", script)
-        self.assertRegex(
+        self.assertIn("PIL.__version__ == sys.argv[2]", script)
+        self.assertNotRegex(
             script,
-            r"PIL\.__version__\s*==\s*['\"]12\.3\.0['\"]",
+            r"(?:yaml|PIL)\.__version__\s*==\s*['\"][0-9]",
         )
         self.assertLess(script.index("sys.version_info"), script.index("\ncc "))
 
@@ -890,32 +896,37 @@ class RepositoryRegistryTests(unittest.TestCase):
         }
         self.assertEqual(
             verified_ids,
-            {"display.amoled", "touch.controller", "radio.wifi-24"},
+            {"display.amoled", "touch.controller", "radio.wifi-24",
+             "audio.speaker-output", "input.pwr-key"},
         )
         for capability_id in verified_ids:
             with self.subTest(capability=capability_id):
                 capability = registry.capabilities[capability_id]
+                # The speaker (2026-10-05) and the PWR button (2026-10-08)
+                # were seen on the second 2.16 unit only; they say nothing
+                # about torget-home-01.
+                second_unit_only = {"audio.speaker-output", "input.pwr-key"}
                 self.assertEqual(
                     capability["verification"]["unit"],
-                    "torget-home-01",
+                    "torget-216-02" if capability_id in second_unit_only
+                    else "torget-home-01",
                 )
                 self.assertTrue(capability["verification"]["test"].strip())
                 sources = {
                     finding["source"] for finding in capability["evidence"]
                     if finding["field"] == "unit_verified"
                 }
-                expected_source = (
-                    "torget-physical-2026-08-27-vibepulse"
-                    if capability_id == "touch.controller"
-                    else "torget-physical-2026-08-06"
-                )
+                expected_source = {
+                    "touch.controller": "torget-physical-2026-08-27-vibepulse",
+                    "audio.speaker-output": "torget-physical-2026-10-05-tid-sound",
+                    "input.pwr-key": "torget-physical-2026-10-08-pwr-button",
+                }.get(capability_id, "torget-physical-2026-08-06")
                 self.assertEqual(sources, {expected_source})
 
     def test_repository_required_truth_distinctions(self):
         registry = self.load_repository_registry()
 
-        for capability_id in (
-                "audio.microphones", "audio.speaker-output"):
+        for capability_id in ("audio.microphones",):
             with self.subTest(capability=capability_id):
                 self.assertEqual(
                     registry.capabilities[capability_id]["states"][
@@ -1030,7 +1041,7 @@ class RepositoryRegistryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout,
-            "OK: 30 capabilities, 13 sources, 1 units\n",
+            "OK: 31 capabilities, 17 sources, 2 units\n",
         )
 
     def test_repository_registry_loads(self):
@@ -1054,6 +1065,7 @@ class RepositoryRegistryTests(unittest.TestCase):
             "usb.device",
             "usb.host",
             "input.key3",
+            "input.pwr-key",
             "input.boot-button",
             "antenna.onboard",
             "antenna.ipex-mod",
@@ -1069,7 +1081,7 @@ class RepositoryRegistryTests(unittest.TestCase):
             "soc.pwm-rmt-twai",
         }
         self.assertEqual(set(registry.capabilities), expected_capabilities)
-        self.assertEqual(len(registry.capabilities), 30)
+        self.assertEqual(len(registry.capabilities), 31)
 
         display = registry.capabilities["display.amoled"]
         self.assertEqual(
@@ -1098,6 +1110,22 @@ class RepositoryRegistryTests(unittest.TestCase):
                 self.assertTrue(expected_fields.issubset(evidenced_fields))
 
         expected_sources = {
+            "torget-physical-2026-09-25-rtc-boot-time": (
+                "physical-test", 1,
+                "findings-2026-09-25; unit=torget-216-02; "
+                "firmware=v1.1.0-26-ga3c84a3",
+            ),
+            "torget-dev-a3c84a3": ("source-code", 3, "a3c84a3"),
+            "torget-physical-2026-10-05-tid-sound": (
+                "physical-test", 1,
+                "findings-2026-10-05; unit=torget-216-02; "
+                "firmware=v1.1.0-40-gaef36a2",
+            ),
+            "torget-physical-2026-10-08-pwr-button": (
+                "physical-test", 1,
+                "findings-2026-10-08; unit=torget-216-02; "
+                "firmware=v1.1.0-50-g8acb202",
+            ),
             "torget-physical-2026-08-30-vibepulse-stale-recovery": (
                 "physical-test", 1,
                 "findings-2026-08-30; unit=torget-home-01; "
@@ -1164,11 +1192,13 @@ class RepositoryRegistryTests(unittest.TestCase):
             ],
             "yes",
         )
+        # Heard on torget-216-02 on 2026-10-05 (TID chime, ten-chime DMA
+        # margin); see docs/superpowers/reviews/2026-10-05-tid-sound-physical.md.
         self.assertEqual(
             registry.capabilities["audio.speaker-output"]["states"][
                 "unit_verified"
             ],
-            "unknown",
+            "yes",
         )
         self.assertEqual(
             registry.capabilities["sensors.ambient-light"]["states"][
@@ -1178,7 +1208,19 @@ class RepositoryRegistryTests(unittest.TestCase):
         )
         self.assertEqual(
             registry.capabilities["rtc.pcf85063atl"]["constraints"][0],
-            "battery backup is not physically verified",
+            "battery backup through a full power loss is not verified: "
+            "with the cell disconnected the oscillator stops (OS=1) within "
+            "seconds; with the cell fitted the clock survived a PMU power "
+            "cycle on 2026-09-25",
+        )
+        self.assertEqual(
+            registry.capabilities["rtc.pcf85063atl"]["states"][
+                "firmware_enabled"
+            ],
+            "yes",
+        )
+        self.assertEqual(
+            registry.units["torget-216-02"]["battery"], "fitted",
         )
         self.assertEqual(
             registry.capabilities["usb.host"]["states"]["soc_capable"],
