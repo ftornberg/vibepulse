@@ -25,9 +25,9 @@
   "about": {
     "wordY": 24,
     "labelX": 74,
-    "firstLineY": 140,
-    "lineGap": 62,
-    "backY": 285,
+    "firstLineY": 100,
+    "lineGap": 57,
+    "backY": 340,
     "footerY": 442
   },
   "fonts": {
@@ -39,6 +39,8 @@
   },
   "aboutRows": [
     "FIRMWARE",
-    "ADDRESS"
+    "ADDRESS",
+    "POWER",
+    "CLOCK"
   ]
 }

@@ -12,6 +12,7 @@
 #include "interaction_relay_net.h"
 #endif
 #include "torget.h"
+#include "agent_monitor.h"
 #include "usage_screen.h"
 #include "settings_menu.h"
 
@@ -98,6 +99,15 @@ void tokens_apply_github(const tk_github_status *status) {
   usage_screen_apply_github(status);
 }
 
+void tokens_apply_merge_queue(tk_merge_queue *queue) {
+#if TK_MERGE_QUEUE
+  if (!queue) return;
+  tk_agent_monitor_apply_merge_queue(queue, torget_now_us());
+#else
+  (void)queue; /* off on this board: never a card */
+#endif
+}
+
 void tokens_show_view(int index) {
   usage_screen_show_view(index);
 }
@@ -160,6 +170,9 @@ static void create(lv_obj_t *root) {
   tokens_net_start();
   tokens_agent_net_start();
   tokens_github_net_start();
+#if TK_MERGE_QUEUE
+  tokens_merge_queue_net_start();
+#endif
   tokens_needs_you_net_start();
 #if CONFIG_TK_VIBEPULSE_INTERACTION_RELAY || \
     CONFIG_TK_VIBEPULSE_AGENT_STATUS_RELAY

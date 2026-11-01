@@ -32,7 +32,7 @@ redder than the release:
 
 ```powershell
 $ValidationRoot = Join-Path $env:TEMP ("vibepulse-validation-" + [guid]::NewGuid())
-git clone https://github.com/niclasvestlund-YT/vibepulse.git $ValidationRoot
+git clone https://github.com/ftornberg/vibepulse.git $ValidationRoot
 git -C $ValidationRoot checkout --detach v1.0.0
 git -C $ValidationRoot describe --tags --always --dirty
 git -C $ValidationRoot status --short

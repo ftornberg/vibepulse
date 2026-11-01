@@ -20,6 +20,11 @@ CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
 CONFIG_SPIRAM_RODATA=y
+# Statisk CPU-data (HTTP-kroppar, tolkade nyttolaster, UI-tillstånd) får
+# ligga i PSRAM via EXT_RAM_BSS_ATTR (platform/ext_ram.h). Internminnet är
+# panelens knappa resurs: ~100 KB fritt i drift, största block 31 744 B
+# (minnesförstudien 2026-10-08, OBS-47). Vaktas i cmake/torget_memory_guard.
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
 # (2026-08-16: prövade CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP för att lätta det
 # interna heapet — gjorde det VÄRRE, min-fritt föll till 16 byte och LVGL-tasken
 # fastnade i låst render. Reverterat. Roten är LVGL:s 96 KB-pool i internt BSS;
@@ -27,6 +32,9 @@ CONFIG_SPIRAM_RODATA=y
 
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_FREERTOS_HZ=1000
+# uxTaskGetSystemState för stackraden i main.c (var 60:e s): ingen task utom
+# chime hade en uppmätt högvattenlinje, och ~90 KB internminne är stackar.
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
 
 # --- Diagnostik: pinnat med flit, inte ärvt (OBS-02, OBS-28, OBS-35) ---
 # En panik sparar en ELF-coredump i flashpartitionen "coredump" innan

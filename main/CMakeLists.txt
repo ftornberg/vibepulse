@@ -8,7 +8,7 @@
 # torget_ota: bootens hälsogrind (boot_health.h) och KEY3:s underhållshåll.
 # torget_wifi: nätverkslistan i NVS + setupfönstret som lägger till en ny
 # plats utan ombygge (docs/wifi.md).
-set(TORGET_MAIN_REQUIRES torget_app app_tokens torget_ota torget_wifi torget_board)
+set(TORGET_MAIN_REQUIRES torget_app app_tokens torget_ota torget_wifi torget_board torget_power torget_audio)
 # OBS $ENV{}: den här filen körs TVÅ gånger — en gång i ESP-IDF:s
 # early-expansion (då REQUIRES läses ut) och en gång i det riktiga bygget. I
 # expansionspasset syns INTE cache-/normalvariablerna som rot-CMakeLists.txt
@@ -23,6 +23,9 @@ endif()
 if(EXISTS "$ENV{TORGET_BUDDY_DIR}/app_buddy")
   list(APPEND TORGET_MAIN_REQUIRES app_buddy)
 endif()
+if("$ENV{TORGET_APP_TIME}" STREQUAL "1")
+  list(APPEND TORGET_MAIN_REQUIRES app_time)
+endif()
 
 idf_component_register(
   SRCS "main.c"
@@ -32,7 +35,10 @@ idf_component_register(
        "../platform/wifi_status_assets.c"
        "../platform/boot_screen.c"
        "../platform/settings_menu.c"
+       "../platform/battery_badge.c"
+       "../platform/corner_probe.c"
        "../platform/button_arbitration.c"
+       "../platform/glass_claim.c"
   # ".." ger `#include "secrets.h"` (gitignorad, kopieras ur secrets.h.example)
   INCLUDE_DIRS "." ".." "../platform"
   REQUIRES ${TORGET_MAIN_REQUIRES}
@@ -53,6 +59,9 @@ if(EXISTS "$ENV{TORGET_SOLELKOLLEN_DIR}/app_solelkollen")
 endif()
 if(EXISTS "$ENV{TORGET_BUDDY_DIR}/app_buddy")
   target_compile_definitions(${COMPONENT_LIB} PRIVATE TORGET_HAVE_BUDDY)
+endif()
+if("$ENV{TORGET_APP_TIME}" STREQUAL "1")
+  target_compile_definitions(${COMPONENT_LIB} PRIVATE TORGET_HAVE_TIME)
 endif()
 
 # lv_font_conv-fonterna inkluderar "lvgl/lvgl.h" om inte det här är satt.

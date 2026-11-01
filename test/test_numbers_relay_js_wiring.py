@@ -82,7 +82,7 @@ class NumbersRelayJsWiringTests(unittest.TestCase):
         setup_node = [
             step
             for step in numbers_job["steps"]
-            if step.get("uses") == "actions/setup-node@v4"
+            if str(step.get("uses", "")).startswith("actions/setup-node@")
         ]
         self.assertEqual(len(setup_node), 1)
         self.assertEqual(setup_node[0]["with"]["node-version"], 22)
@@ -118,7 +118,7 @@ class NumbersRelayJsWiringTests(unittest.TestCase):
         self.assertIn("matrix", tokenserver_job["strategy"])
         self.assertFalse(
             any(
-                step.get("uses") == "actions/setup-node@v4"
+                str(step.get("uses", "")).startswith("actions/setup-node@")
                 for step in tokenserver_job["steps"]
             )
         )

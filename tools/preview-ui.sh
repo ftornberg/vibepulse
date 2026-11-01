@@ -179,6 +179,9 @@ expected_names = {
     "torget-vibepulse-value-both.bmp",
     "torget-vibepulse-value-uneven.bmp",
     "torget-vibepulse-value-solo.bmp",
+    "torget-vibepulse-battery-charging.bmp",
+    "torget-vibepulse-battery-full.bmp",
+    "torget-vibepulse-battery-critical.bmp",
     "torget-vibepulse-needs-you-attract.bmp",
     "torget-vibepulse-needs-you-question.bmp",
     "torget-vibepulse-needs-you-question-long.bmp",
@@ -217,6 +220,13 @@ expected_names = {
     "torget-vibepulse-needs-you-codex-payoff-replacement-pre-expiry.bmp",
     "torget-vibepulse-needs-you-codex-payoff-exact-expiry.bmp",
     "torget-vibepulse-needs-you-codex-payoff-post-expiry.bmp",
+    "torget-vibepulse-merge-one.bmp",
+    "torget-vibepulse-merge-many.bmp",
+    "torget-vibepulse-merge-long-title.bmp",
+    "torget-vibepulse-merge-no-title.bmp",
+    "torget-vibepulse-merge-yields-to-waiting.bmp",
+    "torget-vibepulse-merge-after-waiting.bmp",
+    "torget-vibepulse-merge-dismissed.bmp",
 }
 wifi_global_surfaces = [
     "launcher", "claude", "codex", "value", "github", "needs-you"

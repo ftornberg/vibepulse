@@ -196,6 +196,30 @@ class TierTests(unittest.TestCase):
         self.assertFalse(approvable_tool("Edit", {}))
         self.assertFalse(approvable_tool(None, {}))
 
+    def test_destructive_flags_on_a_recognised_prefix_are_not_approvable(self):
+        # A recognised first word is not a safe command: the flags decide.
+        # These all pass the prefix regex and contain no shell metacharacter,
+        # and every one of them mutates or writes something the panel cannot
+        # see. Same strict shapes the Codex adapter already enforces.
+        for command in ("git branch -D main", "git branch -f main HEAD~5",
+                        "make -f /tmp/evil.mk", "make install",
+                        "git diff --output=/tmp/out", "pytest -p evilplugin",
+                        "ninja -f evil.ninja", "npm test --prefix /tmp/x",
+                        "cat -v /etc/passwd", "python3 -m unittest -k x"):
+            self.assertFalse(approvable_tool("Bash", {"command": command}),
+                             command)
+
+    def test_read_only_flag_shapes_stay_approvable(self):
+        for command in ("git branch", "git branch --show-current",
+                        "git diff --stat", "git status --short",
+                        "git log --oneline", "npm run test",
+                        "npm test --silent", "make test",
+                        "cmake --build build --target test",
+                        "python3 -m unittest tools.tokenserver.test_smoke",
+                        "pytest tools/tokenserver", "ls docs", "rg needle src"):
+            self.assertTrue(approvable_tool("Bash", {"command": command}),
+                            command)
+
 
 class HookResponseTests(unittest.TestCase):
     def test_question_approve_answers_with_the_chosen_label(self):

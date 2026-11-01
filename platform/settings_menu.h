@@ -94,6 +94,15 @@ void torget_settings_close(void);
  * ner igen, precis som när menyn öppnas utan nät. Avduplicerar på värdet,
  * så en oförändrad adress inte kostar en omritning. */
 void torget_settings_set_address(const char *ip);
+
+/* POWER and CLOCK: ABOUT's other two live rows. Same rule as ADDRESS —
+ * NULL or empty draws a dash, never a blank line and never a fabricated
+ * value. Deduped on the string; no-op when the overlay does not exist.
+ * The caller (main.c) owns the wording; the menu only stores and draws
+ * it. */
+void torget_settings_set_power(const char *text);
+void torget_settings_set_clock(const char *text);
+
 bool torget_settings_open_p(void);
 
 /* Håller menyn överst medan den är öppen; no-op när den är stängd.

@@ -4,6 +4,7 @@
 # därför bor listan här och ingen annanstans. Rader som börjar med # är
 # kommentarer; konsumenterna kör tr -d '\r' | grep -v '^#' före bruk.
 tools.tokenserver.test_github_monitor
+tools.tokenserver.test_merge_queue
 tools.tokenserver.test_tokenserver
 tools.tokenserver.test_agent_status
 tools.tokenserver.test_usage_history

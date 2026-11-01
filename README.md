@@ -1,6 +1,12 @@
 # VibePulse
 
-[![CI](https://github.com/niclasvestlund-YT/vibepulse/actions/workflows/ci.yml/badge.svg)](https://github.com/niclasvestlund-YT/vibepulse/actions/workflows/ci.yml)
+[![CI](https://github.com/ftornberg/vibepulse/actions/workflows/ci.yml/badge.svg)](https://github.com/ftornberg/vibepulse/actions/workflows/ci.yml)
+
+Continued independently from [niclasvestlund-YT/vibepulse](https://github.com/niclasvestlund-YT/vibepulse)
+by Niclas Vestlund (MIT, see [LICENSE](LICENSE)). History up to v1.1.0 and the
+issue and PR numbers it links to are the original project's; the former fork,
+with its own pull requests and reviews, is archived at
+[ftornberg/vibepulse-fork-archive](https://github.com/ftornberg/vibepulse-fork-archive).
 
 ![VibePulse: quota, a NEEDS YOU alert, and the Max Tracker heatmap](docs/img/hero.png)
 
@@ -11,7 +17,8 @@ too: one command moves it onto whatever WiFi you are on today, and one
 button-hold on the panel opens its own settings on the glass.**
 
 Claude Code and Codex usage, live agent activity, and a full-screen
-**NEEDS YOU** alert you can answer with a tap. A three-second hold on the
+**NEEDS YOU** alert you can answer with a tap, and a green **READY TO MERGE**
+card when your review agents have a pull request waiting only for you. A three-second hold on the
 panel's one user button opens **SETTINGS** on the glass — update the firmware,
 teach it a new network, choose Labs displays, or read its address. A ~$30 ESP32-S3 panel plus a
 core, pure-stdlib Python service on your Mac or Windows PC. Local mode needs no
@@ -180,7 +187,8 @@ maxed out.
 Both providers get equal treatment — same pages, same alert, their own
 accent colour:
 
-**Codex weekly quota**
+**Codex weekly quota** (hidden with `TK_CODEX_PAGES 0` in `secrets.h` on a
+Claude-only desk)
 
 ![Codex weekly quota](docs/img/vibepulse-codex-week.png)
 
@@ -254,6 +262,28 @@ use the explicit setup command for new installations. The numbers relay and
 interaction relay are different privacy choices and neither is enabled by the
 plugin. Installing the Codex plugin does not enable the encrypted interaction
 relay or the live agent status relay.
+
+### Ready to merge
+
+If you run local agent-team orchestrators that review pull requests, the
+panel can tell you when one is done and only a person can finish it. The
+card borrows the glass the same way a finished agent does, but in its own
+green, so "ready to merge" never reads as "an agent is waiting".
+
+<table>
+<tr>
+<td width="50%"><img src="docs/img/merge-queue/vibepulse-merge-one.png" alt="READY TO MERGE card with the project and the pull request's number and title" width="100%"></td>
+<td width="50%"><img src="docs/img/merge-queue/vibepulse-merge-many.png" alt="READY TO MERGE card for three pull requests: the first number plus two more" width="100%"></td>
+</tr>
+</table>
+
+A new pull request pulses for 45 seconds and then stays as a still card; a
+tap dismisses it until a new one arrives. A **NEEDS YOU** prompt or a
+finished agent always wins the glass. Point the host at each orchestrator's
+loopback port with `vibepulse_setup.py merge-queue add <port>`. Titles stay
+on your LAN and never go to a relay; an orchestrator that is down is
+reported as such instead of counted as zero. The 2.16-inch panel only for
+now; `#define TK_MERGE_QUEUE 0` in `secrets.h` leaves it out of the build.
 
 ### Optional GitHub project pulse
 
@@ -561,7 +591,7 @@ shell and in Windows PowerShell 5.1 and 7:
 **Claude Code**
 
 ```
-git clone https://github.com/niclasvestlund-YT/vibepulse.git
+git clone https://github.com/ftornberg/vibepulse.git
 cd vibepulse
 claude "Set up VibePulse for me: help me fill in secrets.h, build and flash the board over USB, and start the tokenserver on this computer."
 ```
@@ -569,7 +599,7 @@ claude "Set up VibePulse for me: help me fill in secrets.h, build and flash the 
 **Codex**
 
 ```
-git clone https://github.com/niclasvestlund-YT/vibepulse.git
+git clone https://github.com/ftornberg/vibepulse.git
 cd vibepulse
 codex "Set up VibePulse for me: help me fill in secrets.h, build and flash the board over USB, and start the tokenserver on this computer."
 ```
@@ -672,6 +702,33 @@ has shared LVGL simulator coverage; physical memory and touch review are
 pending before release. [Setup, defaults and future experiments](docs/labs/README.md).
 Countdown clocks and coding quotes remain concepts for a later Labs addition.
 
+## TID: a clock, a pomodoro and a timer
+
+A second, opt-in app for the 2.16 panel that has nothing to do with agents.
+**The side the panel stands on chooses the face**, so there is no menu: buttons
+to the right shows the clock (the panel's natural resting pose), buttons to the
+left a pomodoro (25 / 5 min, a 15 min break after four rounds), buttons up a
+plain timer with 20, 40 and 50 minute presets. A ring around the digits counts
+the seconds, always moving clockwise, or shows the time left.
+
+<p align="center">
+  <img src="docs/img/time-clock.png" width="31%" alt="TID clock face: 10:09 with a clockwise seconds ring two-thirds full">
+  &nbsp;
+  <img src="docs/img/time-pomodoro-running.png" width="31%" alt="TID pomodoro: FOCUS 21:48 with the ring showing the time left">
+  &nbsp;
+  <img src="docs/img/time-timer-select.png" width="31%" alt="TID timer waiting for a choice of 20, 40 or 50 minutes">
+</p>
+
+Tap to start, pause and resume; a long press opens the launcher. When a
+timer ends it can chime (three rising notes, two falling ones when a pomodoro
+break is over, silent at night), toggled by the
+speaker symbol and built in with `TK_TID_SOUND`. A NEEDS YOU
+alert still reaches you: the panel switches to VibePulse for the question and
+returns to TID after the answer. TID is off by default (`-DTORGET_WITH_TIME=ON`
+to build it); its rising chime and its break cue are heard on the owner's second 2.16 unit. It runs on the owner's 2.16 panel, with the
+side mapping measured there. [How it works, how to build it and its
+limits](docs/time-app.md).
+
 ## One button, one menu
 
 **2.41 V2:** hold **BOOT for three seconds** to open SETTINGS, then choose
@@ -688,7 +745,7 @@ controls, not part of normal use. Hold KEY3 for three seconds and
   &nbsp;
   <img src="docs/img/vibepulse-settings-no-address.png" width="31%" alt="The same menu on a panel with no network: UPDATE is greyed out while WIFI, LABS and ABOUT stay lit">
   &nbsp;
-  <img src="docs/img/vibepulse-settings-about.png" width="31%" alt="The ABOUT page showing only the firmware version and the panel address, with a BACK control">
+  <img src="docs/img/vibepulse-settings-about.png" width="31%" alt="The ABOUT page showing the firmware version, the panel address, POWER and CLOCK, with a BACK control">
 </p>
 <p align="center"><em>Real 480×480 frames from the shared LVGL firmware renderer: the menu, the same menu on a panel with no network, and ABOUT.</em></p>
 
@@ -698,9 +755,9 @@ controls, not part of normal use. Hold KEY3 for three seconds and
   [Take it with you](#take-it-with-you).
 - **LABS** saves optional display features; restart to apply them. See
   [Vibe Labs](#vibe-labs-start-small-add-later).
-- **ABOUT** shows the firmware version and the panel's address, and nothing
-  else. No token, no device key, no password: every line on it is already in
-  the logs or on the glass somewhere else.
+- **ABOUT** shows the firmware version, the panel's address, and POWER and
+  CLOCK rows. No token, no device key, no password: every line on it is
+  already in the logs or on the glass somewhere else.
 
 **The menu replaced a guess.** The same hold used to open one window or the
 other depending on whether the panel happened to have an address. The panel
@@ -740,6 +797,56 @@ cannot keep.
 > (`v1.0.0-67-ge51b79f`), but the static on-panel review — §3 of the manual
 > test — has not been run, so nothing here is a physical verification; that
 > review is the next gate.
+
+### Battery badge
+
+A 2.16 panel with the optional 3.7 V cell fitted shows it bottom-right
+on every page: green with a bolt on USB, white by percentage on the
+cell, yellow at 20 %, red and pulsing at 5 %. The percentage is the
+PMU's own fuel gauge, never an estimate; when the PMU cannot be read or
+reports no battery, the badge draws only its outline with a dash; a
+missing gauge value on the cell draws the outline without a number, and a
+gauge that says 0 % without a voltage reading below 3.5 V to confirm it
+counts as missing rather than empty.
+SETTINGS → ABOUT carries the same reading live — state, percentage, and
+voltage while on the cell. Brightness is capped at the night level below
+20 % battery, and the LABS row NIGHT DIM dims the glass to that level on a
+schedule, 23:00–07:00 local by default, whenever the panel has a valid
+clock. That clock now comes from the onboard RTC at boot when its reading
+is trustworthy (the chip has a backup supply on the schematic, not yet
+verified through a power loss), and from NTP once the network is up; every
+NTP sync is written back to the RTC, and ABOUT's CLOCK row names the source
+(`RTC + NTP`, `RTC ONLY`, `NTP ONLY`, `NOT SET`). Local time follows
+`TG_TIMEZONE` in `secrets.h` (Europe/Stockholm rules by default), which
+also makes the RUNS OUT line local rather than UTC. The charge profile
+stays at the PMU's defaults; see the design in
+[`docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-night-dim-design.md`](docs/superpowers/specs/2026-09-24-battery-badge-and-rtc-night-dim-design.md).
+
+<p align="center">
+  <img src="docs/img/vibepulse-battery-charging.png" width="31%" alt="Week page with a green charging badge and 71 % bottom-right">
+  &nbsp;
+  <img src="docs/img/vibepulse-battery-critical.png" width="31%" alt="Week page with a red pulsing critical badge and 4 % bottom-right">
+</p>
+<p align="center"><em>Real 480×480 simulator frames: charging on USB at 71 %, and critical at 4 %.</em></p>
+
+> **Evidence, honestly:** these frames come from the shared LVGL
+> renderer in the simulator; the policy (states, hysteresis, dwell, cap)
+> and the ABOUT texts are host-tested, and the frames are pinned. The
+> feature is in source and simulator-reviewed. On 2026-09-25 the owner's
+> 2.16 unit with a cell fitted confirmed the PMU decode (charging, 88–95 %,
+> 4.1 V) and the RTC boot time: a PMU power cycle logged `tid från RTC`
+> seven seconds before WiFi; without the cell the RTC loses its oscillator
+> and the clock waits for NTP, as designed
+> ([review](docs/superpowers/reviews/2026-09-25-rtc-boot-time-physical.md)).
+> The night schedule and the badge's on-battery states are still
+> unverified on the panel. The RTC only ever sets the clock on a true power-on boot: system
+> time survives soft restarts (OTA, panic, watchdog), so those boots log
+> `klockan behållen över omstarten` and leave the RTC alone. The first
+> power-on boot on this firmware logs `RTC opålitlig` (a fresh chip says
+> year 2000) until the first NTP write-back; the real test is a later
+> power-on boot with no network, which must log `tid från RTC`. The
+> schedule and the local RUNS OUT time also apply on the 2.41 V2 once NTP
+> has synced; that board has no RTC path.
 
 ## Over-the-air updates
 
@@ -926,8 +1033,9 @@ that build and remain CI-built and **not flashed**.
 
 Keys: `[` / `]` change VibePulse page, `S` cycles agent status, `M` cycles
 Max Tracker fixtures, `T` re-feeds tokens, `G` simulates a new GitHub star,
-`N` moves to the next app, `L` opens the launcher, and `1`-`4` pick a
-Solelkollen fixture when that companion is checked out.
+`N` moves to the next app, `L` opens the launcher, `B` steps the battery
+badge through unknown, charging, full, on battery, low and critical, and
+`1`-`4` pick a Solelkollen fixture when that companion is checked out.
 
 `K` is KEY3 itself, polled raw rather than on an edge, so the bench drives
 the real time gesture: hold `K` for three seconds and SETTINGS opens, release

@@ -39,6 +39,7 @@
 #include "needs_you_send_policy.h"
 #include "agent_status_parse.h"
 #include "github_status_parse.h"
+#include "merge_queue_parse.h"
 #include "max_tracker_parse.h"
 #include "boot_screen.h"
 #include "ota_ui.h"
@@ -50,6 +51,10 @@
 #include "button_arbitration.h"
 #include "settings_menu.h"
 #include "wifi_slots.h"
+#include "../platform/battery_badge.h"
+#include "../components/torget_power/battery_policy.h"
+#include "../components/torget_power/clock_policy.h"
+#include "../platform/corner_probe.h"
 
 /* VibePulse är det här repots app och ligger ALLTID först i registret, så
  * launchern och den obevakade rundan pekar på samma index oavsett vilka
@@ -221,7 +226,11 @@ static void dump_draw_buf_frame(lv_draw_buf_t *buf, const char *tag) {
   else printf("snapshot: %s\n", path);
 }
 
+/* Batteribrickans täckpredikat, definierat vid key3_tick. */
+static void badge_cover_sync(void);
+
 static void dump_obj_frame(lv_obj_t *root, const char *tag) {
+  badge_cover_sync();
   /* QA-dumpar får inte bero på var SDL:s nästa refresh råkar ligga. Tvinga
    * layout + redraw före snapshot så ett helt tillstånd fångas atomiskt. */
   lv_obj_update_layout(root);
@@ -236,6 +245,7 @@ static void dump_obj_frame(lv_obj_t *root, const char *tag) {
  * one shared Wi-Fi mark lives.  Snapshotting only lv_screen_active() silently
  * omitted it even though the physical display composites both layers. */
 static void dump_frame(const char *tag) {
+  badge_cover_sync();
   lv_obj_t *screen = lv_screen_active();
   lv_obj_t *top = lv_layer_top();
   lv_obj_update_layout(screen);
@@ -456,6 +466,61 @@ static void apply_max_tracker_fixture(int idx) {
   feed_max_tracker_file(MAX_TRACKER_FIXTURES[max_tracker_fixture_idx]);
 }
 
+/* Key B: steg genom batteritillstånd med riktiga policybeslut på
+ * låtsasmätningar — samma policy som firmware, så bilden är sann. */
+static int battery_fixture_idx = -1;
+static tg_batt_policy battery_policy;
+static const tg_batt_sample BATTERY_FIXTURES[] = {
+  { .valid = false },
+  { .valid = true, .present = true, .vbus = true, .charging = true, .percent = 71, .mv = 4020 },
+  { .valid = true, .present = true, .vbus = true, .charge_done = true, .percent = 100, .mv = 4180 },
+  { .valid = true, .present = true, .percent = 64, .mv = 3900 },
+  { .valid = true, .present = true, .percent = 18, .mv = 3650 },
+  { .valid = true, .present = true, .percent = 4, .mv = 3400 },
+};
+
+/* ABOUT:s POWER-rad för en fixtur, med firmwarens egen formulering: ett
+ * färskt policybeslut på mätningen, sedan samma tg_batt_power_text. */
+static void battery_fixture_power_text(int idx, char *out, size_t cap) {
+  tg_batt_policy fresh = {0};
+  tg_batt_verdict v = tg_batt_update(&fresh, &BATTERY_FIXTURES[idx], 0);
+  tg_batt_power_text(&BATTERY_FIXTURES[idx], &v, out, cap);
+}
+
+static void apply_battery_fixture(int idx) {
+  const int count = (int)(sizeof BATTERY_FIXTURES / sizeof BATTERY_FIXTURES[0]);
+  battery_fixture_idx = ((idx % count) + count) % count;
+  const tg_batt_sample *s = &BATTERY_FIXTURES[battery_fixture_idx];
+  int64_t now = torget_now_us();
+  tg_batt_verdict v = tg_batt_update(&battery_policy, s, now);
+  if (battery_fixture_idx == 0) {
+    /* tre ogiltiga i rad ger UNKNOWN, som på glaset */
+    tg_batt_update(&battery_policy, s, now);
+    v = tg_batt_update(&battery_policy, s, now);
+  }
+  if (battery_fixture_idx == 5) {
+    /* fördröjningen: 30 s på <= 5 % innan CRITICAL */
+    v = tg_batt_update(&battery_policy, s, now + 31 * 1000000LL);
+  }
+  torget_battery_badge_set(v.state, v.percent);
+  char text[40];
+  tg_batt_power_text(s, &v, text, sizeof text);
+  torget_settings_set_power(text);
+}
+
+static void apply_merge_queue_file(const char *file) {
+  size_t len = 0;
+  char *json = read_fixture(file, &len);
+  tk_merge_queue queue;
+  if (json && tk_merge_queue_parse(json, len, &queue)) {
+    tokens_apply_merge_queue(&queue);
+    printf("merge-queue: %s (%d)\n", file, (int)queue.count);
+  } else {
+    printf("merge-queue: %s avvisad\n", file);
+  }
+  free(json);
+}
+
 static void apply_github_file(const char *file, bool unique_event) {
   size_t len = 0;
   char *json = read_fixture(file, &len);
@@ -671,6 +736,19 @@ static void key3_open_maintenance_window(void) {
   torget_ota_ui_set(TG_OTA_UI_OPEN, 0, 600);
 }
 
+/* Batteribrickan göms när en övertagning äger glaset — samma fyra termer som
+ * targetets tick_cb, läst ur bänkens egna motsvarigheter. Kallas varje tick
+ * OCH före varje statisk QA-dump: på glaset utvärderas predikatet var
+ * 100 ms, så varje ram panelen visar har redan gått genom det; de statiska
+ * dumparna tickar inte, och utan anropet här fotograferades brickan ovanpå
+ * Needs You. */
+static void badge_cover_sync(void) {
+  torget_battery_badge_set_covered(torget_ota_ui_notice_visible() ||
+                                   key3_maintenance_open ||
+                                   tg_wifi_setup_owns_input(key3_setup_phase) ||
+                                   tk_agent_monitor_takeover_visible());
+}
+
 /* En tick av värdlagret. `down` är knappens råa nivå, `now_us` bänkens klocka. */
 static void key3_tick(bool down, int64_t now_us) {
   static tg_button_policy policy;
@@ -694,6 +772,7 @@ static void key3_tick(bool down, int64_t now_us) {
   };
   tg_button_outputs out;
   tg_button_arbitrate(&in, &out);
+  badge_cover_sync();
 
   if (out.menu_foreground) {
     torget_settings_set_address(key3_address);
@@ -757,16 +836,30 @@ static void qa_key3_tap(void) {
   qa_key3_poll(false, 100000);
 }
 
+/* Bänkens motsvarighet till IMU-kvadranten: tangent R stegar den ett
+ * kvartsvarv. TID läser den genom samma torget_orientation() som panelen. */
+static int sim_orientation;
+int torget_orientation(void) { return sim_orientation; }
+
+/* Bänken har ingen högtalare: ljudet loggas så att testerna kan se det. */
+bool torget_audio_play(tg_audio_cue cue) {
+  printf("audio: %s\n", cue == TG_AUDIO_CUE_DONE ? "DONE"
+                         : cue == TG_AUDIO_CUE_BREAK_OVER ? "BREAK_OVER" : "?");
+  fflush(stdout);
+  return true;
+}
+
 /* Tangent 1-4: Solelkollen-fixtur. T: mata VibePulse. S: nästa agentläge.
  * L: launchern. [ och ] bläddrar VibePulse-sidor; N byter app (KEY3:s
  * appväxling utan gest). M: nästa Max Tracker-fixtur. G: simulera en ny
- * GitHub-stjärna. K är KEY3 självt, U och W fingrar på menyns rader.
+ * GitHub-stjärna. B: nästa batterifixtur. K är KEY3 självt, U och W fingrar
+ * på menyns rader.
  * LVGL:s SDL-drivrutin
  * pumpar eventen, så ren tangentbordspollning räcker — ingen indev-
  * rördragning för ett bänkverktyg. */
 static void poll_keys(lv_timer_t *t) {
   (void)t;
-  static bool held[12];
+  static bool held[14];
   const Uint8 *ks = SDL_GetKeyboardState(NULL);
 
   /* KEY3 pollas RÅTT, inte på flank: hållet är en tidsgest och tidsreglerna
@@ -775,13 +868,14 @@ static void poll_keys(lv_timer_t *t) {
    * släpp före tre sekunder och ett öppet fönster stänger i stället. */
   key3_tick(ks[SDL_SCANCODE_K] != 0, (int64_t)lv_tick_get() * 1000);
 
-  const SDL_Scancode keys[12] = { SDL_SCANCODE_1, SDL_SCANCODE_2,
+  const SDL_Scancode keys[14] = { SDL_SCANCODE_1, SDL_SCANCODE_2,
                                   SDL_SCANCODE_3, SDL_SCANCODE_4,
                                   SDL_SCANCODE_T, SDL_SCANCODE_S,
                                   SDL_SCANCODE_L, SDL_SCANCODE_N,
                                   SDL_SCANCODE_LEFTBRACKET,
                                   SDL_SCANCODE_RIGHTBRACKET,
-                                  SDL_SCANCODE_M, SDL_SCANCODE_G };
+                                  SDL_SCANCODE_M, SDL_SCANCODE_G,
+                                  SDL_SCANCODE_B, SDL_SCANCODE_R };
   /* Fingrar på menyns rader. click_row() är samma väg touch-callbacken tar,
    * så avsikten uppstår som den gör på glaset — och konsumeras av key3_tick(),
    * aldrig här. */
@@ -796,7 +890,7 @@ static void poll_keys(lv_timer_t *t) {
     row_held[i] = down;
   }
 
-  for (int i = 0; i < 12; i++) {
+  for (int i = 0; i < 14; i++) {
     bool down = ks[keys[i]];
     if (down && !held[i]) {
       if (i < 4) {
@@ -818,6 +912,11 @@ static void poll_keys(lv_timer_t *t) {
       }
       else if (i == 10)
         apply_max_tracker_fixture(max_tracker_fixture_idx + 1);
+      else if (i == 13) {
+        sim_orientation = (sim_orientation + 1) % 4;
+        printf("orientation: %d\n", sim_orientation);
+      }
+      else if (i == 12) apply_battery_fixture(battery_fixture_idx + 1);
       else {
         torget_app_show(SIM_APP_VIBEPULSE);
         apply_github_file("github-star.json", true);
@@ -1399,6 +1498,44 @@ static int run_vibepulse_static_qa(void) {
   dump_frame("vibepulse-claude-swedish-project");
   tk_agent_monitor_dismiss_current();
 
+  /* "Ready to merge": the green card on the completion surface. One PR with
+   * its title, several across projects, an over-long title (dots, and a
+   * glyph the face cannot draw), a PR without a title, then the order of
+   * precedence: a waiting agent outranks the merge card, which comes back
+   * when the agent card is dismissed. Each step dismisses so the next is
+   * news. */
+  apply_merge_queue_file("merge-queue-one.json");
+  dump_frame("vibepulse-merge-one");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-many.json");
+  dump_frame("vibepulse-merge-many");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-long.json");
+  dump_frame("vibepulse-merge-long-title");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-no-title.json");
+  dump_frame("vibepulse-merge-no-title");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-one.json");
+  attention = static_attention_snapshot(
+      TK_AGENT_PROVIDER_CLAUDE, TK_AGENT_WAITING,
+      "capture-claude-over-merge", "Torget");
+  tokens_apply_agent_status(&attention);
+  dump_frame("vibepulse-merge-yields-to-waiting");
+  tk_agent_monitor_dismiss_current();
+  dump_frame("vibepulse-merge-after-waiting");
+  tk_agent_monitor_dismiss_merge();
+  dump_frame("vibepulse-merge-dismissed");
+  apply_merge_queue_file("merge-queue-empty.json");
+
   /* Tourens två tracker-dumpar (case 15-18 i platform_tour_cb) återanvänder
    * NAMNEN "vibepulse-tracker-claude"/"-codex" för en berättande
    * coldstart→full-övergång; static-QA:n här bevisar istället FYRA skilda
@@ -1557,6 +1694,13 @@ static int run_vibepulse_static_qa(void) {
   qa_key3_hold();
   dump_overlay_frame("settings-menu");
   torget_settings_click_row(TG_SETTINGS_ROW_ABOUT);
+  {
+    char power[40];
+    battery_fixture_power_text(1, power, sizeof power); /* laddar 71 % */
+    torget_settings_set_power(power);
+  }
+  /* Samma rena funktion som panelen: RTC tillämpad och NTP synkad. */
+  torget_settings_set_clock(tg_clock_text(true, true));
   dump_overlay_frame("settings-about-found");
   qa_key3_tap();
   /* Utan adress: UPDATE tonas ner och ABOUT visar streck. Två frames som
@@ -1574,6 +1718,8 @@ static int run_vibepulse_static_qa(void) {
   qa_key3_hold();
   dump_overlay_frame("settings-menu-no-address");
   torget_settings_click_row(TG_SETTINGS_ROW_ABOUT);
+  torget_settings_set_power(NULL);
+  torget_settings_set_clock(NULL);
   dump_overlay_frame("settings-about-missing");
   qa_key3_tap();
   key3_address = "192.168.1.42";
@@ -1664,6 +1810,17 @@ static int run_vibepulse_static_qa(void) {
   tokens_apply(&value_solo);
   dump_frame("vibepulse-value-solo");
 
+  /* Batteriikonen (design 2026-09-24): laddar, full (100 %, bredaste siffran)
+   * och kritisk. */
+  tokens_show_view(VIEW_CLAUDE_FABLE);
+  apply_battery_fixture(1);
+  dump_frame("vibepulse-battery-charging");
+  apply_battery_fixture(2);
+  dump_frame("vibepulse-battery-full");
+  apply_battery_fixture(5);
+  dump_frame("vibepulse-battery-critical");
+  apply_battery_fixture(0);
+
   capture_wifi_drift_matrix();
   capture_global_wifi_matrix();
 
@@ -1722,6 +1879,96 @@ static void run_vibepulse_completion_qa(void) {
  * a human to look at, not for an assertion to pin geometry that is not approved
  * yet. Taps in the sim resolve locally via tk_needs_you_mark_answered because
  * no verdict callback is wired here (that is the app layer's later job). */
+/* Glasets anspråk genom den riktiga renderaren: launchern står framme (samma
+ * läge som när en annan app visas — VibePulse-roten är dold), ett Needs
+ * You-larm kommer och ska SYNAS, svaret ges, payoff-takten löper ut och
+ * glaset ska gå tillbaka till launchern. test/test_glass_claim_sim.py jämför
+ * ramarna: tillbaka-ramen är byte-identisk med före-ramen. */
+static int run_glass_claim_qa(void) {
+  capture_failures = 0;
+  size_t q_len = 0, idle_len = 0;
+  char *q_json = read_fixture("agent-status-needs-you-question.json", &q_len);
+  char *idle_json = read_fixture("agent-status-idle.json", &idle_len);
+  tk_agent_snapshot question, idle;
+  bool ok = q_json && idle_json &&
+            tk_agent_status_parse(q_json, q_len, &question) &&
+            tk_agent_status_parse(idle_json, idle_len, &idle);
+  free(q_json);
+  free(idle_json);
+  if (!ok) return 2;
+
+  sim_wifi_signal_bars = 3;
+  torget_wifi_status_set_mode(TG_WIFI_STATUS_NORMAL);
+  int64_t base_us = torget_now_us() + 1000000LL;
+  torget_app_show(SIM_APP_VIBEPULSE);
+  usage_screen_apply_agent(&idle, base_us);
+  torget_launcher_open();
+  torget_wifi_status_foreground();
+  dump_frame("glass-claim-before");
+
+  usage_screen_apply_agent(&question, base_us + 1000);
+  dump_frame("glass-claim-alert");
+
+  tk_agent_monitor_needs_you_tap();
+  tk_agent_monitor_needs_you_press(TK_NEEDS_YOU_VERDICT_APPROVE);
+  dump_frame("glass-claim-payoff");
+
+  usage_screen_apply_agent(&idle, base_us + 2000);
+  usage_screen_tick(base_us + 10000000LL);
+  torget_wifi_status_foreground();
+  dump_frame("glass-claim-returned");
+
+  /* The waiting pulse (Claude finished and waits for you): it claims the
+   * glass for its 45 s pulse and hands it back, while the card stays static
+   * inside VibePulse. */
+  size_t w_len = 0;
+  char *w_json = read_fixture("agent-status-claude-waiting.json", &w_len);
+  tk_agent_snapshot waiting;
+  bool w_ok = w_json && tk_agent_status_parse(w_json, w_len, &waiting);
+  free(w_json);
+  if (!w_ok) return 2;
+  int64_t pulse_us = base_us + 20000000LL;
+  torget_launcher_open();
+  torget_wifi_status_foreground();
+  dump_frame("glass-pulse-before");
+  usage_screen_apply_agent(&waiting, pulse_us);
+  dump_frame("glass-pulse-alert");
+  usage_screen_tick(pulse_us + 30000000LL);
+  dump_frame("glass-pulse-held");
+  usage_screen_tick(pulse_us + 46000000LL);
+  torget_wifi_status_foreground();
+  dump_frame("glass-pulse-returned");
+
+  /* Ready to merge: same 45 s claim in its own green. The idle snapshot
+   * clears the waiting card first so the surface is free. A tick inside the
+   * animation's last 0.6 s (37 x 1200 ms = 44.4 s < 45 s) must not start a
+   * second run, and after 45 s nothing may still breathe (review of #28). */
+  size_t m_len = 0;
+  char *m_json = read_fixture("merge-queue-one.json", &m_len);
+  tk_merge_queue merge;
+  bool m_ok = m_json && tk_merge_queue_parse(m_json, m_len, &merge);
+  free(m_json);
+  if (!m_ok) return 2;
+  int64_t merge_us = pulse_us + 60000000LL;
+  usage_screen_apply_agent(&idle, merge_us);
+  tk_agent_monitor_dismiss_current();
+  torget_launcher_open();
+  torget_wifi_status_foreground();
+  dump_frame("glass-merge-before");
+  tk_agent_monitor_apply_merge_queue(&merge, merge_us + 1000);
+  dump_frame("glass-merge-alert");
+  usage_screen_tick(merge_us + 1000 + 44800000LL);
+  dump_frame("glass-merge-held");
+  usage_screen_tick(merge_us + 1000 + 46000000LL);
+  torget_wifi_status_foreground();
+  dump_frame("glass-merge-returned");
+  if (tk_agent_monitor_merge_pulse_running()) {
+    printf("FAIL: the merge pulse still runs after its 45 s\n");
+    capture_failures++;
+  }
+  return capture_failures == 0 ? 0 : 1;
+}
+
 static int run_vibepulse_needs_you_qa(void) {
   capture_failures = 0;
   capture_needs_you_v2();
@@ -1794,12 +2041,119 @@ static int run_vibepulse_labs_qa(bool catalogue) {
   return capture_failures == 0 ? 0 : 1;
 }
 
+#ifdef TORGET_HAVE_TIME
+#include "app_time.h"
+#include "time_core.h"
+
+static int sim_app_index(const char *name) {
+  for (int i = 0; i < torget_app_count; i++)
+    if (strcmp(torget_apps[i]->name, name) == 0) return i;
+  return -1;
+}
+
+static void time_frame(int rot, const char *tag) {
+  sim_orientation = rot;
+  time_app_qa_refresh();
+  dump_frame(tag);
+}
+
+/* TID i varje tillstånd som specen listar. Allt går genom samma vägar som en
+ * touch och tickern: orienteringen är tangent R:s variabel, trycken är
+ * on_tap/on_preset, och klockan skjuts fram i stället för att vänta ut 25
+ * minuter. Exakta 480 x 480-ramar. */
+static int run_time_app_captures(void) {
+  int idx = sim_app_index("TID");
+  if (idx < 0) return 2;
+  sim_wifi_signal_bars = 3;
+  torget_wifi_status_set_mode(TG_WIFI_STATUS_NORMAL);
+  torget_wifi_status_foreground();
+  torget_app_show(idx);
+
+  /* Väggklockan låses så att klockbilden är densamma varje körning och kan
+   * pinnas i docs/img (test_docs_frame_drift.py). 10:09:40 är en udda minut:
+   * ringen växer medurs och är två tredjedelar full. */
+  time_app_qa_clock(10, 9, 40);
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock");
+  time_app_qa_time_unset(true);
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock-unset");
+  time_app_qa_time_unset(false);
+
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-idle");
+  time_app_qa_tap();
+  time_app_qa_advance(3LL * 60 * 1000000 + 12LL * 1000000);
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-running");
+  time_app_qa_tap();
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-paused");
+  time_app_qa_tap();
+  time_app_qa_advance(30LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-done");
+  time_frame(TG_TIME_ROT_CLOCK, "time-done-over-clock");
+  time_app_qa_tap();
+  time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-break");
+
+  time_frame(TG_TIME_ROT_TIMER, "time-timer-select");
+  time_app_qa_preset(1);
+  time_app_qa_advance(7LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_TIMER, "time-timer-running");
+  time_app_qa_advance(40LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_TIMER, "time-timer-done");
+  time_app_qa_tap();
+
+  /* Claude waits for you: the 45 s pulse borrows the glass, then TID comes
+   * back with the orange Claude icon above the clock. */
+  size_t w_len = 0;
+  char *w_json = read_fixture("agent-status-claude-waiting.json", &w_len);
+  tk_agent_snapshot waiting;
+  bool w_ok = w_json && tk_agent_status_parse(w_json, w_len, &waiting);
+  free(w_json);
+  if (!w_ok) return 2;
+  int64_t wait_us = torget_now_us() + 1000000LL;
+  sim_orientation = TG_TIME_ROT_CLOCK;
+  usage_screen_apply_agent(&waiting, wait_us);
+  usage_screen_tick(wait_us + 46000000LL);
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock-attention");
+
+  /* Ljudet (spec 2026-10-02): av ger en överstruken högtalare, på spelar
+   * signalen en gång. Sedan en timer som går ut BAKOM VibePulse och ändå ska
+   * låta, eftersom bevakningen går även när TID är dold. */
+  usage_screen_apply_agent(&waiting, wait_us + 50000000LL);
+  tk_agent_monitor_dismiss_current();
+  usage_screen_tick(wait_us + 51000000LL);
+  time_app_qa_speaker();
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock-sound-off");
+  printf("qa: sound-on\n");
+  time_app_qa_speaker();
+  sim_orientation = TG_TIME_ROT_TIMER;
+  time_app_qa_refresh();
+  time_app_qa_preset(0);
+  torget_app_show(SIM_APP_VIBEPULSE);
+  printf("qa: hidden-timer\n");
+  fflush(stdout);
+  time_app_qa_advance(21LL * 60 * 1000000);
+  for (int i = 0; i < 12; i++) { lv_timer_handler(); lv_delay_ms(100); }
+  torget_app_show(idx);
+
+  /* En paus som tar slut har sin egen signal. Pomodoron väntar sedan förut på
+   * den korta pausen: första trycket kvitterar den färdiga timern, andra
+   * startar pausen. */
+  printf("qa: break-over\n");
+  fflush(stdout);
+  sim_orientation = TG_TIME_ROT_POMODORO;
+  time_app_qa_refresh();
+  time_app_qa_tap();
+  time_app_qa_tap();
+  time_app_qa_advance(6LL * 60 * 1000000);
+  time_app_qa_refresh();
+  return capture_failures == 0 ? 0 : 1;
+}
+#endif
+
 int main(int argc, char **argv) {
   /* Radbuffrat även vid pipe: fixtureloggen ska överleva en kill. */
   setvbuf(stdout, NULL, _IOLBF, 0);
   lv_init();
   lv_display_t *disp = lv_sdl_window_create(TG_DISPLAY_WIDTH, TG_DISPLAY_HEIGHT);
-  lv_sdl_window_set_title(disp, "Torget — G GitHub-star, S agentstatus, T VibePulse, M Max Tracker, [ och ] vy, N nästa app, L launcher");
+  lv_sdl_window_set_title(disp, "Torget — G GitHub-star, S agentstatus, T VibePulse, M Max Tracker, [ och ] vy, N nästa app, L launcher, R orientering");
   lv_sdl_mouse_create();
 
   const char *labs_mask = getenv("TORGET_LABS_MASK");
@@ -1819,7 +2173,13 @@ int main(int argc, char **argv) {
   /* SETTINGS mellan nätlagret och OTA-ringen — samma ordning som targetet,
    * så READY-takeovern vinner över menyn på båda. */
   torget_settings_create();
+  torget_battery_badge_create();
   torget_ota_ui_create();
+
+#ifdef TORGET_HAVE_TIME
+  if (argc == 2 && strcmp(argv[1], "--time-app-captures") == 0)
+    return run_time_app_captures();
+#endif
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-labs-qa") == 0)
     return run_vibepulse_labs_qa(false);
@@ -1851,6 +2211,19 @@ int main(int argc, char **argv) {
   if (argc == 2 && strcmp(argv[1], "--vibepulse-static-qa") == 0) {
     return run_vibepulse_static_qa();
   }
+
+  /* Hörnsonden: ett mätmönster för glasets rundade hörn (platform/
+   * corner_probe.h). En frame, sedan klart; ingen del av QA-matrisen. */
+  if (argc == 2 && strcmp(argv[1], "--corner-probe") == 0) {
+    capture_failures = 0;
+    torget_corner_probe_show();
+    dump_overlay_frame("corner-probe");
+    torget_corner_probe_hide();
+    return capture_failures ? 1 : 0;
+  }
+
+  if (argc == 2 && strcmp(argv[1], "--glass-claim-qa") == 0)
+    return run_glass_claim_qa();
 
   if (argc == 2 && strcmp(argv[1], "--vibepulse-needs-you-qa") == 0) {
     return run_vibepulse_needs_you_qa();

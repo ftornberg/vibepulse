@@ -45,6 +45,7 @@ Eleven tags:
 |-----|-------|-------------|
 | `torget` | `main/main.c` | boot, WiFi candidate hunt, SNTP, heap, brightness, MADCTL |
 | `rotation` | `main/rotation.c` | IMU reads, display rotation |
+| `audio` | `components/torget_audio/audio.c` | TID's chime engine (built only with `TK_TID_SOUND`): one line per chime with the DMA block before and during playback and the task's stack headroom; refusals for memory, start failures, a possible leak, and sound disabled until reboot. ESP-IDF's own `I2S_IF`, `ES8311` and `Adev` tags add a few INFO lines per chime while the codec opens and closes; that is expected noise, not an error |
 | `torget-http` | `components/torget_net/torget_http.c` | every failed GET: error name, status, cap, and a **redacted target** — `<scheme>://<host> via LAN` or `… via relä`, never the path; `LAN svarade inte, provar reläet` when a fetch fails over to the relay |
 | `tokens` | `components/app_tokens/net.c` | /api/tokens + /api/max-tracker polls |
 | `agent-net` | `components/app_tokens/agent_net.c` | /api/agent-status poll (1 Hz, backing off to 30 s on consecutive misses; log rate-limited to 30 s) |
@@ -67,7 +68,29 @@ blind spots below), `N ihågkomna nät i NVS` and `N nät i jaktlistan`
 the WiFi scan table (deliberately permanent — it is
 the ground truth for "which networks can the 2.4 GHz-only S3 actually
 see"), `WiFi uppe ("...")`, `tid synkad`, then steady-state `hämtning ok`
-lines every 30 s and a `heap:` line every 10 s.
+lines every 30 s and a `heap:` line every 10 s. Right after NVS, a boot
+whose system clock survived a soft restart (OTA, panic, watchdog, LABS
+restart — the time syscall runs on the RTC timer) logs `klockan behållen
+över omstarten: …`; a power-on boot does not. On the 2.16 the RTC speaks
+before WiFi: `tid från RTC: …` when its reading was trusted and applied,
+`systemklockan är redan satt, RTC:n lämnas orörd` on the soft-restart
+boots above (the line ends with `källa RTC + NTP` etc. when the clock's
+provenance survived too, `källa okänd` on the first soft restart after
+upgrading to this firmware), `RTC opålitlig (OS=…, UTC-märkt=…, år …)` when
+the reading was not trusted (a fresh chip says year 2000 and has no UTC
+mark, so this is normal on the first power-on boot of the RTC firmware;
+`UTC-märkt=0` with a plausible year means a vendor demo set the chip),
+`RTC svarar inte` / `RTC gav ett ogiltigt datum` when the chip answered
+badly, or `ingen RTC att läsa` when it did not answer — each once. The
+`pcf85063` tag adds `PCF85063 hittad (Control_1 0x..)` and, at most once,
+`Control_1 0x.. rättat (STOP / 12 h)` when it had to unfreeze the clock or
+switch it to 24-hour mode. `tidszon: …` right after NVS prints the POSIX TZ
+string every local time is derived from. After `tid synkad` the
+power task logs `RTC uppdaterad från SNTP` (or `RTC kunde inte skrivas:
+…`) once per sync, and every later hourly resync logs `tid omsynkad från
+SNTP` first. The night schedule writes `natt: dimmar (…)` / `natt: dag (…)`
+once at boot and then only when its decision or the clock's validity
+changes.
 
 **Blind spots to know about:**
 
@@ -385,7 +408,13 @@ Verbatim strings worth grepping for, and what they mean:
 | Signature | Source | Meaning / action |
 |-----------|--------|------------------|
 | `WiFi tappat ("…", orsak 201)` | fw `torget` | network invisible: wrong SSID or 5 GHz-only. 15/204 = bad password. |
-| `ingen tid från SNTP ännu` | fw `torget` | clock unset — but fetches proceed anyway and TLS fails as generic transport errors (OBS-15). Treat later cert/transport noise as *this*. |
+| `ingen tid från SNTP ännu` | fw `torget` | clock unset — but fetches proceed anyway and TLS fails as generic transport errors (OBS-15). Treat later cert/transport noise as *this*. Since the RTC firmware a trusted `tid från RTC` earlier in the boot means the clock is set anyway and TLS works; `RTC opålitlig` plus this line is the no-clock case. |
+| `natt: dimmar/dag (HH:MM, schema SSSS–EEEE, klocka giltig/saknas)` | fw `torget` | the night schedule's decision: the local time it judged, the window, and whether a clock (RTC, NTP, or one kept over a soft restart) backed it. One line at boot and one per change of decision or clock validity, never per tick. `klocka saknas` means the schedule is not applying and only the inactivity rule dims; on a power-on boot the first line may say it before the RTC has been read, and the next line corrects it. |
+| `ljud nekat: night` / `ota` / `busy` / `disabled` / `not built` | fw `torget` | `torget_audio_play()` refused a chime before the engine ran: the night schedule (which follows the LABS NIGHT DIM switch), the open maintenance window, a chime already playing, sound disabled after three start failures, or a build without `TK_TID_SOUND`. `busy` also covers a chime task that could not be created. |
+| `ljud nekat: DMA-block N B < 21248 B` | fw `audio` | the memory gate: the largest internal DMA block would no longer cover the display flush plus the audio buffers and margin, so the chime was skipped to protect the panel (the freezes in `docs/lessons.md`, 2026-08-14/16). A refusal, not a failure: it never counts toward disabling sound. Repeated lines mean something else is eating internal DMA memory. |
+| `spelade DONE: DMA-block före N, under N B, stack kvar N B` | fw `audio` | a chime played. *During* minus *before* is the audio engine's real DMA cost; *stack kvar* is the chime task's headroom out of 4096 B. |
+| `ljudstart misslyckades; river ned` / `ljudet avstängt till nästa boot efter 3 fel i rad` | fw `audio` | the I2S channel or the ES8311 codec failed to start (codec absent, I2C NACK); everything created was torn down. Three in a row disable sound until reboot, logged once. |
+| `möjlig ljudläcka: DMA-block N -> N B` | fw `audio` | after teardown the largest DMA block is more than 256 B smaller than before: the engine may be leaking. Report it with the surrounding lines. |
 | `hämtning misslyckades: ESP_ERR_… (http://<värd>:8737 via LAN)` | fw `torget-http` | transport failure. The target is scheme + host + route only: the relay's path is `/u/<secret>` and *is* its access key, so no fetch log may carry a path (`docs/relay.md`). Wrong hostname and wrong port still show up here; *which* endpoint failed comes from the `tokens`/`github-net` line beside it. `okänd adress via …` means the address had no scheme or host at all. |
 | `oväntad statuskod 404 (https://<värd> via relä)` | fw `torget-http` | the target answered but not with 200. `via relä` says the cloud mailbox answered, `via LAN` the local tokenserver — the two are otherwise indistinguishable now that the path is gone. |
 | `kroppen större än … byte, avvisad` | fw `torget-http` | payload over cap — server-side schema growth. See lessons: the 1058-byte incident. |
@@ -398,6 +427,10 @@ Verbatim strings worth grepping for, and what they mean:
 | `GitHub-flödet: N missar i rad — hämtar var N s …` / `GitHub-flödet svarar igen efter N missar` | fw `github-net` | same for the optional GitHub feed (30 s doubling to 300 s). |
 | `agentstatus kunde inte skapa HTTP-klient` | fw `agent-net` | agent feed **dead until reboot**; screen shows a frozen header meanwhile (OBS-12). |
 | `heap: internt … DMA största …` | fw `torget` | every 10 s. Watch the DMA largest block: its collapse predicted the 2026-08-06 panel freeze. Nothing alerts on it yet (OBS-27). |
+| `stackar kvar (B, lägst först) 1/3: ipc0 388, …` | fw `torget` | every 60 s: every task's stack headroom from `uxTaskGetSystemState`, eight per line, lowest first. Bytes, high-water mark since boot, so a figure only falls. IDF's own tasks (ipc, idle, sys_evt, esp_timer, Tmr Svc, tiT, wifi, mdns) are IDF-sized and sit low by design. The basis for every stack decision after the 2026-10-08 memory study (OBS-47). |
+| `LÅG STACK: <task> har N B kvar` | fw `torget` (W) | one of OUR tasks has had under 512 B of stack left at some point (IDF's own are exempt). Treat as a bug: raise that task's stack before the next feature lands on it. |
+| `esp_lv_adapter_lock(751): Failed to acquire LVGL lock` | fw `esp_lvgl:adapter` (E) | a timed caller (`torget_ui_try_lock(200)`: OTA overlay, Wi-Fi setup, boot screen) gave up after 200 ms because a render held the lock. Seen several times a minute on `torget-216-02`, often about 200 ms after a `/api/tokens` fetch. Harmless only while the caller asks again on its next poll; who holds the lock that long is not named (OBS-44). |
+| `notisen avfärdad med ett tryck — åter om en timme` / `notisen besvarad med JA — fönstret öppnas` | fw `ota-service` | how the UPDATE READY takeover was answered: any tap outside UPDATE snoozes it for an hour; the UPDATE pill opens the maintenance window. Taps on a takeover with neither line after them are being ignored. |
 | `overlaykostnad <namn>: LVGL-pool +N B …, internt ±N B …` | fw `torget` | three lines, once at boot: what each permanent top-layer overlay (wifi-setup, settings, ota) costs. The pool figure is PSRAM (LVGL's TLSF pool lives there since the 2026-08-16 freeze fix); the internal figure is the control — a zero delta means that overlay does not touch internal RAM at all. This is the measured budget the AMOLED rule requires for a persistent layer, so read it after any flash that adds or grows one. |
 | `found neither … — is Claude Code or Codex on this machine?` | server | logged once at boot; the server waits for the directory instead of crash-looping. Seeing it repeatedly means something else is killing the process. |
 | `500 on /api/…` + `Traceback` | server log | a route served the sanitized error-form and this is its cause — a server bug, file it. Any traceback *without* a `500 on` line above it is doubly interesting. |

@@ -450,15 +450,24 @@ static void maintenance_ui_task(void *arg) {
       torget_ota_service_open_maintenance();
       until = atomic_load(&s_maintenance_until_us);
     } else if (notice.showing && tap_snooze) {
+      ESP_LOGI(TAG, "notisen avfärdad med ett tryck — åter om en timme");
       tg_notice_dismiss(&notice, now_us);
     }
     bool busy = until != 0 && (until - now_us) > 0;
-    switch (tg_notice_update(&notice, newer, busy, now_us)) {
+    if (tg_notice_update(&notice, newer, busy, now_us) == TG_NOTICE_SHOW)
+      ESP_LOGI(TAG, "uppdatering annonserad (%s) — notisen tar glaset",
+               announced);
+    /* Glaset följer policyn som NIVÅ: ett avfärdande tryck ger ingen HIDE
+     * ur tg_notice_update, och torget_ota_ui_set hoppar över en ritning när
+     * UI-låset är upptaget. Frågan ställs därför om varje poll tills glaset
+     * stämmer (döda pillar 2026-10-07, docs/lessons.md). */
+    switch (tg_notice_glass(&notice, torget_ota_ui_notice_visible(),
+                            torget_ota_ui_visible(), busy)) {
       case TG_NOTICE_SHOW:
-        ESP_LOGI(TAG, "uppdatering annonserad (%s) — notisen tar glaset",
-                 announced);
-        torget_ota_ui_set_version(announced);
-        torget_ota_ui_set(TG_OTA_UI_NOTICE, 0, 0);
+        /* Versionen först, och notisen bara om den raden gick fram: annars
+         * stämmer glaset med policyn och ingen gör om en gammal versionsrad. */
+        if (torget_ota_ui_set_version(announced))
+          torget_ota_ui_set(TG_OTA_UI_NOTICE, 0, 0);
         break;
       case TG_NOTICE_HIDE:
         torget_ota_ui_set(TG_OTA_UI_HIDDEN, 0, 0);

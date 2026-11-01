@@ -224,6 +224,10 @@ assert "tg_button_update" in main_c, "KEY3 must go through tg_button_update"
 assert "key3_was_down" not in main_c, (
     "the raw KEY3 edge check must be replaced by the button policy"
 )
+assert re.search(r"tg_notice_glass\(&notice, torget_ota_ui_notice_visible\(\),\s*torget_ota_ui_visible\(\), busy\)", service), (
+    "the takeover must be reconciled against the glass every poll, never "
+    "driven by a one-shot SHOW/HIDE edge (dead pills 2026-10-07)"
+)
 assert "torget_ota_service_open_maintenance" in main_c
 # Nödutgången: ett kort tryck medan fönstret är öppet stänger det. Tio
 # minuter total svart låda utan flyktväg gjorde en frisk enhet omöjlig att

@@ -192,6 +192,38 @@ class AgentAssetTests(unittest.TestCase):
         self.assertNotEqual(variants["tk_img_mascot_alert_8"],
                             variants["tk_img_mascot_happy_8"])
 
+    def test_pull_request_icon_is_precolored_merge_green_i4(self):
+        for size in (112, 32):
+            with self.subTest(size=size):
+                data = build.build_pull_request(size)
+                self.assertEqual(len(data), 16 * 4 + size * size // 2)
+                palette, indices = decode_i4(data, size)
+                self.assertEqual(palette[0][3], 0)  # index 0 transparent
+                for index in range(1, 16):
+                    b, g, r, a = palette[index]
+                    self.assertEqual((r, g, b), build.MERGE_GREEN_RGB)
+                    self.assertEqual(a, index * 17)
+                # Opaque stroke cores exist, and the corners stay clear of
+                # the round icon ring on the card.
+                self.assertIn(15, indices)
+                for x, y in ((0, 0), (size - 1, 0), (0, size - 1),
+                             (size - 1, size - 1)):
+                    self.assertEqual(indices[y * size + x], 0)
+                self.assertEqual(build.build_pull_request(size), data)
+
+    def test_pull_request_descriptors_match_native_sizes(self):
+        source = build.render_generated_sources()[1]
+        for name, size in (("tk_img_merge", 112), ("tk_img_merge_32", 32)):
+            with self.subTest(name=name):
+                block = [m for m in DESCRIPTOR_RE.finditer(source)
+                         if m.group("name") == name]
+                self.assertEqual(len(block), 1)
+                fields = dict(DESCRIPTOR_FIELD_RE.findall(block[0].group("body")))
+                self.assertEqual(fields["cf"], "LV_COLOR_FORMAT_I4")
+                self.assertEqual((fields["w"], fields["h"]),
+                                 (str(size), str(size)))
+                self.assertEqual(fields["stride"], str(size // 2))
+
     def test_descriptor_uses_requested_canvas_size(self):
         source = build.descriptor(
             "small", "small_data", "LV_COLOR_FORMAT_A8",

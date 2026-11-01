@@ -22,7 +22,12 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
+
+if __package__:
+    from .vibepulse_config import claude_project_key
+else:  # run directly, as tokenserver.py does
+    from vibepulse_config import claude_project_key
 
 
 LEASE_S = 120.0
@@ -965,9 +970,18 @@ class AgentStatusService:
 
     def __init__(self, projects_dir: Any, codex_sessions: Any,
                  now: Callable[[], float] = time.monotonic, *,
+                 ignore_paths: Iterable[str] = (),
                  _wall_time: Callable[[], float] = time.time,
                  _diagnostic: Optional[Callable[[str], None]] = None):
         self.projects_dir = Path(projects_dir)
+        # Claude project folders are named after the session's cwd with every
+        # non-alphanumeric character turned into "-"; compare in that form.
+        # Filtered at discovery, not at display: only the newest
+        # _RECENT_FILE_LIMIT transcripts are followed, so ignored automation
+        # must not take those slots from the sessions a person is running.
+        self._ignore_keys = tuple(
+            key for key in (claude_project_key(path) for path in ignore_paths)
+            if key)
         self.codex_sessions = Path(codex_sessions)
         self._now = now
         self._wall_time = _wall_time
@@ -1050,6 +1064,15 @@ class AgentStatusService:
         age = max(0.0, wall_now - event_wall_time)
         return monotonic_now - age
 
+    def _ignored(self, root: Path, path: Path) -> bool:
+        if not self._ignore_keys or root != self.projects_dir:
+            return False
+        try:
+            project = path.relative_to(root).parts[0]
+        except (ValueError, IndexError):
+            return False
+        return any(key in project for key in self._ignore_keys)
+
     def _discover_paths(self, root: Path, pattern: str) -> tuple:
         if not root.is_dir():
             return {}, []
@@ -1058,6 +1081,8 @@ class AgentStatusService:
         try:
             paths = root.glob(pattern)
             for path in paths:
+                if self._ignored(root, path):
+                    continue
                 try:
                     stat = path.stat()
                 except OSError:

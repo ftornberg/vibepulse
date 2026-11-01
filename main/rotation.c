@@ -4,9 +4,11 @@
 /* The square board's measured IMU calibration does not transfer to this
  * rectangular board. The first V2 port deliberately uses fixed landscape. */
 void sg_rotation_start(lv_indev_t *touch) { (void)touch; }
+int sg_rotation_quadrant(void) { return -1; }
 #else
 
 #include <math.h>
+#include <stdbool.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -50,6 +52,7 @@ static const bsp_display_rotation_t CYCLE[4] = {
 static qmi8658_dev_t s_imu;
 static lv_indev_read_cb_t s_orig_read;
 static volatile int s_rot;        /* 0-3: extra kvartsvarv från boot */
+static volatile bool s_active;    /* rotationstasken kör (IMU svarade) */
 
 /* FAST kalibrering (självankringen revs 2026-08-06: den ankrade den pose
  * användaren råkade hålla vid boot och allt blev fel därefter).
@@ -175,7 +178,10 @@ void sg_rotation_start(lv_indev_t *touch) {
   }
 
   xTaskCreate(rotation_task, "rotation", 3072, NULL, 3, NULL);
+  s_active = true;
   ESP_LOGI(TAG, "IMU igång (fast kalibrering: kvadrant %d = rättvänt)", SG_QUAD_UP);
 }
+
+int sg_rotation_quadrant(void) { return s_active ? s_rot : -1; }
 
 #endif /* TORGET_BOARD_241_V2 */

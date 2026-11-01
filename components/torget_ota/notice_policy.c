@@ -104,6 +104,16 @@ tg_notice_action tg_notice_update(tg_notice_policy *policy,
   return TG_NOTICE_NONE;
 }
 
+tg_notice_action tg_notice_glass(const tg_notice_policy *policy,
+                                 bool glass_shows_notice,
+                                 bool glass_shows_anything, bool busy) {
+  if (!policy || busy) return TG_NOTICE_NONE;
+  if (policy->showing)
+    return glass_shows_notice ? TG_NOTICE_NONE : TG_NOTICE_SHOW;
+  return glass_shows_notice || glass_shows_anything ? TG_NOTICE_HIDE
+                                                    : TG_NOTICE_NONE;
+}
+
 void tg_notice_dismiss(tg_notice_policy *policy, int64_t now_us) {
   if (!policy || !policy->showing) return;
   policy->showing = false;

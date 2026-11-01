@@ -33,11 +33,38 @@ _FIELDS = frozenset({
     "agent_status_relay",
     "interaction_relay_url",
     "interaction_mailbox",
+    "agent_status_ignore",
+    "merge_queue_sources",
 })
 _MAX_CONFIG_BYTES = 16 * 1024
 _PROCESS_LOCKS = {}
 _PROCESS_LOCKS_GUARD = threading.Lock()
 _MAILBOX_RE = re.compile(r"vp_[A-Za-z0-9_-]{16}\Z")
+AGENT_STATUS_IGNORE_LIMIT = 16
+MERGE_QUEUE_SOURCE_LIMIT = 16
+_MERGE_QUEUE_SOURCE_RE = re.compile(r"http://127\.0\.0\.1:([0-9]{1,5})\Z")
+AGENT_STATUS_IGNORE_MAX_CHARS = 200
+
+
+def claude_project_key(path_fragment: str) -> str:
+    """A path (fragment) in the form Claude Code names its project folders.
+
+    Claude Code stores a session under ~/.claude/projects/<cwd with every
+    character that is not a letter or digit replaced by "-">. Comparing in
+    that form is what lets an ignore entry written as a real path
+    ("/agent-team-orchestrator/work/") match the folder name on disk.
+    """
+    return re.sub(r"[^A-Za-z0-9]", "-", path_fragment)
+
+
+def _valid_ignore_entry(value: object) -> bool:
+    if not isinstance(value, str) or not value or \
+            len(value) > AGENT_STATUS_IGNORE_MAX_CHARS:
+        return False
+    if any(ord(char) < 0x20 or ord(char) == 0x7f for char in value):
+        return False
+    # "/" alone would encode to "-" and hide every session on the machine.
+    return sum(char.isalnum() for char in claude_project_key(value)) >= 3
 
 
 class ConfigError(ValueError):
@@ -60,8 +87,37 @@ class VibePulseConfig:
     agent_status_relay: bool = False
     interaction_relay_url: str | None = None
     interaction_mailbox: str | None = None
+    # Paths whose Claude sessions are left off the agent monitor — typically
+    # automation that runs Claude headless (an orchestrator's work folder),
+    # whose finished runs would otherwise read as "waiting" on the panel.
+    agent_status_ignore: Tuple[str, ...] = ()
+    # Local agent-team orchestrators whose /api/merge-queue the tokenserver
+    # polls ("ready to merge"). Loopback origins only, normalized.
+    merge_queue_sources: Tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        sources = self.merge_queue_sources
+        if isinstance(sources, list):
+            sources = tuple(sources)
+            object.__setattr__(self, "merge_queue_sources", sources)
+        if not isinstance(sources, tuple) or \
+                len(sources) > MERGE_QUEUE_SOURCE_LIMIT or \
+                len(set(sources)) != len(sources) or \
+                not all(isinstance(source, str) and
+                        (match := _MERGE_QUEUE_SOURCE_RE.fullmatch(source))
+                        and 1 <= int(match.group(1)) <= 65535 and
+                        str(int(match.group(1))) == match.group(1)
+                        for source in sources):
+            raise ConfigError("merge_queue_sources is invalid")
+        ignore = self.agent_status_ignore
+        if isinstance(ignore, list):
+            ignore = tuple(ignore)
+            object.__setattr__(self, "agent_status_ignore", ignore)
+        if not isinstance(ignore, tuple) or \
+                len(ignore) > AGENT_STATUS_IGNORE_LIMIT or \
+                not all(_valid_ignore_entry(entry) for entry in ignore) or \
+                len(set(ignore)) != len(ignore):
+            raise ConfigError("agent_status_ignore is invalid")
         for field_name in (
                 "claude_interactions", "codex_interactions",
                 "interaction_detail", "legacy_claude_panel_v1",

@@ -67,6 +67,38 @@ static void test_dismiss_without_takeover_is_a_no_op(void) {
         tg_notice_update(&policy, true, false, 2000) == TG_NOTICE_SHOW);
 }
 
+/* Glaset följer policyn som NIVÅ, inte som en engångshändelse: ett tryck som
+ * avfärdar ger ingen HIDE ur tg_notice_update, och en ritning som hoppades
+ * över för ett upptaget UI-lås måste göras om vid nästa poll. */
+static void test_the_glass_follows_the_policy(void) {
+  tg_notice_policy policy = {0};
+  check("nothing to show, nothing shown",
+        tg_notice_glass(&policy, false, false, false) == TG_NOTICE_NONE);
+  tg_notice_update(&policy, true, false, 0);
+  check("a takeover that never reached the glass is drawn again",
+        tg_notice_glass(&policy, false, false, false) == TG_NOTICE_SHOW);
+  check("a takeover owed while another state lingers is still drawn",
+        tg_notice_glass(&policy, false, true, false) == TG_NOTICE_SHOW);
+  check("glass and policy agree: leave the pixels alone",
+        tg_notice_glass(&policy, true, true, false) == TG_NOTICE_NONE);
+  tg_notice_dismiss(&policy, 1000);
+  check("a dismissing tap changes nothing in the update itself",
+        tg_notice_update(&policy, true, false, 2000) == TG_NOTICE_NONE);
+  check("...so the glass must be told to hide (the dead-pill bug)",
+        tg_notice_glass(&policy, true, true, false) == TG_NOTICE_HIDE);
+  check("a hide that was skipped is asked for again",
+        tg_notice_glass(&policy, true, true, false) == TG_NOTICE_HIDE);
+  check("hidden and dismissed: quiet",
+        tg_notice_glass(&policy, false, false, false) == TG_NOTICE_NONE);
+  check("window closed but its ring is still drawn: hide it",
+        tg_notice_glass(&policy, false, true, false) == TG_NOTICE_HIDE);
+  check("an open window owns the overlay, whatever the glass shows",
+        tg_notice_glass(&policy, true, true, true) == TG_NOTICE_NONE &&
+        tg_notice_glass(&policy, false, true, true) == TG_NOTICE_NONE);
+  check("NULL policy is quiet",
+        tg_notice_glass(NULL, true, true, false) == TG_NOTICE_NONE);
+}
+
 static void test_only_a_demonstrably_newer_build_is_available(void) {
   check("same build is not an update",
         !tg_notice_version_is_newer("v0.6.0-97-g1b6ba3a",
@@ -100,6 +132,7 @@ int main(void) {
   test_busy_device_is_never_taken_over();
   test_installed_update_silences_the_notice();
   test_dismiss_without_takeover_is_a_no_op();
+  test_the_glass_follows_the_policy();
   test_only_a_demonstrably_newer_build_is_available();
   if (failures) {
     printf("%d failure(s)\n", failures);

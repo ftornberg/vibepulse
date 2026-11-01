@@ -7,6 +7,7 @@
 #include "lvgl.h"
 
 #include "torget_app.h"
+#include "audio_cue.h"
 
 /*
  * Plattformens API mot apparna. Två världar implementerar det: main/main.c
@@ -85,6 +86,12 @@ void torget_data_alive(void);
  * Kallas under torget_ui_lock(). */
 void torget_keep_awake(void);
 
+/* Panelens läge som auto-rotationen mäter det: kvartsvarv från boot (0-3),
+ * eller -1 när ingen rotation körs (2.41 V2 står fast, eller IMU:n svarade
+ * inte). Skrivskyddad — den ändrar aldrig rotationen. TID väljer läge efter
+ * den. Olika per värld: main/main.c (IMU) och sim/main.c (tangent R). */
+int torget_orientation(void);
+
 /* ---- plattforms-UI:t (delat, platform/torget_ui.c) ---------------------- */
 
 /* Bygg drift-lagret, alla appars rötter (via create i registret) och
@@ -102,6 +109,30 @@ void torget_app_show(int idx);
 /* Nästa app i registret (från launchern: app 0). KEY3-knappens väg på
  * targetet, tangent N i bänken — appväxling utan att röra glaset. */
 void torget_app_next(void);
+
+/* Glasets anspråk (platform/glass_claim.h). En app vars larm MÅSTE synas även
+ * när en annan app står framme — Needs You, som tar time-out om ingen ser den —
+ * gör anspråk: plattformen tar fram appen och minns vad som visades. När
+ * larmet är besvarat släpper appen, och glaset går tillbaka dit det var, om
+ * inte personen själv navigerat under tiden. Upprepade anrop är billiga och
+ * idempotenta. Kallas under torget_ui_lock(). */
+void torget_glass_claim(const torget_app_t *app);
+void torget_glass_release(const torget_app_t *app);
+
+/* Uppmärksamhetsikonen: en app som väntar på personen (VibePulse medan Claude
+ * väntar på input) tänder en liten ikon som andra appar får visa utan att
+ * bero på den appen — TID visar den ovanför klockan. icon NULL släcker; bara
+ * appen som tände kan släcka. Ikonen är en A8-/alfabild som målas i
+ * color_hex. Kallas under torget_ui_lock(). */
+void torget_attention_set(const torget_app_t *app, const lv_image_dsc_t *icon,
+                          uint32_t color_hex);
+const lv_image_dsc_t *torget_attention_icon(uint32_t *color_hex);
+
+/* Spela ett kort ljud (audio_cue.h). Blockerar aldrig: false betyder nekat
+ * (ej inbyggt, natt, OTA, redan spelande, avstängt efter fel) och skälet
+ * loggas av plattformen. Rör aldrig LVGL från ljudet. Target: main/main.c
+ * med components/torget_audio; simulatorn loggar bara "audio: <cue>". */
+bool torget_audio_play(tg_audio_cue cue);
 
 /* Pixeldriften mot inbränning: allt UI bor i en låda som vandrar ett par
  * pixlar per minut. Apparna behöver aldrig bry sig; exponerad för värdlager

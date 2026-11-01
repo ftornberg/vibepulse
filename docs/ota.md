@@ -98,7 +98,12 @@ compares against its own running version:
   the Mac, delivery is automatic. The pill is the ONLY affirmative action
   while the takeover owns the glass: a KEY3 hold does nothing there, on
   purpose, so SETTINGS can never open behind the notice.
-- **LATER / any other tap** → snooze; the takeover returns every hour
+- **LATER / any other tap** → snooze (logged `notisen avfärdad med ett
+  tryck`); the takeover then leaves the glass at the next half-second poll
+  (confirmed on `torget-216-02`, 2026-10-08). Until
+  2026-10-07 it stayed drawn with dead pills and KEY3 disabled until a reset;
+  the glass is now reconciled against the notice state every poll. The
+  takeover returns every hour
   (`TG_NOTICE_NAG_US` in `notice_policy.h` — raise it when the platform
   calms down) until the update is installed.
 - **Match** → silence. The notice can never nag about nothing.
@@ -130,6 +135,12 @@ The device proves an image is *valid*; the pusher proves it is the
 4. **CI bridge**: the commit in the version string must have a green CI
    run on GitHub (`TG_OTA_ALLOW_NO_CI=1` for offline emergencies). CI
    runs on every pushed branch for exactly this reason.
+
+The script also reports the panel's answer honestly: only HTTP 202 prints the
+success line and exits 0. Any other answer, or none, names the failure and
+exits 1. To confirm a delivery, ask the panel:
+`curl http://<ip>/api/ota/status` shows `running_version` while the window is
+open, which includes the minutes after the post-update reboot.
 
 ## Day-to-day developer workflow
 
@@ -166,7 +177,10 @@ SHA, the version line names the incoming image.
 | "This project has no OTA" | Reading a pre-OTA tree (factory-only `partitions.csv`) | `git branch --show-current`; read `partitions.csv` in *that* checkout |
 | Upload gets 403 | Window not open | Hold KEY3, then pick UPDATE in SETTINGS — the hold alone only opens the menu; the glass must show the ring/UPDATES ON |
 | Upload gets 401 | Token mismatch or malformed | `TG_OTA_TOKEN` in `secrets.h`: exactly 64 lowercase hex |
+| Upload gets 408 "upload interrupted", often after 20 to 60 s | The panel saw no data for 5 s in mid-stream; seen three times in a row on 2026-10-07 with a healthy link (OBS-45, cause not measured) | Run `tools/ota-flash.sh` again while the window is open; the running slot is untouched. The script now exits 1 and says so |
 | Upload gets 400 "not a torget esp32s3 image" | Wrong file (bootloader? another project?) | Send `build*/torget.bin`, nothing else |
 | 202 but the old version still runs after reboot | Health gate rolled the image back | The new build is broken on-device; check it on USB with the console |
 | UPDATE READY never appears | Same version already running, or tokenserver older than the feature | `curl localhost:8737/api/tokens \| grep otaAvailable` |
+| UPDATE READY appears for a version you never sent, often `-dirty` | A branch or scratch firmware build sits in a repo-root `build*/` directory (`build-time/`, `build-241/`, ...); the tokenserver announces the NEWEST `build*/torget.bin`, whatever its origin | `curl localhost:8737/api/tokens \| grep otaAvailable`, then delete that directory or build outside the repo root (`idf.py -B /tmp/<name> ...`); the notice clears at the next quota poll |
 | Takeover shows but UPDATE does nothing | No pusher waiting on the Mac | Start `tools/ota-flash.sh <ip>` — the tap opens the window; the Mac must deliver |
+| Takeover shows, neither pill reacts, KEY3 hold does nothing | Firmware older than the 2026-10-07 fix: a tap outside UPDATE dismissed the notice without hiding it | `curl http://<ip>/api/ota/status` gets no answer (window closed). Power-cycle the panel, then tap UPDATE first |
