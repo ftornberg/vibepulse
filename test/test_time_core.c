@@ -20,24 +20,24 @@ static void test_mode_for(void) {
    * rotation 0, buttons left 1, buttons right 3; buttons down is 2. The owner
    * wants the clock with the buttons right (the panel's resting pose), the
    * timer with the buttons up, pomodoro with the buttons left. */
-  check("buttons right (3) is the clock", tg_time_mode_for(3, TG_TIME_MODE_TIMER) == TG_TIME_MODE_CLOCK);
-  check("buttons up (0) is the timer", tg_time_mode_for(0, TG_TIME_MODE_CLOCK) == TG_TIME_MODE_TIMER);
+  check("buttons right (3) is the clock", tg_time_mode_for(3, TG_TIME_MODE_MEETING) == TG_TIME_MODE_CLOCK);
+  check("buttons up (0) is the meeting", tg_time_mode_for(0, TG_TIME_MODE_CLOCK) == TG_TIME_MODE_MEETING);
   check("buttons left (1) is pomodoro", tg_time_mode_for(1, TG_TIME_MODE_CLOCK) == TG_TIME_MODE_POMODORO);
   check("buttons down (2) keeps the last face", tg_time_mode_for(2, TG_TIME_MODE_POMODORO) == TG_TIME_MODE_POMODORO);
   check("rot clock -> clock",
-        tg_time_mode_for(TG_TIME_ROT_CLOCK, TG_TIME_MODE_TIMER) == TG_TIME_MODE_CLOCK);
+        tg_time_mode_for(TG_TIME_ROT_CLOCK, TG_TIME_MODE_MEETING) == TG_TIME_MODE_CLOCK);
   check("rot pomodoro -> pomodoro",
         tg_time_mode_for(TG_TIME_ROT_POMODORO, TG_TIME_MODE_CLOCK) == TG_TIME_MODE_POMODORO);
   check("rot timer -> timer",
-        tg_time_mode_for(TG_TIME_ROT_TIMER, TG_TIME_MODE_CLOCK) == TG_TIME_MODE_TIMER);
+        tg_time_mode_for(TG_TIME_ROT_MEETING, TG_TIME_MODE_CLOCK) == TG_TIME_MODE_MEETING);
   /* rotation 2 is the button edge down: no mode of its own */
-  for (int last = TG_TIME_MODE_CLOCK; last <= TG_TIME_MODE_TIMER; last++)
+  for (int last = TG_TIME_MODE_CLOCK; last <= TG_TIME_MODE_MEETING; last++)
     check("button edge down keeps last",
           tg_time_mode_for(2, (tg_time_mode)last) == (tg_time_mode)last);
   check("no IMU (-1) keeps last",
         tg_time_mode_for(-1, TG_TIME_MODE_POMODORO) == TG_TIME_MODE_POMODORO);
   check("out of range 4 keeps last",
-        tg_time_mode_for(4, TG_TIME_MODE_TIMER) == TG_TIME_MODE_TIMER);
+        tg_time_mode_for(4, TG_TIME_MODE_MEETING) == TG_TIME_MODE_MEETING);
   check("out of range 99 keeps last",
         tg_time_mode_for(99, TG_TIME_MODE_CLOCK) == TG_TIME_MODE_CLOCK);
 }
@@ -145,48 +145,126 @@ static void test_pomodoro(void) {
   check("the next tap dismisses", p.timer.state == TG_TIMER_IDLE && p.step == 1);
 }
 
-static void test_countdown(void) {
-  tg_countdown c;
-  tg_countdown_init(&c);
-  check("preset 0 is 20", tg_countdown_preset_minutes(0) == 20);
-  check("preset 1 is 40", tg_countdown_preset_minutes(1) == 40);
-  check("preset 2 is 50", tg_countdown_preset_minutes(2) == 50);
-  check("preset -1 is 0", tg_countdown_preset_minutes(-1) == 0);
-  check("preset 3 is 0", tg_countdown_preset_minutes(3) == 0);
-  check("bad preset rejected", !tg_countdown_start(&c, 3, 0));
-  check("negative preset rejected", !tg_countdown_start(&c, -1, 0));
-  check("still idle", c.timer.state == TG_TIMER_IDLE);
+static void test_meeting(void) {
+  tg_meeting m;
+  tg_meeting_init(&m, TG_MEETING_PEOPLE_DEFAULT, TG_MEETING_RATE_DEFAULT);
+  check("defaults 6 x 900", m.people == 6 && m.rate == 900 && m.state == TG_MEETING_IDLE);
+  check("hourly 5 400", tg_meeting_hourly_kr(&m) == 5400);
+  check("idle costs nothing", tg_meeting_cost_kr(&m, MIN_US(99)) == 0);
+  check("idle has no ring", tg_meeting_ring(&m, MIN_US(5)) == -1);
 
-  check("start 40", tg_countdown_start(&c, 1, SEC_US(10)));
-  check("40 minutes remain", tg_timer_remaining_us(&c.timer, SEC_US(10)) == MIN_US(40));
-  check("second start while running rejected", !tg_countdown_start(&c, 0, SEC_US(11)));
-  tg_countdown_tap(&c, SEC_US(20));
-  check("tap pauses", c.timer.state == TG_TIMER_PAUSED);
-  tg_countdown_tap(&c, SEC_US(30));
-  check("tap resumes", c.timer.state == TG_TIMER_RUNNING);
-  tg_timer_tick(&c.timer, MIN_US(90));
-  check("done", c.timer.state == TG_TIMER_DONE);
-  tg_countdown_tap(&c, MIN_US(91));
-  check("tap on done -> idle", c.timer.state == TG_TIMER_IDLE);
-  tg_countdown_start(&c, 0, MIN_US(100));
-  tg_countdown_tap(&c, MIN_US(200));            /* deadline passed, no tick yet */
-  check("countdown tap after deadline reveals done", c.timer.state == TG_TIMER_DONE);
-  tg_countdown_tap(&c, MIN_US(201));
-  check("countdown next tap dismisses", c.timer.state == TG_TIMER_IDLE);
-  check("start again works", tg_countdown_start(&c, 2, MIN_US(92)));
-  tg_countdown_reset(&c);
-  check("reset -> idle", c.timer.state == TG_TIMER_IDLE);
+  tg_meeting_init(&m, 0, 40);
+  check("init clamps people up", m.people == TG_MEETING_PEOPLE_MIN);
+  check("init clamps rate up", m.rate == TG_MEETING_RATE_MIN);
+  tg_meeting_init(&m, 500, 99999);
+  check("init clamps people down", m.people == TG_MEETING_PEOPLE_MAX);
+  check("init clamps rate down", m.rate == TG_MEETING_RATE_MAX);
+  tg_meeting_init(&m, 6, 949);
+  check("rate rounds to the step", m.rate == 900);
+  tg_meeting_init(&m, 6, 950);
+  check("rate rounds half up", m.rate == 1000);
 
-  /* independence: touching one never moves the other */
+  tg_meeting_init(&m, 1, 100);
+  check("people floor holds", !tg_meeting_step_people(&m, -1) && m.people == 1);
+  check("rate floor holds", !tg_meeting_step_rate(&m, -1) && m.rate == 100);
+  check("people up", tg_meeting_step_people(&m, +1) && m.people == 2);
+  check("rate up one step", tg_meeting_step_rate(&m, +1) && m.rate == 200);
+  for (int i = 0; i < 200; i++) tg_meeting_step_people(&m, +1);
+  for (int i = 0; i < 200; i++) tg_meeting_step_rate(&m, +1);
+  check("people ceiling", m.people == 99);
+  check("rate ceiling", m.rate == 5000);
+  check("past the ceiling is no change", !tg_meeting_step_people(&m, +1));
+
+  tg_meeting_init(&m, 6, 900);
+  tg_meeting_tap(&m, SEC_US(100));
+  check("tap starts", m.state == TG_MEETING_RUNNING);
+  check("steppers locked while running",
+        !tg_meeting_step_people(&m, +1) && !tg_meeting_step_rate(&m, +1) &&
+        m.people == 6 && m.rate == 900);
+  int64_t t = SEC_US(100) + MIN_US(27) + SEC_US(40);
+  check("elapsed 27:40", tg_meeting_elapsed_us(&m, t) == MIN_US(27) + SEC_US(40));
+  check("6 x 900 for 27:40 is 2 490 kr", tg_meeting_cost_kr(&m, t) == 2490);
+  check("ring 27:40 is 461 permille", tg_meeting_ring(&m, t) == 461);
+  check("one microsecond in costs nothing yet",
+        tg_meeting_cost_kr(&m, SEC_US(100) + 1) == 0);
+  check("cost rounds down",
+        tg_meeting_cost_kr(&m, SEC_US(100) + SEC_US(1)) == 1); /* 1.5 kr */
+  check("a clock before the start is zero, not negative",
+        tg_meeting_elapsed_us(&m, SEC_US(50)) == 0);
+
+  tg_meeting_tap(&m, t);
+  check("tap pauses", m.state == TG_MEETING_PAUSED);
+  check("paused cost holds", tg_meeting_cost_kr(&m, t + MIN_US(60)) == 2490);
+  check("steppers still locked while paused", !tg_meeting_step_people(&m, +1));
+  tg_meeting_tap(&m, t + MIN_US(60));
+  check("tap resumes", m.state == TG_MEETING_RUNNING);
+  check("the paused hour is not billed",
+        tg_meeting_elapsed_us(&m, t + MIN_US(60)) == MIN_US(27) + SEC_US(40));
+  check("ring wraps each hour",
+        tg_meeting_ring(&m, t + MIN_US(60) + MIN_US(32) + SEC_US(20)) == 0);
+
+  tg_meeting_reset(&m);
+  check("reset -> idle", m.state == TG_MEETING_IDLE);
+  check("reset keeps the setup", m.people == 6 && m.rate == 900);
+  check("reset costs nothing", tg_meeting_cost_kr(&m, MIN_US(500)) == 0);
+
+  /* Taket: tio timmar, sedan pausat. */
+  tg_meeting_init(&m, 99, 5000);
+  tg_meeting_tap(&m, 0);
+  tg_meeting_tick(&m, TG_MEETING_MAX_US - 1);
+  check("just before the cap still runs", m.state == TG_MEETING_RUNNING);
+  tg_meeting_tick(&m, TG_MEETING_MAX_US + MIN_US(5));
+  check("the cap pauses", m.state == TG_MEETING_PAUSED);
+  check("the cap is exactly ten hours",
+        tg_meeting_elapsed_us(&m, TG_MEETING_MAX_US * 3) == TG_MEETING_MAX_US);
+  check("largest cost is 4 950 000", tg_meeting_cost_kr(&m, 0) == 4950000);
+  tg_meeting_tap(&m, TG_MEETING_MAX_US * 2);
+  check("a capped meeting does not resume", m.state == TG_MEETING_PAUSED);
+  tg_meeting_init(&m, 2, 100);
+  tg_meeting_tap(&m, 0);
+  tg_meeting_tap(&m, TG_MEETING_MAX_US + MIN_US(1));
+  check("a tap past the cap pauses at the cap",
+        m.state == TG_MEETING_PAUSED && m.elapsed_us == TG_MEETING_MAX_US);
+
+  /* independence: the meeting and the pomodoro never touch each other */
   tg_pomo p;
   tg_pomo_init(&p);
-  tg_countdown_start(&c, 0, 0);
+  tg_meeting_init(&m, 6, 900);
+  tg_meeting_tap(&m, 0);
   tg_pomo_tap(&p, 0);
-  tg_countdown_reset(&c);
-  check("pomodoro unaffected by countdown reset", p.timer.state == TG_TIMER_RUNNING);
+  tg_meeting_reset(&m);
+  check("pomodoro unaffected by meeting reset", p.timer.state == TG_TIMER_RUNNING);
   tg_pomo_reset(&p);
-  tg_countdown_start(&c, 0, 0);
-  check("countdown unaffected by pomodoro reset", c.timer.state == TG_TIMER_RUNNING);
+  tg_meeting_tap(&m, 0);
+  check("meeting unaffected by pomodoro reset", m.state == TG_MEETING_RUNNING);
+}
+
+static void test_meeting_text(void) {
+  char b[24];
+  tg_meeting_kr_text(0, b, sizeof b);
+  check("0", strcmp(b, "0") == 0);
+  tg_meeting_kr_text(999, b, sizeof b);
+  check("999", strcmp(b, "999") == 0);
+  tg_meeting_kr_text(5400, b, sizeof b);
+  check("5 400", strcmp(b, "5 400") == 0);
+  tg_meeting_kr_text(107917, b, sizeof b);
+  check("107 917", strcmp(b, "107 917") == 0);
+  tg_meeting_kr_text(4950000, b, sizeof b);
+  check("4 950 000", strcmp(b, "4 950 000") == 0);
+  tg_meeting_kr_text(-5, b, sizeof b);
+  check("negative is 0", strcmp(b, "0") == 0);
+  char tiny[4];
+  tg_meeting_kr_text(123456, tiny, sizeof tiny);
+  check("truncates without overflow", strlen(tiny) <= 3);
+
+  tg_meeting_elapsed_text(0, b, sizeof b);
+  check("00:00", strcmp(b, "00:00") == 0);
+  tg_meeting_elapsed_text(MIN_US(27) + SEC_US(40) + 999999, b, sizeof b);
+  check("27:40 rounds down", strcmp(b, "27:40") == 0);
+  tg_meeting_elapsed_text(MIN_US(60), b, sizeof b);
+  check("1:00:00", strcmp(b, "1:00:00") == 0);
+  tg_meeting_elapsed_text(TG_MEETING_MAX_US, b, sizeof b);
+  check("10:00:00", strcmp(b, "10:00:00") == 0);
 }
 
 static void test_text(void) {
@@ -309,25 +387,16 @@ static void test_tick_expired(void) {
 }
 
 static void test_advance(void) {
-  tg_pomo p; tg_countdown c;
-  tg_pomo_init(&p); tg_countdown_init(&c);
-  check("nothing running, nothing expires", tg_time_advance(&p, &c, MIN_US(99)) == 0);
+  tg_pomo p;
+  tg_pomo_init(&p);
+  check("nothing running, nothing expires", tg_time_advance(&p, MIN_US(99)) == 0);
   tg_pomo_tap(&p, 0);
-  check("before the deadline, nothing", tg_time_advance(&p, &c, MIN_US(24)) == 0);
+  check("before the deadline, nothing", tg_time_advance(&p, MIN_US(24)) == 0);
   check("the pomodoro expires once",
-        tg_time_advance(&p, &c, MIN_US(25)) == TG_TIME_EXPIRED_POMODORO);
+        tg_time_advance(&p, MIN_US(25)) == TG_TIME_EXPIRED_POMODORO);
   check("the step stays on the phase that ended", tg_pomo_phase_of(&p) == TG_POMO_FOCUS);
-  check("...and only once", tg_time_advance(&p, &c, MIN_US(26)) == 0);
-  tg_pomo_tap(&p, MIN_US(27));             /* dismiss -> next phase idle */
-  tg_pomo_tap(&p, MIN_US(27));             /* start the 5 min break */
-  tg_countdown_start(&c, 0, MIN_US(12));   /* 20 min timer ends at 32 */
-  check("both expire in one tick", tg_time_advance(&p, &c, MIN_US(40)) ==
-        (TG_TIME_EXPIRED_POMODORO | TG_TIME_EXPIRED_TIMER));
-  check("NULL safe", tg_time_advance(NULL, NULL, 0) == 0);
-  tg_pomo_tap(&p, MIN_US(41));             /* dismiss the break */
-  tg_countdown_tap(&c, MIN_US(41));        /* dismiss the timer */
-  tg_countdown_start(&c, 0, MIN_US(41));
-  check("the timer alone", tg_time_advance(&p, &c, MIN_US(61)) == TG_TIME_EXPIRED_TIMER);
+  check("...and only once", tg_time_advance(&p, MIN_US(26)) == 0);
+  check("NULL safe", tg_time_advance(NULL, 0) == 0);
 }
 
 /* Vilken signal en utgång ger: pausens slut låter annorlunda. */
@@ -335,9 +404,6 @@ static void test_cue_for(void) {
   tg_pomo p;
   tg_pomo_init(&p);
   check("nothing expired, no cue", tg_time_cue_for(0, &p) == -1);
-  check("a timer is DONE", tg_time_cue_for(TG_TIME_EXPIRED_TIMER, &p) == TG_AUDIO_CUE_DONE);
-  check("a timer is DONE without a pomodoro",
-        tg_time_cue_for(TG_TIME_EXPIRED_TIMER, NULL) == TG_AUDIO_CUE_DONE);
   check("NULL pomodoro still sounds",
         tg_time_cue_for(TG_TIME_EXPIRED_POMODORO, NULL) == TG_AUDIO_CUE_DONE);
   for (int step = 0; step < TG_POMO_STEPS; step++) {
@@ -348,17 +414,6 @@ static void test_cue_for(void) {
   }
   p.step = 7;
   check("the long break is a break", tg_pomo_phase_of(&p) == TG_POMO_LONG_BREAK);
-  p.step = 1;
-  check("both at once: the pomodoro decides, as on the glass",
-        tg_time_cue_for(TG_TIME_EXPIRED_POMODORO | TG_TIME_EXPIRED_TIMER, &p) ==
-        TG_AUDIO_CUE_BREAK_OVER);
-  p.step = 0;
-  check("both at once after focus",
-        tg_time_cue_for(TG_TIME_EXPIRED_POMODORO | TG_TIME_EXPIRED_TIMER, &p) ==
-        TG_AUDIO_CUE_DONE);
-  p.step = 1;
-  check("a timer during a break phase is still DONE",
-        tg_time_cue_for(TG_TIME_EXPIRED_TIMER, &p) == TG_AUDIO_CUE_DONE);
 }
 
 int main(void) {
@@ -369,7 +424,8 @@ int main(void) {
   test_ring();
   test_timer();
   test_pomodoro();
-  test_countdown();
+  test_meeting();
+  test_meeting_text();
   test_text();
   if (failures) { printf("%d failure(s)\n", failures); return 1; }
   printf("time core: ok\n");

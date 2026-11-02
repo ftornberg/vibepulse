@@ -16,7 +16,7 @@
 typedef struct {
   void (*tap)(void);        /* tryck på bakgrunden eller KLAR-lagret */
   void (*reset)(void);      /* RESET-knappen */
-  void (*preset)(int idx);  /* ett av 20/40/50 */
+  void (*step)(int which, int dir); /* stegare: 0 deltagare, 1 kr/h; -1/+1 */
   void (*speaker)(void);    /* högtalarsymbolen: ljud av/på */
 } tg_time_view_actions;
 

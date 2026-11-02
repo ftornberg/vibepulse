@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from PIL import Image
+import math
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = "sim/build-time"
@@ -16,7 +17,8 @@ FRAMES = [
     "clock", "clock-unset",
     "pomodoro-idle", "pomodoro-running", "pomodoro-paused", "pomodoro-done",
     "done-over-clock", "pomodoro-break",
-    "timer-select", "timer-running", "timer-done",
+    "meeting-setup", "meeting-stepped", "meeting-running", "meeting-paused",
+    "meeting-wide", "meeting-setup-wide", "meeting-max",
     "clock-attention", "clock-sound-off",
 ]
 
@@ -56,7 +58,28 @@ class TimeAppSimTests(unittest.TestCase):
                                 "Claude waiting must show its icon on the clock")
             self.assertNotEqual(images["clock-sound-off"], images["clock"],
                                 "sound off must show a crossed speaker")
-            # A timer that ends while VibePulse is in front must still chime.
+            self.assertNotEqual(images["meeting-setup"], images["meeting-stepped"],
+                                "a stepper tap must change the setup face")
+            self.assertNotEqual(images["meeting-running"], images["meeting-paused"],
+                                "a paused meeting must look paused")
+            # The widest sums (six and seven digits) must stay inside the
+            # ring's inner edge (radius 214 around 240,240) with a margin:
+            # measured 18 px for "4 950 000" on 2026-11-02.
+            for tag in ("meeting-wide", "meeting-max"):
+                with self.subTest(clearance=tag):
+                    with Image.open(Path(temporary) / f"torget-time-{tag}.bmp") as im:
+                        px = im.convert("RGB").load()
+                        worst = 999.0
+                        for y in range(170, 290):
+                            for x in range(20, 460):
+                                r, g, b = px[x, y]
+                                # digits are grey/off-white; the ring is the
+                                # dark track or the orange accent
+                                if r > 110 and abs(r - g) < 30 and abs(g - b) < 30:
+                                    d = 214 - math.hypot(x + 0.5 - 240, y + 0.5 - 240)
+                                    worst = min(worst, d)
+                        self.assertGreaterEqual(worst, 12, f"{tag}: {worst:.1f} px")
+            # A pomodoro phase that ends while VibePulse is in front must still chime.
             out = run.stdout
             marker = out.find("qa: hidden-timer")
             self.assertGreaterEqual(marker, 0, out)
@@ -67,7 +90,7 @@ class TimeAppSimTests(unittest.TestCase):
             self.assertNotIn("audio: DONE", out[over:])
             self.assertNotIn("audio: BREAK_OVER", out[:over])
             self.assertEqual(out[marker:].count("audio: DONE"), 1,
-                             "a TID timer ending behind VibePulse must chime "
+                             "a TID focus phase ending behind VibePulse must chime "
                              "exactly once, also across the return to TID")
             # Turning sound back on plays the chime once as a confirmation.
             on = out.find("qa: sound-on")

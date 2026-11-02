@@ -30,6 +30,10 @@
 required-version = "==0.17.2"
 target-version = "py311"
 extend-exclude = [
+    # Claude Code's git worktrees live under .claude/worktrees and carry their
+    # own pyproject.toml: ruff's hierarchical config would load an older
+    # required-version from there and refuse to run (seen 2026-11-02).
+    ".claude",
     ".venv",
     "build",
     "managed_components",

@@ -7,9 +7,9 @@
 #include "torget_app.h"
 
 /*
- * TID: klocka, pomodoro och timer. Panelens orientering väljer läge
- * (time_core.h). Ingen nätverkstask, ingen ljudväg: appen är tyst, och en
- * timer som går ut medan en annan app visas syns först när TID öppnas igen.
+ * TID: klocka, pomodoro och möteskostnad. Panelens orientering väljer läge
+ * (time_core.h). Ingen nätverkstask. Ljud bara när en pomodorofas tar slut
+ * (TK_TID_SOUND), också medan en annan app visas.
  */
 extern const torget_app_t time_app;
 
@@ -19,7 +19,8 @@ extern const torget_app_t time_app;
 void time_app_qa_refresh(void);
 void time_app_qa_advance(int64_t us);
 void time_app_qa_tap(void);
-void time_app_qa_preset(int idx);
+/* Samma väg som ett tryck på en stegare: which 0 = deltagare, 1 = kr/h. */
+void time_app_qa_step(int which, int dir);
 void time_app_qa_reset(void);
 void time_app_qa_time_unset(bool unset);
 /* Lås klockans väggtid (h < 0 släpper låset) så att klockbilden blir

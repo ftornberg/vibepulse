@@ -2091,13 +2091,43 @@ static int run_time_app_captures(void) {
   time_app_qa_tap();
   time_frame(TG_TIME_ROT_POMODORO, "time-pomodoro-break");
 
-  time_frame(TG_TIME_ROT_TIMER, "time-timer-select");
-  time_app_qa_preset(1);
-  time_app_qa_advance(7LL * 60 * 1000000);
-  time_frame(TG_TIME_ROT_TIMER, "time-timer-running");
-  time_app_qa_advance(40LL * 60 * 1000000);
-  time_frame(TG_TIME_ROT_TIMER, "time-timer-done");
+  /* Möteskostnaden (ersatte timern 2026-11-02). Förvalt 6 deltagare x
+   * 900 kr/h; stegarna nås genom samma väg som ett tryck. */
+  sim_orientation = TG_TIME_ROT_MEETING;
+  time_app_qa_refresh();
+  time_frame(TG_TIME_ROT_MEETING, "time-meeting-setup");
+  time_app_qa_step(0, -1);                 /* 5 */
+  time_app_qa_step(1, +1);                 /* 1 000 */
+  time_frame(TG_TIME_ROT_MEETING, "time-meeting-stepped");
+  time_app_qa_step(0, +1);
+  time_app_qa_step(1, -1);                 /* tillbaka till 6 x 900 */
   time_app_qa_tap();
+  time_app_qa_advance(27LL * 60 * 1000000 + 40LL * 1000000);
+  time_frame(TG_TIME_ROT_MEETING, "time-meeting-running");
+  time_app_qa_step(0, +1);                 /* ignoreras medan mötet pågår */
+  time_app_qa_tap();
+  time_frame(TG_TIME_ROT_MEETING, "time-meeting-paused");
+  time_app_qa_reset();
+  /* Bredaste realistiska: 14 x 1 300 kr/h i 6 h 10 min -> 112 233 kr. */
+  for (int i = 0; i < 8; i++) time_app_qa_step(0, +1);
+  for (int i = 0; i < 4; i++) time_app_qa_step(1, +1);
+  time_app_qa_tap();
+  time_app_qa_advance(6LL * 3600 * 1000000 + 10LL * 60 * 1000000);
+  time_frame(TG_TIME_ROT_MEETING, "time-meeting-wide");
+  time_app_qa_reset();
+  /* Bredaste inställningen: 99 x 5 000 kr/h = 495 000 kr/h. */
+  for (int i = 0; i < 100; i++) time_app_qa_step(0, +1);
+  for (int i = 0; i < 50; i++) time_app_qa_step(1, +1);
+  time_frame(TG_TIME_ROT_MEETING, "time-meeting-setup-wide");
+  /* Tio timmar är taket: mötet står då pausat på 4 950 000 kr. */
+  time_app_qa_tap();
+  time_app_qa_advance(11LL * 3600 * 1000000);
+  time_frame(TG_TIME_ROT_MEETING, "time-meeting-max");
+  time_app_qa_reset();
+  for (int i = 0; i < 100; i++) time_app_qa_step(0, -1);
+  for (int i = 0; i < 50; i++) time_app_qa_step(1, -1);
+  for (int i = 0; i < 5; i++) time_app_qa_step(0, +1);   /* 6 */
+  for (int i = 0; i < 8; i++) time_app_qa_step(1, +1);   /* 900 */
 
   /* Claude waits for you: the 45 s pulse borrows the glass, then TID comes
    * back with the orange Claude icon above the clock. */
@@ -2114,8 +2144,8 @@ static int run_time_app_captures(void) {
   time_frame(TG_TIME_ROT_CLOCK, "time-clock-attention");
 
   /* Ljudet (spec 2026-10-02): av ger en överstruken högtalare, på spelar
-   * signalen en gång. Sedan en timer som går ut BAKOM VibePulse och ändå ska
-   * låta, eftersom bevakningen går även när TID är dold. */
+   * signalen en gång. Sedan en fokusfas som går ut BAKOM VibePulse och ändå
+   * ska låta, eftersom bevakningen går även när TID är dold. */
   usage_screen_apply_agent(&waiting, wait_us + 50000000LL);
   tk_agent_monitor_dismiss_current();
   usage_screen_tick(wait_us + 51000000LL);
@@ -2123,13 +2153,14 @@ static int run_time_app_captures(void) {
   time_frame(TG_TIME_ROT_CLOCK, "time-clock-sound-off");
   printf("qa: sound-on\n");
   time_app_qa_speaker();
-  sim_orientation = TG_TIME_ROT_TIMER;
+  sim_orientation = TG_TIME_ROT_POMODORO;
   time_app_qa_refresh();
-  time_app_qa_preset(0);
+  time_app_qa_reset();                     /* fokus, steg 0, i vila */
+  time_app_qa_tap();
   torget_app_show(SIM_APP_VIBEPULSE);
   printf("qa: hidden-timer\n");
   fflush(stdout);
-  time_app_qa_advance(21LL * 60 * 1000000);
+  time_app_qa_advance(26LL * 60 * 1000000);
   for (int i = 0; i < 12; i++) { lv_timer_handler(); lv_delay_ms(100); }
   torget_app_show(idx);
 

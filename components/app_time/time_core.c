@@ -1,20 +1,21 @@
 #include "time_core.h"
 
 #include <stdio.h>
+#include <string.h>
 
 _Static_assert(TG_TIME_ROT_CLOCK >= 0 && TG_TIME_ROT_CLOCK <= 3 &&
                TG_TIME_ROT_POMODORO >= 0 && TG_TIME_ROT_POMODORO <= 3 &&
-               TG_TIME_ROT_TIMER >= 0 && TG_TIME_ROT_TIMER <= 3,
+               TG_TIME_ROT_MEETING >= 0 && TG_TIME_ROT_MEETING <= 3,
                "rotationsvärden är kvartsvarv 0..3");
 _Static_assert(TG_TIME_ROT_CLOCK != TG_TIME_ROT_POMODORO &&
-               TG_TIME_ROT_CLOCK != TG_TIME_ROT_TIMER &&
-               TG_TIME_ROT_POMODORO != TG_TIME_ROT_TIMER,
+               TG_TIME_ROT_CLOCK != TG_TIME_ROT_MEETING &&
+               TG_TIME_ROT_POMODORO != TG_TIME_ROT_MEETING,
                "varje läge behöver en egen rotation");
 
 tg_time_mode tg_time_mode_for(int rot, tg_time_mode last) {
   if (rot == TG_TIME_ROT_CLOCK) return TG_TIME_MODE_CLOCK;
   if (rot == TG_TIME_ROT_POMODORO) return TG_TIME_MODE_POMODORO;
-  if (rot == TG_TIME_ROT_TIMER) return TG_TIME_MODE_TIMER;
+  if (rot == TG_TIME_ROT_MEETING) return TG_TIME_MODE_MEETING;
   return last;
 }
 
@@ -109,58 +110,131 @@ void tg_pomo_tap(tg_pomo *p, int64_t now_us) {
 
 void tg_pomo_reset(tg_pomo *p) { tg_pomo_init(p); }
 
-static const int k_preset_minutes[TG_COUNTDOWN_PRESETS] = {20, 40, 50};
-
-void tg_countdown_init(tg_countdown *c) {
-  tg_timer_init(&c->timer);
-  c->preset = 0;
+static int clamp_int(int v, int lo, int hi) {
+  return v < lo ? lo : (v > hi ? hi : v);
 }
 
-int tg_countdown_preset_minutes(int preset) {
-  if (preset < 0 || preset >= TG_COUNTDOWN_PRESETS) return 0;
-  return k_preset_minutes[preset];
+static int round_rate(int rate) {
+  int steps = (rate + TG_MEETING_RATE_STEP / 2) / TG_MEETING_RATE_STEP;
+  return clamp_int(steps * TG_MEETING_RATE_STEP, TG_MEETING_RATE_MIN,
+                   TG_MEETING_RATE_MAX);
 }
 
-bool tg_countdown_start(tg_countdown *c, int preset, int64_t now_us) {
-  int minutes = tg_countdown_preset_minutes(preset);
-  if (minutes <= 0) return false;
-  if (!tg_timer_start(&c->timer, now_us, (int64_t)minutes * 60LL * 1000000LL))
-    return false;
-  c->preset = preset;
+void tg_meeting_init(tg_meeting *m, int people, int rate) {
+  memset(m, 0, sizeof *m);
+  m->state = TG_MEETING_IDLE;
+  m->people = clamp_int(people, TG_MEETING_PEOPLE_MIN, TG_MEETING_PEOPLE_MAX);
+  m->rate = round_rate(rate);
+}
+
+bool tg_meeting_step_people(tg_meeting *m, int delta) {
+  if (m->state != TG_MEETING_IDLE) return false;
+  int next = clamp_int(m->people + delta, TG_MEETING_PEOPLE_MIN,
+                       TG_MEETING_PEOPLE_MAX);
+  if (next == m->people) return false;
+  m->people = next;
   return true;
 }
 
-void tg_countdown_tap(tg_countdown *c, int64_t now_us) {
-  if (tg_timer_tick_expired(&c->timer, now_us)) return;
-  switch (c->timer.state) {
-    case TG_TIMER_RUNNING:
-    case TG_TIMER_PAUSED:
-      tg_timer_toggle(&c->timer, now_us);
+bool tg_meeting_step_rate(tg_meeting *m, int delta_steps) {
+  if (m->state != TG_MEETING_IDLE) return false;
+  int next = clamp_int(m->rate + delta_steps * TG_MEETING_RATE_STEP,
+                       TG_MEETING_RATE_MIN, TG_MEETING_RATE_MAX);
+  if (next == m->rate) return false;
+  m->rate = next;
+  return true;
+}
+
+int64_t tg_meeting_elapsed_us(const tg_meeting *m, int64_t now_us) {
+  int64_t e = 0;
+  if (m->state == TG_MEETING_RUNNING) e = now_us - m->start_us;
+  else if (m->state == TG_MEETING_PAUSED) e = m->elapsed_us;
+  if (e < 0) e = 0;
+  if (e > TG_MEETING_MAX_US) e = TG_MEETING_MAX_US;
+  return e;
+}
+
+void tg_meeting_tick(tg_meeting *m, int64_t now_us) {
+  if (m->state == TG_MEETING_RUNNING &&
+      now_us - m->start_us >= TG_MEETING_MAX_US) {
+    m->state = TG_MEETING_PAUSED;
+    m->elapsed_us = TG_MEETING_MAX_US;
+  }
+}
+
+void tg_meeting_tap(tg_meeting *m, int64_t now_us) {
+  tg_meeting_tick(m, now_us);
+  switch (m->state) {
+    case TG_MEETING_IDLE:
+      m->state = TG_MEETING_RUNNING;
+      m->start_us = now_us;
+      m->elapsed_us = 0;
       break;
-    case TG_TIMER_DONE:
-      tg_timer_cancel(&c->timer);
+    case TG_MEETING_RUNNING:
+      m->elapsed_us = tg_meeting_elapsed_us(m, now_us);
+      m->state = TG_MEETING_PAUSED;
       break;
-    case TG_TIMER_IDLE:
+    case TG_MEETING_PAUSED:
+      /* Vid maxtiden finns inget att återuppta: den står kvar pausad. */
+      if (m->elapsed_us >= TG_MEETING_MAX_US) break;
+      m->start_us = now_us - m->elapsed_us;
+      m->state = TG_MEETING_RUNNING;
       break;
   }
 }
 
-void tg_countdown_reset(tg_countdown *c) { tg_countdown_init(c); }
+void tg_meeting_reset(tg_meeting *m) { tg_meeting_init(m, m->people, m->rate); }
 
-int tg_time_advance(tg_pomo *p, tg_countdown *c, int64_t now_us) {
-  int expired = 0;
-  if (p && tg_timer_tick_expired(&p->timer, now_us)) expired |= TG_TIME_EXPIRED_POMODORO;
-  if (c && tg_timer_tick_expired(&c->timer, now_us)) expired |= TG_TIME_EXPIRED_TIMER;
-  return expired;
+int64_t tg_meeting_hourly_kr(const tg_meeting *m) {
+  return (int64_t)m->people * (int64_t)m->rate;
+}
+
+int64_t tg_meeting_cost_kr(const tg_meeting *m, int64_t now_us) {
+  /* Högst 495 000 kr/h x 3.6e10 us: ryms gott i int64. */
+  return tg_meeting_hourly_kr(m) * tg_meeting_elapsed_us(m, now_us) /
+         (3600LL * 1000000LL);
+}
+
+int tg_meeting_ring(const tg_meeting *m, int64_t now_us) {
+  if (m->state == TG_MEETING_IDLE) return -1;
+  const int64_t hour = 3600LL * 1000000LL;
+  return (int)(tg_meeting_elapsed_us(m, now_us) % hour * 1000 / hour);
+}
+
+void tg_meeting_kr_text(int64_t kr, char *out, size_t cap) {
+  if (cap == 0) return;
+  if (kr < 0) kr = 0;
+  char digits[24];
+  int n = snprintf(digits, sizeof digits, "%lld", (long long)kr);
+  size_t o = 0;
+  for (int i = 0; i < n && o + 1 < cap; i++) {
+    if (i > 0 && (n - i) % 3 == 0) {
+      if (o + 2 >= cap) break;
+      out[o++] = ' ';
+    }
+    out[o++] = digits[i];
+  }
+  out[o] = '\0';
+}
+
+void tg_meeting_elapsed_text(int64_t elapsed_us, char *out, size_t cap) {
+  if (cap == 0) return;
+  if (elapsed_us < 0) elapsed_us = 0;
+  int64_t s = elapsed_us / 1000000LL;
+  int h = (int)(s / 3600), mi = (int)(s / 60 % 60), se = (int)(s % 60);
+  if (h > 0) snprintf(out, cap, "%d:%02d:%02d", h, mi, se);
+  else snprintf(out, cap, "%02d:%02d", mi, se);
+}
+
+int tg_time_advance(tg_pomo *p, int64_t now_us) {
+  if (p && tg_timer_tick_expired(&p->timer, now_us)) return TG_TIME_EXPIRED_POMODORO;
+  return 0;
 }
 
 int tg_time_cue_for(int expired, const tg_pomo *p) {
-  if (p && (expired & TG_TIME_EXPIRED_POMODORO))
-    return tg_pomo_phase_of(p) == TG_POMO_FOCUS ? TG_AUDIO_CUE_DONE
-                                                : TG_AUDIO_CUE_BREAK_OVER;
-  if (expired & (TG_TIME_EXPIRED_POMODORO | TG_TIME_EXPIRED_TIMER))
-    return TG_AUDIO_CUE_DONE;
-  return -1;
+  if (!(expired & TG_TIME_EXPIRED_POMODORO)) return -1;
+  if (p && tg_pomo_phase_of(p) != TG_POMO_FOCUS) return TG_AUDIO_CUE_BREAK_OVER;
+  return TG_AUDIO_CUE_DONE;
 }
 
 bool tg_time_clock_valid(int64_t epoch_s) {
