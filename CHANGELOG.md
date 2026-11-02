@@ -109,8 +109,12 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
   takes the glass. The clock runs on the RTC time when it is valid, and
   shows `––:––` when it is not. VibePulse keeps its NO DATA, NO NETWORK and
   setup steps, and they now count from when it took the glass. WIFI under
-  SETTINGS opens the setup window as before. Host-tested; not yet seen on
-  glass.
+  SETTINGS opens the setup window as before. Host-tested, and seen on
+  `torget-216-02` on 2026-11-02 (`v1.1.0-96-g480d5a5`): the clock stayed
+  for over two minutes with the panel blocked from the Wi-Fi, and VibePulse
+  got NO NETWORK at ~60 s and the setup window at ~90 s from the switch
+  ([review](docs/superpowers/reviews/2026-11-02-tid-offline-glass-physical.md));
+  a cold boot without a network is host-tested only.
 
 - **`tools/ota-flash.sh` no longer reports a failed upload as a success.** It
   printed its "202" line and exited 0 whatever the panel answered, also after
