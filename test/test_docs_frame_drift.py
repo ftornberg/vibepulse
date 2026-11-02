@@ -116,7 +116,8 @@ PINNED = {
     # wall clock pinned by --time-app-captures so the clock face is exact.
     "time-clock.png": "torget-time-clock.bmp",
     "time-pomodoro-running.png": "torget-time-pomodoro-running.bmp",
-    "time-timer-select.png": "torget-time-timer-select.bmp",
+    "time-meeting-setup.png": "torget-time-meeting-setup.bmp",
+    "time-meeting-running.png": "torget-time-meeting-running.bmp",
 }
 
 # Frames whose chrome this guard cannot confirm is current, each frozen at

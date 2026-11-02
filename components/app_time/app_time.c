@@ -19,7 +19,7 @@ extern const lv_font_t plex_icon_64;
 static struct {
   tg_time_mode mode;
   tg_pomo pomo;
-  tg_countdown count;
+  tg_meeting meeting;
   lv_timer_t *tick;
   lv_timer_t *watch;
   bool sound_on;
@@ -38,20 +38,22 @@ static int64_t now_us(void) {
   return now;
 }
 
-/* En timer som just gick ut låter, om ljudet är på (spec 2026-10-02). En paus
- * som är slut har sin egen signal; två utgångar på samma tick ger en. Kallas
- * före kvitteringen, medan pomodoron står kvar på fasen som tog slut. */
+/* En pomodorofas som just gick ut låter, om ljudet är på (spec 2026-10-02).
+ * En paus som är slut har sin egen signal. Kallas före kvitteringen, medan
+ * pomodoron står kvar på fasen som tog slut. Mötet låter aldrig. */
 static void chime_on(int expired) {
   int cue = tg_time_cue_for(expired, &app.pomo);
   if (cue >= 0 && app.sound_on) torget_audio_play((tg_audio_cue)cue);
 }
 
-/* Tickar timrarna, läser orienteringen och ritar om vid ändring. Kallas under
- * UI-låset (lv_timer och touch-callbacks gör det redan). All tickning går
- * genom tg_time_advance, så att varje utgång hörs exakt en gång. */
+/* Tickar pomodoron och mötet, läser orienteringen och ritar om vid ändring.
+ * Kallas under UI-låset (lv_timer och touch-callbacks gör det redan). All
+ * pomodorotickning går genom tg_time_advance, så att varje utgång hörs exakt
+ * en gång. */
 static void refresh(void) {
   int64_t now = now_us();
-  chime_on(tg_time_advance(&app.pomo, &app.count, now));
+  chime_on(tg_time_advance(&app.pomo, now));
+  tg_meeting_tick(&app.meeting, now);
   app.mode = tg_time_mode_for(torget_orientation(), app.mode);
 
   time_t wall = time(NULL);
@@ -82,7 +84,7 @@ static void refresh(void) {
   const lv_image_dsc_t *attention = torget_attention_icon(&attention_color);
   time_views_set_attention(attention, attention_color);
   tg_time_present(&model, app.mode, valid, hour, minute, second, &app.pomo,
-                  &app.count, now, attention != NULL, app.sound_on);
+                  &app.meeting, now, attention != NULL, app.sound_on);
   time_views_render(&model);
 }
 
@@ -91,33 +93,40 @@ static void tick_cb(lv_timer_t *timer) {
   refresh();
 }
 
-/* Bevakningen går ALLTID, även när TID är dold: en timer som går ut medan
- * VibePulse visas ska höras. Den ritar ingenting. */
+/* Bevakningen går ALLTID, även när TID är dold: en pomodorofas som går ut
+ * medan VibePulse visas ska höras. Den ritar ingenting. */
 static void watch_cb(lv_timer_t *timer) {
   (void)timer;
-  chime_on(tg_time_advance(&app.pomo, &app.count, now_us()));
+  chime_on(tg_time_advance(&app.pomo, now_us()));
 }
 
-/* Ett tryck kvitterar först en färdig timer (pomodoron före timern, i vilket
- * läge som helst); annars gäller det läget man står i. */
+static void start_or_toggle_meeting(int64_t now) {
+  /* Inställningen sparas när ett möte startar, inte vid varje stegartryck:
+   * ett NVS-skriv per möte i stället för ett per tryck. */
+  if (app.meeting.state == TG_MEETING_IDLE)
+    tg_time_meeting_save(app.meeting.people, app.meeting.rate);
+  tg_meeting_tap(&app.meeting, now);
+}
+
+/* Ett tryck kvitterar först en färdig pomodoro (i vilket läge som helst);
+ * annars gäller det läget man står i. */
 static void on_tap(void) {
   /* Medvetet INGEN tick före beslutet: ett tryck som landar efter deadline men
    * före nästa 200 ms-tick ska visa KLAR (tg_*_tap tickar själv och stannar
    * där), inte kvittera den osedd. */
   int64_t now = now_us();
   /* Gick en löpning ut just nu: låt den höras och visa KLAR, kvittera inte. */
-  int expired = tg_time_advance(&app.pomo, &app.count, now);
+  int expired = tg_time_advance(&app.pomo, now);
   if (expired) {
     chime_on(expired);
     refresh();
     return;
   }
-  switch (tg_time_done_source_of(&app.pomo, &app.count)) {
+  switch (tg_time_done_source_of(&app.pomo)) {
     case TG_TIME_DONE_POMODORO: tg_pomo_tap(&app.pomo, now); break;
-    case TG_TIME_DONE_TIMER: tg_countdown_tap(&app.count, now); break;
     case TG_TIME_DONE_NONE:
       if (app.mode == TG_TIME_MODE_POMODORO) tg_pomo_tap(&app.pomo, now);
-      else if (app.mode == TG_TIME_MODE_TIMER) tg_countdown_tap(&app.count, now);
+      else if (app.mode == TG_TIME_MODE_MEETING) start_or_toggle_meeting(now);
       break;
   }
   refresh();
@@ -126,20 +135,23 @@ static void on_tap(void) {
 static void on_reset(void) {
   /* Samma regel som on_tap: en löpning som gick ut inom senaste tick visar
    * KLAR först i stället för att försvinna osedd i ett avbryt. */
-  int expired = tg_time_advance(&app.pomo, &app.count, now_us());
+  int expired = tg_time_advance(&app.pomo, now_us());
   if (expired) {
     chime_on(expired);
   } else if (app.mode == TG_TIME_MODE_POMODORO) {
     tg_pomo_reset(&app.pomo);
-  } else if (app.mode == TG_TIME_MODE_TIMER) {
-    tg_countdown_reset(&app.count);
+  } else if (app.mode == TG_TIME_MODE_MEETING) {
+    tg_meeting_reset(&app.meeting);
   }
   refresh();
 }
 
-static void on_preset(int idx) {
-  if (app.mode != TG_TIME_MODE_TIMER) return;
-  tg_countdown_start(&app.count, idx, now_us());
+/* En stegare: which 0 = deltagare, 1 = timkostnad; dir -1 eller +1. Bara i
+ * mötesläget och bara i vila (kärnan vägrar annars). */
+static void on_step(int which, int dir) {
+  if (app.mode != TG_TIME_MODE_MEETING) return;
+  if (which == 0) tg_meeting_step_people(&app.meeting, dir);
+  else tg_meeting_step_rate(&app.meeting, dir);
   refresh();
 }
 
@@ -159,11 +171,13 @@ static void create(lv_obj_t *root) {
   app.fixed_hour = -1;
 #endif
   tg_pomo_init(&app.pomo);
-  tg_countdown_init(&app.count);
+  int people = TG_MEETING_PEOPLE_DEFAULT, rate = TG_MEETING_RATE_DEFAULT;
+  tg_time_meeting_load(&people, &rate);
+  tg_meeting_init(&app.meeting, people, rate);
   app.sound_on = tg_time_sound_load();
 
   static const tg_time_view_actions actions = {
-    .tap = on_tap, .reset = on_reset, .preset = on_preset, .speaker = on_speaker,
+    .tap = on_tap, .reset = on_reset, .step = on_step, .speaker = on_speaker,
   };
   time_views_create(root, &actions);
   refresh();
@@ -204,7 +218,7 @@ const torget_app_t time_app = {
 void time_app_qa_refresh(void) { refresh(); }
 void time_app_qa_advance(int64_t us) { app.skew_us += us; }
 void time_app_qa_tap(void) { on_tap(); }
-void time_app_qa_preset(int idx) { on_preset(idx); }
+void time_app_qa_step(int which, int dir) { on_step(which, dir); }
 void time_app_qa_reset(void) { on_reset(); }
 void time_app_qa_time_unset(bool unset) { app.time_unset = unset; }
 void time_app_qa_speaker(void) { on_speaker(); }

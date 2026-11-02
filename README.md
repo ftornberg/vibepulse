@@ -702,32 +702,42 @@ has shared LVGL simulator coverage; physical memory and touch review are
 pending before release. [Setup, defaults and future experiments](docs/labs/README.md).
 Countdown clocks and coding quotes remain concepts for a later Labs addition.
 
-## TID: a clock, a pomodoro and a timer
+## TID: a clock, a pomodoro and a meeting meter
 
 A second, opt-in app for the 2.16 panel that has nothing to do with agents.
 **The side the panel stands on chooses the face**, so there is no menu: buttons
 to the right shows the clock (the panel's natural resting pose), buttons to the
 left a pomodoro (25 / 5 min, a 15 min break after four rounds), buttons up a
-plain timer with 20, 40 and 50 minute presets. A ring around the digits counts
-the seconds, always moving clockwise, or shows the time left.
+**meeting meter**: set how many people are in the room and what an hour of
+each costs, tap, and watch the meeting's price climb in kronor. A ring around
+the digits counts the seconds, always moving clockwise, shows the pomodoro's
+time left, or makes one lap per meeting hour.
 
 <p align="center">
   <img src="docs/img/time-clock.png" width="31%" alt="TID clock face: 10:09 with a clockwise seconds ring two-thirds full">
   &nbsp;
   <img src="docs/img/time-pomodoro-running.png" width="31%" alt="TID pomodoro: FOCUS 21:48 with the ring showing the time left">
   &nbsp;
-  <img src="docs/img/time-timer-select.png" width="31%" alt="TID timer waiting for a choice of 20, 40 or 50 minutes">
+  <img src="docs/img/time-meeting-setup.png" width="31%" alt="TID meeting meter set to 6 people at 900 kr per hour each: 5 400 kr per hour">
 </p>
 
-Tap to start, pause and resume; a long press opens the launcher. When a
-timer ends it can chime (three rising notes, two falling ones when a pomodoro
+<p align="center">
+  <img src="docs/img/time-meeting-running.png" width="31%" alt="TID meeting meter after 27 minutes 40 seconds: 2 490 kr, the ring almost half way round the hour">
+</p>
+
+Tap to start, pause and resume; a long press opens the launcher. The meeting
+meter's − and + set 1–99 people and 100–5 000 kr per person and hour (in
+steps of 100), remembered for the next meeting. It replaced the earlier 20 /
+40 / 50 minute timer. When a pomodoro phase ends it can chime (three rising notes, two falling ones when a pomodoro
 break is over, silent at night), toggled by the
 speaker symbol and built in with `TK_TID_SOUND`. A NEEDS YOU
 alert still reaches you: the panel switches to VibePulse for the question and
 returns to TID after the answer. TID is off by default (`-DTORGET_WITH_TIME=ON`
 to build it); its rising chime and its break cue are heard on the owner's second 2.16 unit. It runs on the owner's 2.16 panel, with the
 side mapping measured there. [How it works, how to build it and its
-limits](docs/time-app.md).
+limits](docs/time-app.md). The meeting meter has been
+on the owner's 2.16 panel since 2026-11-02 and was accepted there in a static
+review ([physical review](docs/superpowers/reviews/2026-11-02-tid-meeting-meter-physical.md)).
 
 ## One button, one menu
 

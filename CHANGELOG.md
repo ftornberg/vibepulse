@@ -8,6 +8,23 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
 
 ### Added
 
+- **TID meeting meter (2.16, opt-in).** Buttons up on TID is now a meeting
+  meter instead of the 20 / 40 / 50 minute timer: set the number of people
+  (1–99) and kr per person and hour (100–5 000, steps of 100) with − and +,
+  tap, and the big number counts the meeting's cost in kronor, with the
+  elapsed time under it and a ring that laps once per hour. Pause, resume and
+  RESET as before; the setting is saved on the panel when a meeting starts.
+  Ten hours is the cap (largest sum 4 950 000, seven digits, which fit inside
+  the ring at 84 px). Pure logic (`tg_meeting` in `time_core`) and the view
+  model are host-tested; the simulator captures seven meeting states and a
+  test keeps the widest digits at least 12 px inside the ring. On
+  `torget-216-02` since 2026-11-02 (`v1.1.0-94-gd501bcb`): MEETING seen on
+  the glass; the owner's first minutes with the steppers found that a quick
+  tap beside − / + landed on the background and started a meeting, so in the
+  setup face only the band over the hourly price now starts one
+  (`v1.1.0-95-g27e970b`, accepted on the glass the same evening;
+  [review](docs/superpowers/reviews/2026-11-02-tid-meeting-meter-physical.md)).
+
 - **Merge queue on the host.** `/api/merge-queue` lists pull requests that
   local agent-team orchestrators have reviewed and that wait for a person to
   merge them (`vibepulse_setup.py merge-queue add <port>`). Loopback sources
@@ -124,6 +141,10 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
   Found in the owner's review of the part A plan (#5, point 2).
 
 ### Changed
+
+- **TID's 20 / 40 / 50 minute timer is gone,** replaced by the meeting meter
+  on the same side (buttons up). The pomodoro is now TID's only countdown and
+  the only thing that chimes; the speaker symbol stays on the clock face only.
 
 - **48.6 KB of static data moved from internal RAM to PSRAM** (link map:
   85 716 to 37 124 B), and the panel now logs its task stacks. The 2026-10-08 memory study (OBS-47) found
