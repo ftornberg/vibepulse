@@ -14,8 +14,8 @@
     "deploy": "node deploy.mjs deploy"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "1.4.10",
+    "@cloudflare/vitest-plugin": "1.4.11",
     "vitest": "4.1.12",
-    "wrangler": "4.155.0"
+    "wrangler": "4.156.0"
   }
 }
