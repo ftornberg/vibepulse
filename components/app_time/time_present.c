@@ -1,6 +1,9 @@
 #include "time_present.h"
 
+#include <stdio.h>
 #include <string.h>
+
+#define DOT "  \xC2\xB7  " /* mittpunkt med luft, plex_ui_21 bär U+00B7 */
 
 static const char *pomo_caption(tg_pomo_phase phase) {
   switch (phase) {
@@ -11,20 +14,57 @@ static const char *pomo_caption(tg_pomo_phase phase) {
   return "";
 }
 
-tg_time_done_source tg_time_done_source_of(const tg_pomo *p, const tg_countdown *c) {
+tg_time_done_source tg_time_done_source_of(const tg_pomo *p) {
   if (p && p->timer.state == TG_TIMER_DONE) return TG_TIME_DONE_POMODORO;
-  if (c && c->timer.state == TG_TIMER_DONE) return TG_TIME_DONE_TIMER;
   return TG_TIME_DONE_NONE;
+}
+
+bool tg_time_big_is_compact(const char *big) {
+  int digits = 0;
+  for (const char *c = big; c && *c; c++)
+    if (*c >= '0' && *c <= '9') digits++;
+  return digits >= 6;
+}
+
+static void set_hint(tg_time_view_model *m, const char *text) {
+  snprintf(m->hint, sizeof m->hint, "%s", text);
+}
+
+static void present_meeting(tg_time_view_model *m, const tg_meeting *mt,
+                            int64_t now_us) {
+  m->caption = "MEETING";
+  if (mt->state == TG_MEETING_IDLE) {
+    /* I vila är siffran mötets pris per timme: varje tryck syns direkt. */
+    tg_meeting_kr_text(tg_meeting_hourly_kr(mt), m->big, sizeof m->big);
+    set_hint(m, "KR PER HOUR" DOT "TAP TO START");
+    m->show_steppers = true;
+    snprintf(m->people, sizeof m->people, "%d", mt->people);
+    snprintf(m->rate, sizeof m->rate, "%d", mt->rate);
+    return;
+  }
+  int64_t elapsed = tg_meeting_elapsed_us(mt, now_us);
+  char clock[16];
+  tg_meeting_elapsed_text(elapsed, clock, sizeof clock);
+  tg_meeting_kr_text(tg_meeting_cost_kr(mt, now_us), m->big, sizeof m->big);
+  if (mt->state == TG_MEETING_RUNNING) {
+    snprintf(m->hint, sizeof m->hint, "KR" DOT "%s" DOT "%d %s", clock,
+             mt->people, mt->people == 1 ? "PERSON" : "PEOPLE");
+  } else {
+    snprintf(m->hint, sizeof m->hint, "PAUSED" DOT "%s", clock);
+    m->muted = true;
+  }
+  m->show_reset = true;
+  m->ring_end = tg_meeting_ring(mt, now_us);
 }
 
 /* En timer som inte är i vila: siffran är kvarvarande tid. */
 static void fill_active(tg_time_view_model *m, const tg_timer *t, int64_t now_us) {
   tg_time_mmss_text(tg_timer_remaining_us(t, now_us), m->big, sizeof m->big);
   if (t->state == TG_TIMER_RUNNING) {
-    m->hint = "TAP TO PAUSE";
+    set_hint(m, "TAP TO PAUSE");
     m->show_reset = true;
   } else if (t->state == TG_TIMER_PAUSED) {
-    m->hint = "PAUSED";
+    set_hint(m, "PAUSED");
     m->muted = true;
     m->show_reset = true;
   }
@@ -32,12 +72,11 @@ static void fill_active(tg_time_view_model *m, const tg_timer *t, int64_t now_us
 
 void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
                      bool clock_valid, int hour, int minute, int second,
-                     const tg_pomo *pomo, const tg_countdown *count,
+                     const tg_pomo *pomo, const tg_meeting *meeting,
                      int64_t now_us, bool attention, bool sound_on) {
   memset(m, 0, sizeof *m);
   m->mode = mode;
   m->caption = "";
-  m->hint = "";
   m->dots_done = -1;
   m->ring_start = 0;
   m->ring_end = -1;
@@ -50,7 +89,7 @@ void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
         m->ring_start = arc.start;
         m->ring_end = arc.end;
       }
-      /* Bara klockan: pomodoro och timer har sin rubrik på samma plats. */
+      /* Bara klockan: pomodoro och möte har sin rubrik på samma plats. */
       m->show_attention = attention;
       break;
 
@@ -64,7 +103,7 @@ void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
         m->dots_done += 1;
       if (pomo->timer.state == TG_TIMER_IDLE) {
         tg_time_mmss_text(tg_pomo_phase_us(pomo), m->big, sizeof m->big);
-        m->hint = "TAP TO START";
+        set_hint(m, "TAP TO START");
       } else {
         fill_active(m, &pomo->timer, now_us);
         m->ring_end = tg_ring_remaining(&pomo->timer, now_us);
@@ -72,28 +111,19 @@ void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
       break;
     }
 
-    case TG_TIME_MODE_TIMER:
-      m->caption = "TIMER";
-      if (count->timer.state == TG_TIMER_IDLE) {
-        /* Ingen längd vald: ett streck, aldrig en påhittad nolla. */
-        tg_time_clock_text(false, 0, 0, m->big, sizeof m->big);
-        m->show_presets = true;
-        m->hint = "CHOOSE MINUTES";
-      } else {
-        fill_active(m, &count->timer, now_us);
-        m->ring_end = tg_ring_remaining(&count->timer, now_us);
-      }
+    case TG_TIME_MODE_MEETING:
+      present_meeting(m, meeting, now_us);
       break;
   }
 
-  /* Högtalaren: klockan alltid, timern när RESET inte tar platsen; pomodoron
-   * har sina prickar där. */
+  /* Högtalaren bara på klockan: pomodoron har sina prickar där och mötet
+   * sina stegare och RESET. Mötet låter aldrig. */
   m->speaker_on = sound_on;
-  m->show_speaker = mode == TG_TIME_MODE_CLOCK ||
-                    (mode == TG_TIME_MODE_TIMER && !m->show_reset);
+  m->show_speaker = mode == TG_TIME_MODE_CLOCK;
+  m->big_compact = tg_time_big_is_compact(m->big);
 
   /* KLAR gäller i alla lägen så länge appen syns; pomodoron kvitteras först. */
-  m->done_source = tg_time_done_source_of(pomo, count);
+  m->done_source = tg_time_done_source_of(pomo);
   if (m->done_source != TG_TIME_DONE_NONE) {
     m->ring_start = 0;
     m->ring_end = -1;
@@ -103,8 +133,5 @@ void tg_time_present(tg_time_view_model *m, tg_time_mode mode,
   if (m->done_source == TG_TIME_DONE_POMODORO) {
     m->done = true;
     m->caption = pomo_caption(tg_pomo_phase_of(pomo));
-  } else if (m->done_source == TG_TIME_DONE_TIMER) {
-    m->done = true;
-    m->caption = "TIMER";
   }
 }

@@ -1,8 +1,9 @@
-# TID: clock, pomodoro and timer
+# TID: clock, pomodoro and meeting meter
 
 TID is an opt-in launcher app for the original 2.16 panel. It has nothing to do
 with agents: it turns the panel into a small desk clock, a pomodoro timer and a
-plain countdown, and **the side the panel stands on chooses which one**. There
+meeting meter that shows what a meeting costs, and **the side the panel stands
+on chooses which one**. There
 is no menu.
 
 > **Status.** Running on the owner's 2.16 panel since 2026-09-26 (OTA), with the
@@ -15,7 +16,7 @@ is no menu.
 |---|---|
 | Buttons to the right | **Clock:** the current local time as `HH:MM`, seconds as a ring around it |
 | Buttons to the left | **Pomodoro:** 25 min focus, 5 min break, four rounds, then a 15 min long break |
-| Buttons up | **Timer:** pick 20, 40 or 50 minutes |
+| Buttons up | **Meeting:** set people and kr per person and hour, then watch the cost |
 | Buttons down | No face of its own: the app keeps whatever it showed last |
 
 The clock sits with the buttons to the right because that is how the panel
@@ -27,22 +28,50 @@ The digital time sits in the middle of the glass and a thin ring runs around it:
   minutes the filled part grows from 12 o'clock, in even minutes the empty
   part does, so the ring never jumps from full to empty. It is hidden until the
   panel has a valid time (the digits then read `––:––`, never `00:00`).
-- **Pomodoro and timer:** the ring is the time left, full at the start and
-  shrinking to nothing. It is hidden while a timer is idle.
+- **Pomodoro:** the ring is the time left, full at the start and shrinking to
+  nothing. It is hidden while the pomodoro is idle.
+- **Meeting:** the ring makes one lap per meeting hour, growing clockwise from
+  12 o'clock and starting over each hour. It is hidden before the meeting
+  starts.
 
 ### Touch
 
-- **Tap** starts, pauses and resumes. In the timer face a tap on 20, 40 or 50
-  starts that length.
-- **RESET** (shown while a timer runs or is paused) cancels it. Its touch area
+- **Tap** starts, pauses and resumes.
+- **RESET** (shown while a pomodoro or a meeting runs or is paused) cancels it. Its touch area
   is larger than the word: most of the bottom of the face.
 - **Long press** anywhere opens the launcher, as in every app.
 - When a timer ends, a full circle and **DONE** take over the glass in *any*
   face until you tap. In pomodoro the next phase then waits idle for another
   tap; nothing starts by itself while the app is silent.
 
-The two timers are independent: turning the panel away from a running one does
-not cancel it, and returning shows the correct time left.
+The pomodoro and the meeting are independent: turning the panel away from a
+running one does not stop it, and returning shows the correct time.
+
+### Meeting meter
+
+Replaced the 20 / 40 / 50 minute timer on 2026-11-02 (the owner's choice).
+
+- **Before the meeting** the face shows two steppers: **PEOPLE** (1–99) and
+  **KR/H EACH** (100–5 000 kr per person and hour, in steps of 100). The big
+  number is the meeting's price per hour (`6 × 900 = 5 400`), so every tap on
+  − or + shows its effect. Each stepper splits into two touch areas, − on the
+  left half and + on the right, at least 80 × 80 px each. Defaults are 6 people
+  at 900 kr; the last setting is saved on the panel (NVS namespace `tg_time`,
+  only when a meeting starts) and comes back after a restart.
+- **Tap** anywhere else starts the meeting. The big number is now the cost so
+  far in whole kronor, rounded down, with the elapsed time and the head count
+  under it (`KR · 27:40 · 6 PEOPLE`). The steppers are locked while a meeting
+  runs or is paused: the cost always uses what the meeting started with.
+- **Tap** pauses (the number dims, the time stops) and resumes; **RESET** ends
+  the meeting and keeps the setting for the next one.
+- **Ten hours is the cap.** The meeting then stands paused. This keeps the
+  largest possible sum (99 × 5 000 kr/h × 10 h = 4 950 000) to seven digits,
+  which fit inside the ring in the 84 px digits; six digits and more switch
+  from 118 px to 84 px.
+- **It never chimes** and has no DONE screen: a meeting has no planned end.
+- Status: **simulator-verified only** (`--time-app-captures`, frames
+  `time-meeting-*`). It has not been installed on or reviewed on a panel;
+  in particular the touch areas need the owner's finger on the glass.
 
 ## Build it
 
@@ -80,7 +109,7 @@ build, so commit before any install.
 
 `components/app_time/time_core.h` maps the rotation the panel measures
 (`torget_orientation()`, quarter turns from boot) to a face:
-`TG_TIME_ROT_CLOCK`, `TG_TIME_ROT_POMODORO` and `TG_TIME_ROT_TIMER`. On the
+`TG_TIME_ROT_CLOCK`, `TG_TIME_ROT_POMODORO` and `TG_TIME_ROT_MEETING`. On the
 owner's 2.16 panel (2026-09-26) buttons up reports 0, buttons left 1 and
 buttons right 3, so buttons down is 2 by elimination. Another unit should
 report the same (the calibration in `main/rotation.c` is fixed), but if a face
@@ -89,20 +118,20 @@ appears, and edit the three `#define` values.
 
 ## Sound
 
-When a timer or a focus phase ends, TID plays three rising notes (C6, E6,
+When a focus phase ends, TID plays three rising notes (C6, E6,
 G6, about 0.6 s), also while another app is on the glass. When a pomodoro
 break ends, short or long, it plays two falling, lower notes instead (G5, E5,
-about 0.6 s), so the ear can tell "rest now" from "back to work". If a break
-and the timer end on the same tick, only the break's cue plays, matching the
-pomodoro that the glass shows first. It stays silent
+about 0.6 s), so the ear can tell "rest now" from "back to work". The
+meeting meter never sounds. It stays silent
 during the night schedule (the same 23:00 to 07:00 as night dimming, with a
 valid clock) and while the maintenance window is open. Silence follows night
 dimming itself: with **NIGHT DIM** switched off in SETTINGS → LABS, the chime
 also plays at night (the owner asked for "silent while night dimming").
 
-- **The speaker symbol** at the bottom of the clock and the timer's preset
-  page turns sound on and off; the choice survives a restart. Turning it on
-  plays the chime once. While a timer runs, RESET takes that place.
+- **The speaker symbol** at the bottom of the clock turns sound on and off;
+  the choice survives a restart. Turning it on plays the chime once. (Until
+  2026-11-02 it also sat on the timer's preset page; the meeting meter has
+  its steppers there.)
 - **It is compiled in only with `#define TK_TID_SOUND 1`** in `secrets.h`
   (off in `secrets.h.example`). Without it the panel carries no audio code.
 - **Memory first.** The engine borrows the I2S peripheral and the ES8311 codec
@@ -128,8 +157,8 @@ break to their ends and judged the cue good at the unchanged volume
   tap, so it is silent; repeating a chime until a tap is a later step.
 - **Needs You takes the glass from TID.** When an agent needs you, the panel
   switches to VibePulse so the question is seen, and returns to TID after the
-  answer, unless you switched app yourself meanwhile. A running TID timer keeps
-  counting underneath. Seen on the owner's 2.16 panel on 2026-09-26
+  answer, unless you switched app yourself meanwhile. A running pomodoro or
+  meeting keeps counting underneath. Seen on the owner's 2.16 panel on 2026-09-26
   (`v1.1.0-32-g96d6947`): NEEDS YOU came up over the clock face, for a
   manual-mode request where the panel offered only to dismiss it, and TID came
   back after it was dismissed.
@@ -155,9 +184,10 @@ break to their ends and judged the cue good at the unchanged volume
 ## Design notes
 
 The pure logic (`time_core`, `time_present`) has no LVGL and no system clock, and
-is tested on the host with `./test/run.sh`. Timers store a deadline in the
-device's monotonic clock and compute the time left from it, so they stay correct
-across a long absence. The LVGL layer only renders a view model and forwards
+is tested on the host with `./test/run.sh`. The pomodoro stores a deadline in
+the device's monotonic clock and computes the time left from it; the meeting
+stores when it (adjusted for pauses) began and computes the elapsed time and
+cost from that. Neither needs to tick to stay correct across a long absence. The LVGL layer only renders a view model and forwards
 touches; taps use `LV_EVENT_SHORT_CLICKED` so a long press that opens the
 launcher never also toggles a timer.
 

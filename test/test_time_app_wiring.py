@@ -105,6 +105,17 @@ assert reset and int(reset.group(1)) >= 240 and int(reset.group(2)) >= 80, (
     "the RESET hit area must stay at least 240 x 80 px"
 )
 
+# The meeting steppers are finger targets too: each half of a stepper (minus
+# left, plus right) is one hit area, at least 80 x 80 (2026-11-02).
+consts = dict(re.findall(r"#define (STEP_\w+)\s+(\d+)", views))
+hit_h = int(consts["STEP_H"]) + 2 * int(consts["STEP_HIT_PAD"])
+assert hit_h >= 80, f"stepper hit areas must be at least 80 px tall, got {hit_h}"
+for w in ("STEP_PEOPLE_W", "STEP_RATE_W"):
+    assert int(consts[w]) // 2 >= 80, f"{w}/2 must be at least 80 px wide"
+assert "tg_countdown" not in views and "tg_countdown" not in app, (
+    "the 20/40/50 timer was replaced by the meeting cost (2026-11-02)"
+)
+
 # The owner chose VibePulse's palette on the glass (2026-09-26): Claude orange
 # accent and the softer off-white for the big digits; pure white was too sharp.
 assert "#define COL_ACCENT lv_color_hex(0xD97757)" in views

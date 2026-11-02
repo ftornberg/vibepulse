@@ -6,6 +6,8 @@
 #include "torget.h"
 
 extern const lv_font_t plex_num_118;
+extern const lv_font_t plex_num_84;
+extern const lv_font_t plex_stat_35;
 extern const lv_font_t plex_num_50;
 extern const lv_font_t plex_headline_48;
 extern const lv_font_t plex_attention_52;
@@ -23,12 +25,28 @@ extern const lv_font_t plex_ui_21;
 
 #define DOT_COUNT 4
 
-/* Läget innanför ringen. Förvalen kräver plats: siffran flyttar upp och
- * uppmaningen hamnar mellan siffran och förvalen. */
+/* Läget innanför ringen. Mötets stegare kräver plats: rubriken och siffran
+ * flyttar upp och uppmaningen hamnar mellan siffran och stegarna (skissen
+ * 2026-11-02). */
+#define CAPTION_Y             112
+#define CAPTION_Y_STEPPERS    74
 #define BIG_OFFSET_Y          (-8)
-#define BIG_OFFSET_Y_PRESETS  (-54)
+#define BIG_OFFSET_Y_STEPPERS (-62)
 #define HINT_Y                300
-#define HINT_Y_PRESETS        232
+#define HINT_Y_STEPPERS       232
+
+/* Stegarna: en ram per värde, deltagare smal (högst två siffror) och
+ * timkostnad bred (fyra). Ramarna ryms innanför glasets runda hörn. Varje
+ * ram delas i två osynliga träffytor, − till vänster och + till höger, som
+ * går 10 px utanför ramen uppåt och nedåt (84 px höga). */
+#define STEP_Y        290
+#define STEP_H        64
+#define STEP_HIT_PAD  10
+#define STEP_LABEL_Y  362
+#define STEP_PEOPLE_X 38
+#define STEP_PEOPLE_W 160
+#define STEP_RATE_X   214
+#define STEP_RATE_W   228
 
 static struct {
   tg_time_view_actions actions;
@@ -43,8 +61,8 @@ static struct {
   lv_obj_t *big;
   lv_obj_t *hint;
   lv_obj_t *dots[DOT_COUNT];
-  lv_obj_t *presets_row;
-  lv_obj_t *chips[TG_COUNTDOWN_PRESETS];
+  lv_obj_t *steppers;
+  lv_obj_t *step_value[2];
   lv_obj_t *reset;
   lv_obj_t *speaker_area;
   lv_obj_t *speaker;
@@ -75,9 +93,10 @@ static void on_speaker(lv_event_t *e) {
   if (v.actions.speaker) v.actions.speaker();
 }
 
-static void on_preset(lv_event_t *e) {
-  int idx = (int)(intptr_t)lv_event_get_user_data(e);
-  if (v.actions.preset) v.actions.preset(idx);
+/* user_data: which * 2 + (dir > 0), så en pekare bär båda. */
+static void on_step(lv_event_t *e) {
+  int code = (int)(intptr_t)lv_event_get_user_data(e);
+  if (v.actions.step) v.actions.step(code / 2, (code % 2) ? 1 : -1);
 }
 
 /* Tryck = SHORT_CLICKED, aldrig CLICKED: LVGL skickar även CLICKED efter ett
@@ -119,6 +138,51 @@ static lv_obj_t *plain(lv_obj_t *parent, int w, int h) {
   return o;
 }
 
+/* En stegare i v.steppers: ram, −, värde, + och etikett under. Två osynliga
+ * träffytor (vänster halva −, höger halva +) ligger ovanpå ramen. */
+static void stepper(int which, int x, int w, const char *what) {
+  int top = STEP_HIT_PAD; /* ramens y inne i behållaren */
+  lv_obj_t *box = plain(v.steppers, w, STEP_H);
+  lv_obj_set_pos(box, x, top);
+  lv_obj_set_style_radius(box, 20, 0);
+  lv_obj_set_style_border_width(box, 2, 0);
+  lv_obj_set_style_border_color(box, COL_TRACK, 0);
+
+  static const char *const glyph[2] = {"\xE2\x80\x93", "+"}; /* U+2013, + */
+  for (int side = 0; side < 2; side++) {
+    lv_obj_t *g = lv_label_create(box);
+    lv_obj_set_style_text_font(g, &plex_stat_35, 0);
+    lv_obj_set_style_text_color(g, COL_MUTED, 0);
+    lv_label_set_text(g, glyph[side]);
+    lv_obj_align(g, side ? LV_ALIGN_RIGHT_MID : LV_ALIGN_LEFT_MID,
+                 side ? -18 : 18, -2);
+    lv_obj_remove_flag(g, LV_OBJ_FLAG_CLICKABLE);
+  }
+
+  lv_obj_t *num = lv_label_create(box);
+  lv_obj_set_style_text_font(num, &plex_num_50, 0);
+  lv_obj_set_style_text_color(num, COL_WHITE, 0);
+  lv_label_set_text(num, "");
+  lv_obj_center(num);
+  lv_obj_remove_flag(num, LV_OBJ_FLAG_CLICKABLE);
+  v.step_value[which] = num;
+
+  lv_obj_t *cap = lv_label_create(v.steppers);
+  lv_obj_set_style_text_font(cap, &plex_ui_21, 0);
+  lv_obj_set_style_text_color(cap, COL_MUTED, 0);
+  lv_obj_set_style_text_align(cap, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_width(cap, w);
+  lv_obj_set_pos(cap, x, STEP_LABEL_Y - (STEP_Y - STEP_HIT_PAD));
+  lv_label_set_text(cap, what);
+  lv_obj_remove_flag(cap, LV_OBJ_FLAG_CLICKABLE);
+
+  for (int side = 0; side < 2; side++) {
+    lv_obj_t *hit = plain(v.steppers, w / 2, STEP_H + 2 * STEP_HIT_PAD);
+    lv_obj_set_pos(hit, x + side * (w / 2), 0);
+    touchable(hit, on_step, (void *)(intptr_t)(which * 2 + side));
+  }
+}
+
 void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
   memset(&v, 0, sizeof v);
   if (actions) v.actions = *actions;
@@ -149,7 +213,7 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
   set_shown(v.ring, false);
 
   /* Allt annat ryms innanför ringens innerkant (radie ~214). */
-  v.caption = label(root, &plex_headline_48, COL_MUTED, 112);
+  v.caption = label(root, &plex_headline_48, COL_MUTED, CAPTION_Y);
   /* Uppmärksamhetsikonen (Claude väntar på dig): 32 px, centrerad ovanför
    * klockans siffror och innanför ringen. Källa och färg kommer från
    * plattformen; synligheten från vymodellen. */
@@ -173,31 +237,12 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
     v.dots[i] = dot;
   }
 
-  /* Förvalen 20/40/50 för den vanliga timern. */
-  v.presets_row = plain(root, 480, 72);
-  lv_obj_set_pos(v.presets_row, 0, 296);
-  lv_obj_set_flex_flow(v.presets_row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(v.presets_row, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(v.presets_row, 12, 0);
-  for (int i = 0; i < TG_COUNTDOWN_PRESETS; i++) {
-    lv_obj_t *chip = plain(v.presets_row, 96, 64);
-    lv_obj_set_style_radius(chip, 20, 0);
-    lv_obj_set_style_border_width(chip, 2, 0);
-    lv_obj_set_style_border_color(chip, COL_TRACK, 0);
-    lv_obj_set_flex_flow(chip, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(chip, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_t *num = lv_label_create(chip);
-    lv_obj_set_style_text_font(num, &plex_num_50, 0);
-    lv_obj_set_style_text_color(num, COL_WHITE, 0);
-    char text[8];
-    lv_snprintf(text, sizeof text, "%d", tg_countdown_preset_minutes(i));
-    lv_label_set_text(num, text);
-    lv_obj_remove_flag(num, LV_OBJ_FLAG_CLICKABLE);
-    touchable(chip, on_preset, (void *)(intptr_t)i);
-    v.chips[i] = chip;
-  }
+  /* Mötets stegare: deltagare och timkostnad per person. Behållaren täcker
+   * bara stegarnas band och tar själv aldrig emot tryck. */
+  v.steppers = plain(root, 480, STEP_LABEL_Y + 30 - (STEP_Y - STEP_HIT_PAD));
+  lv_obj_set_pos(v.steppers, 0, STEP_Y - STEP_HIT_PAD);
+  stepper(0, STEP_PEOPLE_X, STEP_PEOPLE_W, "PEOPLE");
+  stepper(1, STEP_RATE_X, STEP_RATE_W, "KR/H EACH");
 
   /* RESET: en stor träffyta, en liten text. */
   /* 260 x 84 (ägaren 2026-09-26: 200 x 56 var för litet för ett finger på
@@ -214,7 +259,7 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
   touchable(v.reset, on_reset, NULL);
 
   /* Högtalaren: 24 px nere i ringen, en 96 x 64-yta att träffa (spec
-   * 2026-10-02). Delar plats med RESET, som tar över när en timer går. */
+   * 2026-10-02). Bara på klockan. */
   v.speaker_area = plain(root, 96, 64);
   lv_obj_set_pos(v.speaker_area, 192, 392);
   touchable(v.speaker_area, on_speaker, NULL);
@@ -245,7 +290,7 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
   lv_label_set_text(done_hint, "TAP TO CONTINUE");
   touchable(v.done_layer, on_tap, NULL);
 
-  set_shown(v.presets_row, false);
+  set_shown(v.steppers, false);
   set_shown(v.reset, false);
   set_shown(v.done_layer, false);
 }
@@ -258,7 +303,7 @@ void time_views_render(const tg_time_view_model *m) {
   lv_label_set_text(v.caption, m->caption ? m->caption : "");
   lv_label_set_text(v.big, m->big);
   lv_obj_set_style_text_color(v.big, m->muted ? COL_MUTED : COL_WHITE, 0);
-  lv_label_set_text(v.hint, m->hint ? m->hint : "");
+  lv_label_set_text(v.hint, m->hint);
 
   for (int i = 0; i < DOT_COUNT; i++) {
     set_shown(v.dots[i], m->dots_done >= 0);
@@ -267,11 +312,17 @@ void time_views_render(const tg_time_view_model *m) {
   set_shown(v.attention, m->show_attention && v.attention_src != NULL);
   set_shown(v.speaker_area, m->show_speaker);
   lv_image_set_src(v.speaker, m->speaker_on ? &tg_img_speaker_on : &tg_img_speaker_off);
-  set_shown(v.presets_row, m->show_presets);
+  set_shown(v.steppers, m->show_steppers);
+  if (m->show_steppers) {
+    lv_label_set_text(v.step_value[0], m->people);
+    lv_label_set_text(v.step_value[1], m->rate);
+  }
   set_shown(v.reset, m->show_reset);
+  lv_obj_set_style_text_font(v.big, m->big_compact ? &plex_num_84 : &plex_num_118, 0);
+  lv_obj_set_y(v.caption, m->show_steppers ? CAPTION_Y_STEPPERS : CAPTION_Y);
   lv_obj_align(v.big, LV_ALIGN_CENTER, 0,
-               m->show_presets ? BIG_OFFSET_Y_PRESETS : BIG_OFFSET_Y);
-  lv_obj_set_y(v.hint, m->show_presets ? HINT_Y_PRESETS : HINT_Y);
+               m->show_steppers ? BIG_OFFSET_Y_STEPPERS : BIG_OFFSET_Y);
+  lv_obj_set_y(v.hint, m->show_steppers ? HINT_Y_STEPPERS : HINT_Y);
 
   /* Bågen sätts med vinklar, inte med ett värde: klockans ring kan växa från
    * båda kanterna (alltid medurs), timrarnas krymper mot 12. 1 promille =

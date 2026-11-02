@@ -20,14 +20,14 @@
 typedef enum {
   TG_TIME_MODE_CLOCK = 0,
   TG_TIME_MODE_POMODORO,
-  TG_TIME_MODE_TIMER,
+  TG_TIME_MODE_MEETING,
 } tg_time_mode;
 
 /* Kvartsvarv från boot som auto-rotationen mäter (torget_orientation()).
  * UPPMÄTT på ägarens 2.16-panel 2026-09-26: knapparna uppåt ger 0, åt vänster
  * 1, nedåt 2 och åt höger 3. Ägaren vill ha klockan med knapparna åt höger
- * (panelens viloläge, laddsladden åt rätt håll), timern med knapparna uppåt
- * och pomodoro med knapparna åt vänster. Rotation 2 (knappkanten nedåt, där
+ * (panelens viloläge, laddsladden åt rätt håll), möteskostnaden med knapparna
+ * uppåt (där timern satt fram till 2026-11-02) och pomodoro med knapparna åt vänster. Rotation 2 (knappkanten nedåt, där
  * bilden är förvrängd i alla appar) har inget eget läge och behåller det
  * senaste. */
 #ifndef TG_TIME_ROT_CLOCK
@@ -36,8 +36,8 @@ typedef enum {
 #ifndef TG_TIME_ROT_POMODORO
 #define TG_TIME_ROT_POMODORO 1
 #endif
-#ifndef TG_TIME_ROT_TIMER
-#define TG_TIME_ROT_TIMER 0
+#ifndef TG_TIME_ROT_MEETING
+#define TG_TIME_ROT_MEETING 0
 #endif
 
 /* Läget för en rotation. Allt utanför de tre kända (2, -1 utan IMU, 4, ...)
@@ -100,36 +100,73 @@ int64_t tg_pomo_phase_us(const tg_pomo *p);
 void tg_pomo_tap(tg_pomo *p, int64_t now_us);
 void tg_pomo_reset(tg_pomo *p); /* -> steg 0, IDLE */
 
-/* ---- vanlig timer med förval -------------------------------------------- */
+/* ---- möteskostnad ------------------------------------------------------- */
 
-#define TG_COUNTDOWN_PRESETS 3
+/* Ersatte timern med förval (20/40/50) 2026-11-02. Räknar UPPÅT: förfluten
+ * tid gånger deltagare gånger timkostnad per person. Samma deadline-tanke som
+ * timrarna: RUNNING lagrar när mötet (omräknat) började, så inget behöver
+ * ticka för att förbli korrekt. Antal och timkostnad ändras bara i vila — ett
+ * möte som pågår räknar med det det startade med. */
+#define TG_MEETING_PEOPLE_MIN 1
+#define TG_MEETING_PEOPLE_MAX 99
+#define TG_MEETING_PEOPLE_DEFAULT 6
+#define TG_MEETING_RATE_MIN 100
+#define TG_MEETING_RATE_MAX 5000
+#define TG_MEETING_RATE_STEP 100
+#define TG_MEETING_RATE_DEFAULT 900
+/* Tio timmar: därefter står mötet pausat. Håller den största summan
+ * (99 x 5 000 kr/h x 10 h = 4 950 000) inom sju siffror, som ryms i ringen. */
+#define TG_MEETING_MAX_US (10LL * 3600LL * 1000000LL)
+
+typedef enum {
+  TG_MEETING_IDLE = 0,
+  TG_MEETING_RUNNING,
+  TG_MEETING_PAUSED,
+} tg_meeting_state;
 
 typedef struct {
-  tg_timer timer;
-  int preset; /* senast startade förval, 0..TG_COUNTDOWN_PRESETS-1 */
-} tg_countdown;
+  tg_meeting_state state;
+  int people;          /* TG_MEETING_PEOPLE_MIN..MAX */
+  int rate;            /* kr per person och timme, i steg om RATE_STEP */
+  int64_t start_us;    /* RUNNING: nu - förfluten tid */
+  int64_t elapsed_us;  /* PAUSED: förfluten tid */
+} tg_meeting;
 
-void tg_countdown_init(tg_countdown *c);
-/* Förvalen är 20, 40 och 50 minuter; utanför området 0. */
-int tg_countdown_preset_minutes(int preset);
-/* Bara från IDLE och med ett giltigt förval. */
-bool tg_countdown_start(tg_countdown *c, int preset, int64_t now_us);
-/* RUNNING/PAUSED: växla. DONE: kvittera -> IDLE. IDLE: ingenting. */
-void tg_countdown_tap(tg_countdown *c, int64_t now_us);
-void tg_countdown_reset(tg_countdown *c); /* -> IDLE */
+/* Värden utanför området klipps; rate rundas till närmaste steg. */
+void tg_meeting_init(tg_meeting *m, int people, int rate);
+/* Bara i vila; svarar true om värdet ändrades (klipps vid gränserna). */
+bool tg_meeting_step_people(tg_meeting *m, int delta);
+bool tg_meeting_step_rate(tg_meeting *m, int delta_steps);
+/* RUNNING som nått TG_MEETING_MAX_US -> PAUSED vid maxtiden. */
+void tg_meeting_tick(tg_meeting *m, int64_t now_us);
+/* IDLE -> RUNNING, RUNNING <-> PAUSED. Tickar först. */
+void tg_meeting_tap(tg_meeting *m, int64_t now_us);
+void tg_meeting_reset(tg_meeting *m); /* -> IDLE, behåller antal och kostnad */
+/* 0..TG_MEETING_MAX_US; 0 i vila. */
+int64_t tg_meeting_elapsed_us(const tg_meeting *m, int64_t now_us);
+int64_t tg_meeting_hourly_kr(const tg_meeting *m);
+/* Hela kronor, avrundat NEDÅT: aldrig en krona som inte hunnit kosta. */
+int64_t tg_meeting_cost_kr(const tg_meeting *m, int64_t now_us);
+/* Ringen: ett varv per timme, andel av den pågående timmen i promille.
+ * -1 i vila. */
+int tg_meeting_ring(const tg_meeting *m, int64_t now_us);
 
-/* Tickar båda timrarna och svarar med VILKA som just gick från RUNNING till
- * DONE, som bitar (0 = ingen). Den ENDA tickvägen i appen, så att en signal
- * varken missas eller spelas två gånger. NULL-säker. */
+/* Kronor med mellanslag var tredje siffra: "107 917". Negativt ger "0". */
+void tg_meeting_kr_text(int64_t kr, char *out, size_t cap);
+/* Förfluten tid: "MM:SS" under en timme, annars "H:MM:SS". Sekunder rundas
+ * NEDÅT (tiden räknas upp och ska aldrig ligga före). */
+void tg_meeting_elapsed_text(int64_t elapsed_us, char *out, size_t cap);
+
+/* Tickar pomodoron och svarar TG_TIME_EXPIRED_POMODORO om DEN HÄR tickningen
+ * flyttade den från RUNNING till DONE (0 annars). Den ENDA tickvägen i appen,
+ * så att en signal varken missas eller spelas två gånger. NULL-säker.
+ * Möteskostnaden har ingen slutpunkt och låter aldrig. */
 #define TG_TIME_EXPIRED_POMODORO 1
-#define TG_TIME_EXPIRED_TIMER 2
-int tg_time_advance(tg_pomo *p, tg_countdown *c, int64_t now_us);
+int tg_time_advance(tg_pomo *p, int64_t now_us);
 
 /* Signalen för det tg_time_advance just svarade; -1 när inget gick ut. En
- * paus som är slut låter annorlunda än en fokusfas eller en timer. Kallas
- * FÖRE kvitteringen: p står då kvar på fasen som tog slut. Gick båda ut på
- * samma tick väljs pomodoron, som också är den som visas och kvitteras först
- * (tg_time_done_source_of) — plattformen spelar ändå bara en signal. */
+ * paus som är slut låter annorlunda än en fokusfas. Kallas FÖRE
+ * kvitteringen: p står då kvar på fasen som tog slut. */
 int tg_time_cue_for(int expired, const tg_pomo *p);
 
 /* ---- text --------------------------------------------------------------- */
@@ -168,7 +205,7 @@ typedef struct {
  * minut/sekund utanför 0..59. */
 tg_ring_arc tg_ring_seconds(bool valid, int minute, int second);
 
-/* Kvarvarande andel av en löpning i promille, avrundad UPP så att en gående
+/* Kvarvarande andel av en pomodorofas i promille, avrundad UPP så att en gående
  * timer aldrig visar en tom ring. -1 utom när timern går eller är pausad. */
 int tg_ring_remaining(const tg_timer *t, int64_t now_us);
 
