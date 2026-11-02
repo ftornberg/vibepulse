@@ -34,6 +34,7 @@ idf_component_register(
        "../platform/torget_ui.c"
        "../platform/wifi_status_assets.c"
        "../platform/boot_screen.c"
+       "../platform/boot_screen_policy.c"
        "../platform/settings_menu.c"
        "../platform/battery_badge.c"
        "../platform/corner_probe.c"

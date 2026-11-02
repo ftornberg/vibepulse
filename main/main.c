@@ -57,6 +57,7 @@
 #include "labs_features.h"
 #include "night_policy.h"
 #include "boot_screen.h"
+#include "boot_screen_policy.h"
 #include "button_arbitration.h"
 #include "settings_menu.h"
 #include "button_policy.h"
@@ -737,6 +738,7 @@ static const tg_wifi_setup_hooks s_setup_hooks = {
    * samma tal som heap-larmet i tick_cb vaktar. */
   .flush_dma_bytes = (size_t)DISPLAY_FLUSH_ROWS * TG_DISPLAY_WIDTH * 2u,
   .have_ip = hook_have_ip,
+  .foreground_needs_network = torget_foreground_needs_network,
   .ip_acquired = hook_ip_acquired,
   .sta_pause = hook_sta_pause,
   .try_credentials = hook_try_credentials,
@@ -968,18 +970,23 @@ static void tick_cb(lv_timer_t *t) {
   if (s_touch && lv_indev_get_state(s_touch) == LV_INDEV_STATE_PRESSED)
     s_last_touch_us = now;
 
-  /* Bootskärmen tas ner av första datalivet — eller ge-upp-taket när
-   * nätet aldrig kommer (45 s: två hämtcykler + marginal; bakom står
-   * apparnas ärliga NO DATA). Låset är rekursivt, så stage() från
-   * LVGL-tasken är säkert. */
+  /* Bootskärmen tas ner av första datalivet, direkt när glaset visar en app
+   * som inte behöver nätet (TID, eller launchern på väg dit), eller av
+   * ge-upp-taket när nätet aldrig kommer (45 s; bakom står apparnas ärliga
+   * NO DATA). Regeln bor i platform/boot_screen_policy.c. Låset är
+   * rekursivt, så stage() från LVGL-tasken är säkert. */
   static bool boot_screen_done;
   if (!boot_screen_done) {
-    if (atomic_load(&s_data_alive)) {
+    tg_boot_screen_decision d = tg_boot_screen_decide(
+        atomic_load(&s_data_alive), now, torget_foreground_needs_network());
+    if (d != TG_BOOT_SCREEN_HOLD) {
       boot_screen_done = true;
-      torget_boot_screen_stage(TG_BOOT_DATA_OK);
-    } else if (now > 45LL * 1000000LL) {
-      boot_screen_done = true;
-      torget_boot_screen_stage(TG_BOOT_GIVE_UP);
+      torget_boot_screen_stage(d == TG_BOOT_SCREEN_DATA ? TG_BOOT_DATA_OK
+                                                        : TG_BOOT_GIVE_UP);
+      ESP_LOGI(TAG, "bootskärmen av efter %lld ms: %s", (long long)(now / 1000),
+               d == TG_BOOT_SCREEN_DATA          ? "första datan"
+               : d == TG_BOOT_SCREEN_OFFLINE_APP ? "offlineapp på glaset"
+                                                 : "ingen data, ger upp");
     }
   }
 

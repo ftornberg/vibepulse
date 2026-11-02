@@ -164,6 +164,11 @@ bool tg_wifi_setup_dma_ok_to_continue(size_t largest_dma, size_t flush_bytes) {
   return largest_dma / TG_WIFI_SETUP_DMA_ABORT_FACTOR >= flush_bytes;
 }
 
+int64_t tg_wifi_offline_since(int64_t no_ip_since_us, int64_t needs_net_since_us) {
+  if (no_ip_since_us <= 0 || needs_net_since_us <= 0) return 0;
+  return no_ip_since_us > needs_net_since_us ? no_ip_since_us : needs_net_since_us;
+}
+
 bool tg_wifi_search_ui_visible(bool have_ip, int64_t now_us,
                                int64_t no_ip_since_us) {
   if (have_ip) return false;

@@ -46,6 +46,14 @@ typedef struct {
    * (pausa animationer, sänka kadens, ...). Får vara NULL. */
   void (*enter)(void);
   void (*leave)(void);
+
+  /* Appen gör sitt jobb utan nät (TID:s klocka och timrar). Medan en sådan
+   * app äger glaset tar plattformens nätlager — bootskärmens väntan på data,
+   * NO NETWORK-sidan och det självöppnande setupfönstret — inte glaset ifrån
+   * den; WIFI under SETTINGS öppnar fönstret som vanligt. Ett tillägg sist i
+   * structen: en app som inte sätter fältet får false, dvs. dagens beteende
+   * (läxan 2026-11-02 i docs/lessons.md). */
+  bool works_offline;
 } torget_app_t;
 
 /* Appregistret — byggets lista över inpluggade appar, i launcherordning.

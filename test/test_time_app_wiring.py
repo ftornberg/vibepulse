@@ -40,6 +40,22 @@ app = (root / "components/app_time/app_time.c").read_text(encoding="utf-8")
 assert "torget_keep_awake" not in app, "TID never holds the panel awake"
 assert "torget_net_wait" not in app, "TID has no network task"
 
+# Lesson 2026-11-02: offline, the shared network layers (boot screen, NO
+# NETWORK page, self-opening setup window) covered TID's clock for good. TID
+# declares that it works offline, and every layer must consult the glass.
+assert ".works_offline = true" in app, "TID must declare works_offline"
+ui = (root / "platform/torget_ui.c").read_text(encoding="utf-8")
+assert "->works_offline" in ui and "torget_foreground_needs_network" in ui
+setup = (root / "components/torget_wifi/wifi_setup.c").read_text(encoding="utf-8")
+assert "tg_wifi_offline_since(no_ip_since, needs_net_since)" in setup
+for call in ("tg_wifi_setup_should_open(have_ip, now, offline_since",
+             "tg_wifi_search_ui_visible(have_ip, now, offline_since)"):
+    assert call in setup, f"the setup guard must measure from offline_since: {call}"
+main = (root / "main/main.c").read_text(encoding="utf-8")
+assert ".foreground_needs_network = torget_foreground_needs_network" in main
+assert "tg_boot_screen_decide(" in main and "torget_foreground_needs_network()" in main
+assert "45LL * 1000000LL" not in main, "the boot screen ceiling lives in boot_screen_policy.h"
+
 core_h = (root / "components/app_time/time_core.h").read_text(encoding="utf-8")
 no_value = [l for l in core_h.splitlines() if l.startswith("#define TG_TIME_NO_VALUE ")]
 assert len(no_value) == 1, "time_core.h must define TG_TIME_NO_VALUE exactly once"

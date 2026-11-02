@@ -211,6 +211,7 @@ const torget_app_t time_app = {
   .create = create,
   .enter = enter,
   .leave = leave,
+  .works_offline = true, /* klockan går på RTC:n, timrarna på monotonklockan */
 };
 
 #ifndef ESP_PLATFORM

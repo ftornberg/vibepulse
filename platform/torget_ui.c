@@ -2,6 +2,7 @@
 #include "display_geometry.h"
 #include "glass_claim.h"
 
+#include <stdatomic.h>
 #include <string.h>
 
 #include "lvgl.h"
@@ -38,6 +39,13 @@ static struct {
   const lv_image_dsc_t *attention_icon;
   uint32_t attention_color;
 } tg;
+
+/* Utanför tg: torget_ui_create nollar tg med memset, och värdet läses av
+ * andra taskar. Sant tills första appen visats — ett okänt glas behandlas som
+ * dagens beteende, aldrig som "offline går bra". */
+static atomic_bool s_fg_needs_net = true;
+
+bool torget_foreground_needs_network(void) { return atomic_load(&s_fg_needs_net); }
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -130,6 +138,7 @@ void torget_app_show(int idx) {
   lv_obj_add_flag(tg.launcher, LV_OBJ_FLAG_HIDDEN);
   lv_obj_remove_flag(tg.roots[idx], LV_OBJ_FLAG_HIDDEN);
   tg.active = idx;
+  atomic_store(&s_fg_needs_net, !torget_apps[idx]->works_offline);
   tg_glass_claim_note_show(&tg.claim, idx);
   if (torget_apps[idx]->enter) torget_apps[idx]->enter();
 }
@@ -146,6 +155,9 @@ void torget_launcher_open(void) {
     tg.active = -1;
   }
   lv_obj_remove_flag(tg.launcher, LV_OBJ_FLAG_HIDDEN);
+  /* Launchern är vägen TILL en offlineapp: täckte nätsidan den gick TID inte
+   * att nå utan nät. Väljs en app som behöver nätet tar nätlagret över igen. */
+  atomic_store(&s_fg_needs_net, false);
   tg_glass_claim_note_show(&tg.claim, TG_GLASS_LAUNCHER);
 }
 
