@@ -73,9 +73,13 @@ Replaced the 20 / 40 / 50 minute timer on 2026-11-02 (the owner's choice).
   which fit inside the ring in the 84 px digits; six digits and more switch
   from 118 px to 84 px.
 - **It never chimes** and has no DONE screen: a meeting has no planned end.
-- Status: **simulator-verified only** (`--time-app-captures`, frames
-  `time-meeting-*`). It has not been installed on or reviewed on a panel;
-  in particular the touch areas need the owner's finger on the glass.
+- Status: **seen and accepted on `torget-216-02`** (2026-11-02,
+  `v1.1.0-95-g27e970b`, OTA): the setup face, the steppers with a finger, a
+  running meeting, pause and RESET
+  ([physical review](superpowers/reviews/2026-11-02-tid-meeting-meter-physical.md)).
+  The hourly ring lap, the 10 h cap and the saved setup across a power
+  cycle are host- and simulator-tested only (`--time-app-captures`, frames
+  `time-meeting-*`).
 
 ## Build it
 

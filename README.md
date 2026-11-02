@@ -735,8 +735,9 @@ alert still reaches you: the panel switches to VibePulse for the question and
 returns to TID after the answer. TID is off by default (`-DTORGET_WITH_TIME=ON`
 to build it); its rising chime and its break cue are heard on the owner's second 2.16 unit. It runs on the owner's 2.16 panel, with the
 side mapping measured there. [How it works, how to build it and its
-limits](docs/time-app.md). The meeting meter is so far
-simulator-verified only: it has not been installed on or reviewed on a panel.
+limits](docs/time-app.md). The meeting meter has been
+on the owner's 2.16 panel since 2026-11-02 and was accepted there in a static
+review ([physical review](docs/superpowers/reviews/2026-11-02-tid-meeting-meter-physical.md)).
 
 ## One button, one menu
 
