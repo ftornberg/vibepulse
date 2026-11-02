@@ -198,8 +198,12 @@ break to their ends and judged the cue good at the unchanged volume
   and the second one moves to TID. The clock reads the RTC time when the RTC
   holds a trusted time, which it does once any earlier boot has synced over
   SNTP; a never-set or untrusted RTC shows `––:––` until the network returns.
-  Timers need no wall clock at all. Host-tested; not yet verified on the
-  physical panel.
+  Timers need no wall clock at all. Host-tested, and seen on `torget-216-02`
+  on 2026-11-02 (`v1.1.0-96-g480d5a5`): with the clock in front and the
+  panel blocked from the Wi-Fi, the clock stood untouched for over two
+  minutes while the panel cycled through its saved networks, and VibePulse
+  got its NO NETWORK counted from the switch
+  ([physical review](superpowers/reviews/2026-11-02-tid-offline-glass-physical.md)).
 
 ## Design notes
 
