@@ -48,6 +48,14 @@ extern const lv_font_t plex_ui_21;
 #define STEP_RATE_X   214
 #define STEP_RATE_W   228
 
+/* Startytan i inställningsläget: bandet med timkostnaden (siffrorna 150..252)
+ * och raden "KR PER HOUR · TAP TO START" (232..258). Bakgrunden utanför
+ * startar INTE mötet där: ett snabbt tryck strax utanför − eller + landade
+ * på bakgrunden och drog igång räknaren (ägaren på glaset 2026-11-02).
+ * Slutar ovanför stegarnas träffyta (STEP_Y - STEP_HIT_PAD = 280). */
+#define START_Y       120
+#define START_H       150
+
 static struct {
   tg_time_view_actions actions;
   tg_time_view_model shown;
@@ -63,6 +71,7 @@ static struct {
   lv_obj_t *dots[DOT_COUNT];
   lv_obj_t *steppers;
   lv_obj_t *step_value[2];
+  lv_obj_t *start_area;
   lv_obj_t *reset;
   lv_obj_t *speaker_area;
   lv_obj_t *speaker;
@@ -81,6 +90,14 @@ static void on_long_press(lv_event_t *e) {
 static void on_tap(lv_event_t *e) {
   (void)e;
   if (v.actions.tap) v.actions.tap();
+}
+
+/* Bakgrunden: ett tryck gäller överallt UTOM i mötets inställningsläge, där
+ * bara startytan (och stegarna) tar emot tryck. Långtrycket för launchern
+ * sitter kvar på bakgrunden oavsett läge. */
+static void on_background_tap(lv_event_t *e) {
+  if (v.has_shown && v.shown.show_steppers) return;
+  on_tap(e);
 }
 
 static void on_reset(lv_event_t *e) {
@@ -189,7 +206,7 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
 
   lv_obj_set_style_bg_color(root, COL_BLACK, 0);
   lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
-  touchable(root, on_tap, NULL);
+  touchable(root, on_background_tap, NULL);
 
   /* Ringen först, så att all text ritas ovanpå. Den fångar aldrig touch. */
   v.ring = lv_arc_create(root);
@@ -244,6 +261,11 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
   stepper(0, STEP_PEOPLE_X, STEP_PEOPLE_W, "PEOPLE");
   stepper(1, STEP_RATE_X, STEP_RATE_W, "KR/H EACH");
 
+  /* Startytan: osynlig, bara i inställningsläget, över timkostnaden. */
+  v.start_area = plain(root, 480, START_H);
+  lv_obj_set_pos(v.start_area, 0, START_Y);
+  touchable(v.start_area, on_tap, NULL);
+
   /* RESET: en stor träffyta, en liten text. */
   /* 260 x 84 (ägaren 2026-09-26: 200 x 56 var för litet för ett finger på
    * glaset). Texten ligger kvar där den låg; ytan börjar under prickarna
@@ -291,6 +313,7 @@ void time_views_create(lv_obj_t *root, const tg_time_view_actions *actions) {
   touchable(v.done_layer, on_tap, NULL);
 
   set_shown(v.steppers, false);
+  set_shown(v.start_area, false);
   set_shown(v.reset, false);
   set_shown(v.done_layer, false);
 }
@@ -313,6 +336,7 @@ void time_views_render(const tg_time_view_model *m) {
   set_shown(v.speaker_area, m->show_speaker);
   lv_image_set_src(v.speaker, m->speaker_on ? &tg_img_speaker_on : &tg_img_speaker_off);
   set_shown(v.steppers, m->show_steppers);
+  set_shown(v.start_area, m->show_steppers);
   if (m->show_steppers) {
     lv_label_set_text(v.step_value[0], m->people);
     lv_label_set_text(v.step_value[1], m->rate);

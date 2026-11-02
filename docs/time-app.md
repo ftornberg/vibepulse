@@ -58,7 +58,11 @@ Replaced the 20 / 40 / 50 minute timer on 2026-11-02 (the owner's choice).
   left half and + on the right, at least 80 × 80 px each. Defaults are 6 people
   at 900 kr; the last setting is saved on the panel (NVS namespace `tg_time`,
   only when a meeting starts) and comes back after a restart.
-- **Tap** anywhere else starts the meeting. The big number is now the cost so
+- **Tap on the big number** (the band with the hourly price and the `TAP TO
+  START` line) starts the meeting. The rest of the face ignores taps while the
+  steppers are up: on the glass a quick tap that missed − or + by a few
+  pixels used to land on the background and start a meeting by mistake
+  (2026-11-02). The big number is now the cost so
   far in whole kronor, rounded down, with the elapsed time and the head count
   under it (`KR · 27:40 · 6 PEOPLE`). The steppers are locked while a meeting
   runs or is paused: the cost always uses what the meeting started with.

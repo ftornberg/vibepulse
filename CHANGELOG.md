@@ -17,8 +17,11 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
   Ten hours is the cap (largest sum 4 950 000, seven digits, which fit inside
   the ring at 84 px). Pure logic (`tg_meeting` in `time_core`) and the view
   model are host-tested; the simulator captures seven meeting states and a
-  test keeps the widest digits at least 12 px inside the ring. Simulator only:
-  not installed on or reviewed on a panel yet.
+  test keeps the widest digits at least 12 px inside the ring. On
+  `torget-216-02` since 2026-11-02 (`v1.1.0-94-gd501bcb`): MEETING seen on
+  the glass; the owner's first minutes with the steppers found that a quick
+  tap beside − / + landed on the background and started a meeting, so in the
+  setup face only the band over the hourly price now starts one.
 
 - **Merge queue on the host.** `/api/merge-queue` lists pull requests that
   local agent-team orchestrators have reviewed and that wait for a person to
