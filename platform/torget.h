@@ -110,6 +110,13 @@ void torget_app_show(int idx);
  * targetet, tangent N i bänken — appväxling utan att röra glaset. */
 void torget_app_next(void);
 
+/* Behöver det som står på glaset nätet? Falskt när en app med works_offline
+ * (TID) eller launchern visas, sant för övriga appar och före första appen.
+ * Atomärt: värdlagrets taskar (bootskärmen i tick_cb, setupvakten) frågar
+ * utan UI-låset. Nätlagren följer svaret så att en klocka utan nät inte
+ * täcks av NO NETWORK eller setupfönstret (läxan 2026-11-02). */
+bool torget_foreground_needs_network(void);
+
 /* Glasets anspråk (platform/glass_claim.h). En app vars larm MÅSTE synas även
  * när en annan app står framme — Needs You, som tar time-out om ingen ser den —
  * gör anspråk: plattformen tar fram appen och minns vad som visades. När

@@ -398,6 +398,13 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
   -o /tmp/torget-wifi-slots-test
 /tmp/torget-wifi-slots-test
 
+# Bootskärmens avkliv: data, en offlineapp (TID) på glaset, eller 45 s-taket.
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../platform/boot_screen_policy.c \
+  test_boot_screen_policy.c \
+  -o /tmp/torget-boot-screen-policy-test
+/tmp/torget-boot-screen-policy-test
+
 cc -std=c11 -Wall -Wextra -Werror -O1 \
   test_wifi_signal_state.c \
   -o /tmp/torget-wifi-signal-state-test

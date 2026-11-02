@@ -151,6 +151,18 @@ break to their ends and judged the cue good at the unchanged volume
   the auto-rotation reports no orientation and TID keeps the last face.
 - **Wall-clock time** comes from the RTC or SNTP like the night dimming does. The
   clock face uses local time from `TG_TIMEZONE`.
+- **Without a network TID keeps the glass.** TID declares `works_offline`
+  in the app contract. While it (or the launcher) is shown, the boot screen
+  steps aside at once, and neither NO NETWORK nor the self-opening Wi-Fi setup
+  window takes the glass. Before 2026-11-02 they took turns covering the clock
+  for as long as the network was missing. The panel still boots into
+  VibePulse, so one KEY3 press reaches TID. If the setup window has already
+  opened (after 90 s on VibePulse with no network), the first press closes it
+  and the second one moves to TID. The clock reads the RTC time when the RTC
+  holds a trusted time, which it does once any earlier boot has synced over
+  SNTP; a never-set or untrusted RTC shows `––:––` until the network returns.
+  Timers need no wall clock at all. Host-tested; not yet verified on the
+  physical panel.
 
 ## Design notes
 

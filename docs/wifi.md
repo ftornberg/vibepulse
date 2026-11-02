@@ -21,6 +21,12 @@ new place, panel finds nothing
                 └─► remembered in NVS. Next time you are here, it just joins.
 ```
 
+These times count only while an app that needs the network is on the
+glass. TID's clock works offline, so while TID or the launcher is shown, the
+NO NETWORK page and the self-opening window stay away; switching back to
+VibePulse starts the 60 s and 90 s again from the switch. WIFI under
+SETTINGS opens the window from any app.
+
 Six places are remembered. The one that worked most recently is tried
 first, and the least recently working one is evicted when a seventh
 arrives. The networks in `secrets.h` are appended underneath as an

@@ -138,6 +138,20 @@ bool tg_wifi_should_switch(int misses);
 bool tg_wifi_setup_should_open(bool have_ip, int64_t now_us,
                                int64_t no_ip_since_us, int64_t last_close_us);
 
+/* Från när räknas nätlöshet för glasets nätlager (NO NETWORK-sidan och det
+ * självöppnande setupfönstret)? Det SENARE av när IP:t försvann och när en
+ * app som behöver nätet tog glaset; 0 = någotdera saknas, och då öppnar
+ * inget. Utan den här regeln räknades klockan från boot oavsett vad glaset
+ * visade, så en panel utan nät täckte TID med NO NETWORK efter 60 s och
+ * setupfönstret efter 90 s, varv efter varv (läxan 2026-11-02). Den andra
+ * startpunkten ger också VibePulse sina 60/90 s efter ett byte från TID
+ * i stället för ett fönster som slår upp i samma ögonblick.
+ *
+ * no_ip_since_us:      när nuvarande IP-lösa period började (0 = har IP).
+ * needs_net_since_us:  när glaset senast fick en app som behöver nätet
+ *                      (0 = glaset visar en offlineapp eller launchern). */
+int64_t tg_wifi_offline_since(int64_t no_ip_since_us, int64_t needs_net_since_us);
+
 /* Ska den ärliga nätsidan synas? Bara efter TG_WIFI_SEARCH_UI_US utan IP,
  * så bootskärmen får äga uppstarten ostört och en kort routersvacka aldrig
  * svartnar hela glaset. */

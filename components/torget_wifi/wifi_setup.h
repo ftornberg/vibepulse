@@ -34,6 +34,10 @@ typedef struct {
   size_t flush_dma_bytes;
   /* Har STA:n en IP just nu? Vakten frågar var halvsekund. */
   bool (*have_ip)(void);
+  /* Behöver appen på glaset nätet (torget_foreground_needs_network)? Falskt
+   * håller NO NETWORK-sidan och det självöppnande fönstret borta, så TID:s
+   * klocka står kvar utan nät. NULL = alltid sant (beteendet före 2026-11-02). */
+  bool (*foreground_needs_network)(void);
   /* En uppkoppling lyckades just. Anropas från VAKTENS task, inte från
    * event-loopen: det är här värdlagret får röra flashen (flytta upp nätet
    * i listan) utan att blockera eventhanteringen eller spränga dess

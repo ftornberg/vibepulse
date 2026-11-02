@@ -31,6 +31,27 @@ point at the backlog item.
 
 ---
 
+## 2026-11-02 · The network layers measured offline time from boot, not from the app that needed it
+
+**What happened:** the owner reported that the 2.16 panel "needs internet to
+start properly", also for TID, which has no network task. **Root cause:**
+three shared layers took the glass on a timer that started at boot,
+whichever app was showing: the boot screen held for 45 s waiting for data;
+the NO NETWORK page covered everything from 60 s; and from 90 s the setup
+window opened by itself and took KEY3. It closed after 10 min, waited the
+2 min cooldown with NO NETWORK up, and opened again. Without Wi-Fi the
+clock was never on the glass, even with a valid RTC time underneath.
+**The rule now:** a network takeover answers to the app on the glass. Apps
+declare `works_offline` (TID does); while one is shown, or the launcher,
+the boot screen leaves at once and the guard measures offline time from
+the later of IP loss and an app that needs the network taking the glass
+(`tg_wifi_offline_since`). VibePulse keeps its honest NO DATA, NO NETWORK
+and setup steps. **Guards:** `test/test_boot_screen_policy.c`,
+`test_offline_app_keeps_the_glass` in `test/test_wifi_slots.c`, wiring
+asserts in `test/test_time_app_wiring.py`. Not yet verified on glass.
+**Watch for:** any new takeover that starts its own clock at boot instead
+of asking `torget_foreground_needs_network()`.
+
 ## 2026-09-10 · A background scan still blocked every request through the lock
 
 **What happened:** after a restart on a Mac with a large Claude/Codex
