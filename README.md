@@ -132,6 +132,7 @@ and the coredump partition still needs one USB `partition-table-flash` on a
 panel that never had it.
 
 [Read the v1.2.0 notes](docs/releases/2026-11-03-meeting-meter-and-offline-tid.md)
+· [Windows v1 evidence](docs/superpowers/reviews/2026-08-28-windows-v1-full-lifecycle.md)
 · [Full changelog](CHANGELOG.md)
 · [Compare v1.1.0...v1.2.0](https://github.com/ftornberg/vibepulse/compare/v1.1.0...v1.2.0)
 
