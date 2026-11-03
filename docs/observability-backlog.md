@@ -1077,6 +1077,27 @@ the receiving version (it carries the notice fix of #29), a panel rebooted
 ten minutes earlier, and another day's Wi-Fi. A serial reader was attached,
 as it was for the 129 s upload, so an unread console is not the cause. One
 fast upload does not close this item.
+**2026-11-02, first measurement from the device side** (serial console
+attached during two OTA sessions on `torget-216-02`, both receiving on
+`v1.1.0-95`/`-96`, Mac on wired Ethernet, panel power unchanged all evening):
+the day's first upload took 20.8 s (first attempt, 202). An hour later the
+same path stalled: `ota-service: strömmen bröts efter 309088 byte` after
+98 s, then the retry went through in 511 s. Two hours later: `strömmen bröts
+efter 70800 byte` after 38 s, a second 408, and the third attempt in 223 s.
+During every stalled upload the panel's **own clients failed in the same
+window**: `esp-tls: couldn't get hostname for :ftornberg.local:
+getaddrinfo() returns 202`, `HTTP_CLIENT: Connection timed out before data
+was ready!`, `Incomlete data received, 0/1492 bytes` against the
+tokenserver, plus repeated `esp_lv_adapter_lock(751): Failed to acquire LVGL
+lock` (OBS-44). Ping from the Mac in the slow period: 0 % loss, 23 ms
+average, 74 ms maximum, against 9 ms a month earlier. No Wi-Fi disconnect
+was logged. **What this adds:** the stall is not specific to the OTA
+receive path; DNS and the quota poll fail at the same moments, so the panel's
+network as a whole goes quiet, which points at the radio/driver side (Wi-Fi
+power save, buffer exhaustion, or air time) rather than at the handler's
+ring redraws alone. The handler-side measurements asked for above are still
+owed; add `esp_wifi_get_ps` / RSSI to the boot log and the OTA start line so
+the next stall carries them.
 
 ### OBS-46 · The OTA pusher reported success whatever the panel answered
 `tooling · S · done (2026-10-07)` — `tools/ota-flash.sh` printed
