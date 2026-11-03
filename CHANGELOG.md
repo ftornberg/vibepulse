@@ -6,6 +6,11 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
 
 ## Unreleased
 
+## v1.2.0 — 2026-11-03
+
+Release notes:
+[v1.2.0 — a meeting meter, TID without a network, READY TO MERGE](docs/releases/2026-11-03-meeting-meter-and-offline-tid.md).
+
 ### Added
 
 - **TID meeting meter (2.16, opt-in).** Buttons up on TID is now a meeting
@@ -54,8 +59,8 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
   NEEDS YOU for two hours and took a followed-transcript slot from a real
   session. Filtered at discovery; token and cost totals still count it.
 
-- **TID can chime.** Three rising notes (C6, E6, G6) when a timer or a
-  focus phase ends, also while another app is on the glass; silent during
+- **TID can chime.** Three rising notes (C6, E6, G6) when a focus phase (or,
+  until the meeting meter replaced it, a timer) ends, also while another app is on the glass; silent during
   the night schedule and the maintenance window. A speaker symbol in TID turns
   it on and off. A new platform engine, `components/torget_audio`, borrows
   I2S and the ES8311 codec per chime behind a DMA-margin check and returns
@@ -93,104 +98,10 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
 - **TID, an opt-in launcher app for the 2.16 panel** (`TORGET_WITH_TIME`, off by
   default): the side the panel stands on chooses a digital clock, a pomodoro
   timer or a 20/40/50 minute timer, with a ring for the seconds or the time
-  left. Simulator-reviewed only, silent, not yet flashed; see
-  [`docs/time-app.md`](docs/time-app.md). The platform gains one read-only host
+  left. On the owner's 2.16 panel since 2026-09-26 (`v1.1.0-32-g96d6947`);
+  the entries above add its sound, its meeting meter and its offline
+  behaviour. See [`docs/time-app.md`](docs/time-app.md). The platform gains one read-only host
   function, `torget_orientation()`.
-
-### Fixed
-
-- **TID works without a network (2.16).** Offline, the shared network
-  layers covered TID's clock: the boot screen for 45 s, then NO NETWORK
-  from 60 s, then a setup window that opened by itself at 90 s, took KEY3
-  and kept coming back. Apps now declare `works_offline` in the app
-  contract (an additive field; apps that leave it out keep today's
-  behavior). While TID or the launcher is on the glass, the boot screen
-  leaves at once and neither NO NETWORK nor the self-opening setup window
-  takes the glass. The clock runs on the RTC time when it is valid, and
-  shows `––:––` when it is not. VibePulse keeps its NO DATA, NO NETWORK and
-  setup steps, and they now count from when it took the glass. WIFI under
-  SETTINGS opens the setup window as before. Host-tested; not yet seen on
-  glass.
-
-- **`tools/ota-flash.sh` no longer reports a failed upload as a success.** It
-  printed its "202" line and exited 0 whatever the panel answered, also after
-  an HTTP 408. It now exits 0 only for 202, names the failure otherwise, and
-  allows 570 s instead of 300 s, since a healthy upload was seen to take 224 s.
-- **UPDATE READY no longer goes deaf after a tap on LATER.** A tap outside the
-  UPDATE pill dismissed the notice without hiding it, so the takeover stayed
-  on the glass with both pills dead and the KEY3 hold disabled until the panel
-  was reset. The glass is now reconciled against the notice state every poll,
-  which also repairs a show or hide skipped while the UI lock was busy.
-  Confirmed on `torget-216-02` (2026-10-08, `v1.1.0-45-ga3bcbbf`): LATER made
-  the takeover leave the glass and the console logged the snooze.
-- With the buttons down, the 2.16 panel rendered every app as smeared,
-  dotted streaks (OBS-42). That pose's MADCTL `0x60` swaps the axes, and its
-  panel gap sat on x, where the CO5300 driver adds it to the column window
-  and overruns the 480-pixel axis. The gap moves to y, and a guard test pins
-  that no axis-swapped mode carries an x gap. Verified clean on the owner's
-  2.16 panel in all four poses (2026-09-30).
-- The battery badge sits one badge width further from the right edge
-  (margin 50 px instead of the footer's 22 px). At 22 px the panel's
-  rounded bezel clipped the body and nub, seen at the glass on 2026-09-25.
-  The two README frames are re-captured.
-- A fuel gauge reading 0 % that no voltage reading below 3.5 V confirms
-  (cell at 3.5 V or more, or the VBAT ADC off) is treated as "no number"
-  instead of an empty battery. An unconfigured or disabled
-  gauge could otherwise walk the panel to LOW and, after 30 s, CRITICAL on a
-  full cell; with the shutdown of part C that would have powered it off.
-  Found in the owner's review of the part A plan (#5, point 2).
-
-### Changed
-
-- **TID's 20 / 40 / 50 minute timer is gone,** replaced by the meeting meter
-  on the same side (buttons up). The pomodoro is now TID's only countdown and
-  the only thing that chimes; the speaker symbol stays on the clock face only.
-
-- **48.6 KB of static data moved from internal RAM to PSRAM** (link map:
-  85 716 to 37 124 B), and the panel now logs its task stacks. The 2026-10-08 memory study (OBS-47) found
-  internal RAM at ~100 KB free in use with the largest free block pinned at
-  31 744 B; the HTTP bodies, the parsed payloads and the two big UI state
-  structs are plain CPU data and now carry `EXT_RAM_BSS_ATTR`
-  (`platform/ext_ram.h`): 36.7 KB of ours. The same Kconfig value lets
-  ESP-IDF place 12 KB of its own lwip, wpa_supplicant and Wi-Fi statics in
-  PSRAM too, by its own choice of what is safe there. Flash-adjacent buffers
-  (OTA chunk, Wi-Fi credentials) stay internal. A once-a-minute `stackar kvar` line lists the
-  stack headroom of every task, eight per line, and `LÅG STACK` warns when
-  one of ours is under 512 B (IDF's own small tasks are exempt).
-  Both rest on two Kconfig values that `sdkconfig.defaults` seeds and a new
-  CMake guard enforces (`CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY`,
-  `CONFIG_FREERTOS_USE_TRACE_FACILITY`): an existing `sdkconfig` needs the
-  two lines and `idf.py reconfigure`. On `torget-216-02` (2026-10-08,
-  `v1.1.0-50-g8acb202`, maintenance window closed): internal RAM free in use
-  143 to 153 KB against 98 to 109 KB before, the largest free block 57 to
-  65 KB against a pinned 31 744 B, low-water 95 315 B against 58 759 B;
-  Wi-Fi up in 8 s as before.
-- TID's clock moves to the buttons-right pose, the panel's natural resting
-  position on the desk, and the timer to buttons up; pomodoro stays at buttons
-  left. The rotation values are now measured on the owner's panel (buttons up
-  0, left 1, right 3) instead of guessed.
-- TID's seconds ring always moves clockwise: odd minutes fill it, even minutes
-  empty it from 12 o'clock, instead of snapping from full to empty every
-  minute. RESET's touch area grows from 200 x 56 to 260 x 84 px. TID takes
-  VibePulse's palette: Claude-orange accent and the softer off-white
-  (`0xD9DCE2`) for its big digits, as pure white was too sharp. All from the
-  owner's first look at the physical panel.
-- **Claude and Codex approvals now share one shell-command classifier.**
-  The Claude path used to judge a Bash permission by its first word and the
-  absence of shell metacharacters alone, so `git branch -D main`,
-  `make -f evil.mk`, `git diff --output=…` and `pytest -p plugin` were
-  APPROVE-able from the panel. The strict shape check the Codex adapter
-  already applied (flags against small allowlists, argument positions) now
-  lives in `interactions.py` and gates both providers. Read-only shapes
-  (`git status --short`, `npm test --silent`, `make test`, plain `pytest`)
-  are unchanged. Found in the 2026-09-22 security review.
-- `.github-token` in the repository root, which the tokenserver reads for
-  the optional GitHub stargazer poll, is now git-ignored.
-- Encrypted live-status publishing runs at most every five seconds instead of
-  two, reducing normal host status uploads by 60%. Changed activity can appear
-  up to three seconds later; approval delivery and signed expiry are unchanged.
-
-### Added
 
 - `TK_CODEX_PAGES 0` in `secrets.h` hides the Codex pages (CODEX · WEEKLY
   and the Codex Max Tracker page) for a Claude-only desk. Compile-time;
@@ -270,6 +181,103 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
   using existing configurations retain their initial views. Disabled pages
   and optional polling tasks are not created. Physical selector review is
   pending; standalone clocks and quotes remain future experiments.
+
+### Fixed
+
+- **TID works without a network (2.16).** Offline, the shared network
+  layers covered TID's clock: the boot screen for 45 s, then NO NETWORK
+  from 60 s, then a setup window that opened by itself at 90 s, took KEY3
+  and kept coming back. Apps now declare `works_offline` in the app
+  contract (an additive field; apps that leave it out keep today's
+  behavior). While TID or the launcher is on the glass, the boot screen
+  leaves at once and neither NO NETWORK nor the self-opening setup window
+  takes the glass. The clock runs on the RTC time when it is valid, and
+  shows `––:––` when it is not. VibePulse keeps its NO DATA, NO NETWORK and
+  setup steps, and they now count from when it took the glass. WIFI under
+  SETTINGS opens the setup window as before. Host-tested, and seen on
+  `torget-216-02` on 2026-11-02 (`v1.1.0-96-g480d5a5`): the clock stayed
+  for over two minutes with the panel blocked from the Wi-Fi, and VibePulse
+  got NO NETWORK at ~60 s and the setup window at ~90 s from the switch
+  ([review](docs/superpowers/reviews/2026-11-02-tid-offline-glass-physical.md));
+  a cold boot without a network is host-tested only.
+
+- **`tools/ota-flash.sh` no longer reports a failed upload as a success.** It
+  printed its "202" line and exited 0 whatever the panel answered, also after
+  an HTTP 408. It now exits 0 only for 202, names the failure otherwise, and
+  allows 570 s instead of 300 s, since a healthy upload was seen to take 224 s.
+- **UPDATE READY no longer goes deaf after a tap on LATER.** A tap outside the
+  UPDATE pill dismissed the notice without hiding it, so the takeover stayed
+  on the glass with both pills dead and the KEY3 hold disabled until the panel
+  was reset. The glass is now reconciled against the notice state every poll,
+  which also repairs a show or hide skipped while the UI lock was busy.
+  Confirmed on `torget-216-02` (2026-10-08, `v1.1.0-45-ga3bcbbf`): LATER made
+  the takeover leave the glass and the console logged the snooze.
+- With the buttons down, the 2.16 panel rendered every app as smeared,
+  dotted streaks (OBS-42). That pose's MADCTL `0x60` swaps the axes, and its
+  panel gap sat on x, where the CO5300 driver adds it to the column window
+  and overruns the 480-pixel axis. The gap moves to y, and a guard test pins
+  that no axis-swapped mode carries an x gap. Verified clean on the owner's
+  2.16 panel in all four poses (2026-09-30).
+- The battery badge sits one badge width further from the right edge
+  (margin 50 px instead of the footer's 22 px). At 22 px the panel's
+  rounded bezel clipped the body and nub, seen at the glass on 2026-09-25.
+  The two README frames are re-captured.
+- A fuel gauge reading 0 % that no voltage reading below 3.5 V confirms
+  (cell at 3.5 V or more, or the VBAT ADC off) is treated as "no number"
+  instead of an empty battery. An unconfigured or disabled
+  gauge could otherwise walk the panel to LOW and, after 30 s, CRITICAL on a
+  full cell; with the shutdown of part C that would have powered it off.
+  Found in the owner's review of the part A plan (#5, point 2).
+
+### Changed
+
+- **TID's 20 / 40 / 50 minute timer is gone,** replaced by the meeting meter
+  on the same side (buttons up). The pomodoro is now TID's only countdown and
+  the only thing that chimes; the speaker symbol stays on the clock face only.
+
+- **48.6 KB of static data moved from internal RAM to PSRAM** (link map:
+  85 716 to 37 124 B), and the panel now logs its task stacks. The 2026-10-08 memory study (OBS-47) found
+  internal RAM at ~100 KB free in use with the largest free block pinned at
+  31 744 B; the HTTP bodies, the parsed payloads and the two big UI state
+  structs are plain CPU data and now carry `EXT_RAM_BSS_ATTR`
+  (`platform/ext_ram.h`): 36.7 KB of ours. The same Kconfig value lets
+  ESP-IDF place 12 KB of its own lwip, wpa_supplicant and Wi-Fi statics in
+  PSRAM too, by its own choice of what is safe there. Flash-adjacent buffers
+  (OTA chunk, Wi-Fi credentials) stay internal. A once-a-minute `stackar kvar` line lists the
+  stack headroom of every task, eight per line, and `LÅG STACK` warns when
+  one of ours is under 512 B (IDF's own small tasks are exempt).
+  Both rest on two Kconfig values that `sdkconfig.defaults` seeds and a new
+  CMake guard enforces (`CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY`,
+  `CONFIG_FREERTOS_USE_TRACE_FACILITY`): an existing `sdkconfig` needs the
+  two lines and `idf.py reconfigure`. On `torget-216-02` (2026-10-08,
+  `v1.1.0-50-g8acb202`, maintenance window closed): internal RAM free in use
+  143 to 153 KB against 98 to 109 KB before, the largest free block 57 to
+  65 KB against a pinned 31 744 B, low-water 95 315 B against 58 759 B;
+  Wi-Fi up in 8 s as before.
+- TID's clock moves to the buttons-right pose, the panel's natural resting
+  position on the desk, and the timer to buttons up; pomodoro stays at buttons
+  left. The rotation values are now measured on the owner's panel (buttons up
+  0, left 1, right 3) instead of guessed.
+- TID's seconds ring always moves clockwise: odd minutes fill it, even minutes
+  empty it from 12 o'clock, instead of snapping from full to empty every
+  minute. RESET's touch area grows from 200 x 56 to 260 x 84 px. TID takes
+  VibePulse's palette: Claude-orange accent and the softer off-white
+  (`0xD9DCE2`) for its big digits, as pure white was too sharp. All from the
+  owner's first look at the physical panel.
+- **Claude and Codex approvals now share one shell-command classifier.**
+  The Claude path used to judge a Bash permission by its first word and the
+  absence of shell metacharacters alone, so `git branch -D main`,
+  `make -f evil.mk`, `git diff --output=…` and `pytest -p plugin` were
+  APPROVE-able from the panel. The strict shape check the Codex adapter
+  already applied (flags against small allowlists, argument positions) now
+  lives in `interactions.py` and gates both providers. Read-only shapes
+  (`git status --short`, `npm test --silent`, `make test`, plain `pytest`)
+  are unchanged. Found in the 2026-09-22 security review.
+- `.github-token` in the repository root, which the tokenserver reads for
+  the optional GitHub stargazer poll, is now git-ignored.
+- Encrypted live-status publishing runs at most every five seconds instead of
+  two, reducing normal host status uploads by 60%. Changed activity can appear
+  up to three seconds later; approval delivery and signed expiry are unchanged.
 
 ## v1.1.0 — 2026-09-10
 

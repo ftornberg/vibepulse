@@ -1788,9 +1788,9 @@ class PluginPackageTests(unittest.TestCase):
         self.assertNotIn("eventual `v0.7.1` tag", release)
 
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("## Latest release: v1.1.0", readme)
-        self.assertIn("Compare v1.0.0...v1.1.0", readme)
-        self.assertIn("### v1.1.0 verification", readme)
+        self.assertIn("## Latest release: v1.2.0", readme)
+        self.assertIn("Compare v1.1.0...v1.2.0", readme)
+        self.assertIn("### v1.2.0 verification", readme)
         self.assertIn("windows-v1-full-lifecycle.md", readme)
         self.assertNotIn(
             "latest sanitized checkpoint is explicitly\n"
@@ -1833,8 +1833,8 @@ class PluginPackageTests(unittest.TestCase):
                 release)
         # The ABOUT fixture displays an older sample firmware version.
         self.assertNotIn("vibepulse-settings-about.png", release)
-        # The README's release section carries the same evidence boundary.
-        self.assertIn("NOT YET FLASHED", readme)
+        # The README's release section moved on to v1.2.0 (its own guard
+        # below); the Windows claim it inherited stays pinned there.
         self.assertIn("Pinned to v1.0.0's runtime `bee5d8c`", readme)
         self.assertIn("## v1.1.0 — 2026-09-10", changelog)
         self.assertIn("2026-09-10-settings-and-evidence.md", changelog)
@@ -1845,9 +1845,51 @@ class PluginPackageTests(unittest.TestCase):
         # The cut left nothing behind: v1.1.0's entries live under v1.1.0,
         # never under Unreleased (which may already hold the next change).
         between = changelog[changelog.index("## Unreleased"):
-                            changelog.index("## v1.1.0")]
+                            changelog.index("## v1.2.0")]
         for shipped in ("coredump", "reboot ledger", "poll_backoff_policy",
                         "ruff"):
+            self.assertNotIn(shipped, between)
+        for forbidden in ("oauth token:", "refresh token:",
+                          "account id:", "relay address:"):
+            self.assertNotIn(forbidden, release.lower())
+
+    def test_v120_release_names_its_unit_and_what_was_not_seen(self):
+        release = (ROOT / "docs/releases/"
+                   "2026-11-03-meeting-meter-and-offline-tid.md").read_text(
+                       encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertTrue(release.startswith("VibePulse v1.2.0"))
+        self.assertIsNone(re.search(r"^# ", release, re.MULTILINE))
+        for required in (
+                "A meeting meter in TID", "TID keeps the glass without a network",
+                "TID can chime", "READY TO MERGE", "torget-216-02",
+                "Not seen on a panel", "source-only",
+                "v1.1.0...v1.2.0"):
+            self.assertIn(required, release)
+        for image in ("time-meeting-setup.png", "time-meeting-running.png",
+                      "merge-queue/vibepulse-merge-one.png"):
+            self.assertIn("https://raw.githubusercontent.com/"
+                          "ftornberg/vibepulse/v1.2.0/docs/img/" + image,
+                          release)
+        # Every firmware row in the README table names its unit or says
+        # host-tested only; the Windows claim stays pinned to v1.0.0.
+        self.assertIn("### v1.2.0 verification", readme)
+        self.assertIn("SEEN AND ACCEPTED", readme)
+        self.assertIn("host-tested only", readme)
+        self.assertIn("Pinned to v1.0.0's runtime `bee5d8c`", readme)
+        self.assertIn("2026-11-03-meeting-meter-and-offline-tid.md", readme)
+        self.assertIn("## v1.2.0 — 2026-11-03", changelog)
+        self.assertIn("2026-11-03-meeting-meter-and-offline-tid.md", changelog)
+        self.assertLess(changelog.index("## Unreleased"),
+                        changelog.index("## v1.2.0"))
+        self.assertLess(changelog.index("## v1.2.0"),
+                        changelog.index("## v1.1.0"))
+        # The cut left nothing behind under Unreleased.
+        between = changelog[changelog.index("## Unreleased"):
+                            changelog.index("## v1.2.0")]
+        for shipped in ("meeting meter", "works_offline", "merge-queue",
+                        "TK_TID_SOUND"):
             self.assertNotIn(shipped, between)
         for forbidden in ("oauth token:", "refresh token:",
                           "account id:", "relay address:"):

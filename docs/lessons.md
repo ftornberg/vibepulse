@@ -48,7 +48,8 @@ the later of IP loss and an app that needs the network taking the glass
 (`tg_wifi_offline_since`). VibePulse keeps its honest NO DATA, NO NETWORK
 and setup steps. **Guards:** `test/test_boot_screen_policy.c`,
 `test_offline_app_keeps_the_glass` in `test/test_wifi_slots.c`, wiring
-asserts in `test/test_time_app_wiring.py`. Not yet verified on glass.
+asserts in `test/test_time_app_wiring.py`. Verified on glass 2026-11-02
+(`docs/superpowers/reviews/2026-11-02-tid-offline-glass-physical.md`).
 **Watch for:** any new takeover that starts its own clock at boot instead
 of asking `torget_foreground_needs_network()`.
 
