@@ -14,13 +14,18 @@ with its own pull requests and reviews, is archived at
 agents are doing — taps you on the shoulder when one is stuck waiting for
 you, and (if you want) lets you answer it with a tap on the glass. It packs
 too: one command moves it onto whatever WiFi you are on today, and one
-button-hold on the panel opens its own settings on the glass.**
+button-hold on the panel opens its own settings on the glass. Stand it on
+its side and it is a desk clock, a pomodoro, or a meeting meter that counts
+what the room costs while you talk.**
 
 Claude Code and Codex usage, live agent activity, and a full-screen
 **NEEDS YOU** alert you can answer with a tap, and a green **READY TO MERGE**
 card when your review agents have a pull request waiting only for you. A three-second hold on the
 panel's one user button opens **SETTINGS** on the glass — update the firmware,
-teach it a new network, choose Labs displays, or read its address. A ~$30 ESP32-S3 panel plus a
+teach it a new network, choose Labs displays, or read its address. The opt-in
+**TID** app turns the same 2.16 panel into a clock, a pomodoro and a
+**meeting meter** (people × kr per hour, counting up), chimes when a focus
+phase ends, and keeps the glass even when the WiFi is gone. A ~$30 ESP32-S3 panel plus a
 core, pure-stdlib Python service on your Mac or Windows PC. Local mode needs no
 VibePulse account and keeps agent activity on your LAN. The optional
 numbers-only relay can carry quota data across isolated WiFi; a separate,
@@ -48,19 +53,17 @@ Both answers already exist, buried in a terminal you're not looking at.
 VibePulse moves them onto a screen you can't miss: one glance from across
 the room, no window to switch to, no menu bar to squint at.
 
-> **Status:** v1.1.0. The core shelf-screen loop is real and physically
+> **Status:** v1.2.0. The core shelf-screen loop is real and physically
 > exercised on macOS and Windows: see quota, see an agent waiting, and answer
 > a supported prompt on the glass. The Windows core, physical answer loop and
 > persistent sign-in/sleep/reboot lifecycle were verified at the v1.0.0 host
-> runtime and are not re-claimed for a later one. v1.1.0 adds SETTINGS on
-> the glass, an honest warm-up, and crash evidence in the firmware. The
-> v1.1.0 SETTINGS menu has been on `torget-home-01` since the 2026-09-06 USB
-> flash of `v1.0.0-67-ge51b79f`, with its static on-panel review still unrun;
-> the warm-up, coredump, ledger and backoff changes and the later LABS
-> addition landed after that build and are CI-built, waiting for the next
-> flash session. Optional
-> integrations remain opt-in, and every platform claim stays tied to its
-> recorded evidence.
+> runtime and are not re-claimed for a later one. v1.2.0 adds the READY TO
+> MERGE card, TID with sound, a meeting meter and offline behaviour, a
+> battery badge with RTC night dimming, the 2.41 V2 board profile, and a
+> host that classifies shell commands the same way for Claude and Codex.
+> Every firmware claim below is tied to the unit it was seen on; the
+> [v1.2.0 verification](#v120-verification) table says what was not.
+> Optional integrations remain opt-in.
 
 ## Start here
 
@@ -77,45 +80,60 @@ Codex. You do not need to read this whole page:
    into separately: today through the setup command, `secrets.h`, and the
    table under [Independent switches](#independent-switches). A **3 s KEY3
    hold opens [SETTINGS](#one-button-one-menu)** on the glass — UPDATE, WIFI, LABS and ABOUT; the
-   LABS choices are saved and apply after restart. Sound has no verified
-   backend yet.
+   LABS choices are saved and apply after restart. Sound exists only in
+   TID's chimes (`TK_TID_SOUND`), heard on one 2.16 unit.
 4. **Choose what to add later:** [Vibe Labs](docs/labs/README.md) lists the
    the base installation, optional analytics/integrations and future ideas. GitHub Stars is available; standalone reset clocks and coding quotes
    are concepts. New installs start with quotas and activity; analytics are
    optional in SETTINGS → LABS.
 
-## Latest release: v1.1.0
+## Latest release: v1.2.0
 
-The first release after 1.0 gives the panel a menu and a memory. A
-three-second **KEY3** hold opens **SETTINGS** on the glass (UPDATE, WIFI,
-ABOUT), so the maintenance window is chosen rather than guessed. The service
-answers the panel at once after a restart while the first history scan runs,
-labelling the volume counters as placeholders instead of letting the glass go
-STALE. A panic now leaves an ELF coredump in flash and a reboot ledger in
-NVS, every device poller backs off from a dead service, and the logging
-configuration is pinned by a configure-time guard. The host quarantines a
-corrupt state file instead of wiping it, says why the Claude probe is idle,
-names the keychain failure, typesets any model id, and the whole tokenserver
-directory now reads in English. Never a number it did not measure, still.
+The first release of the independent continuation. The panel gets a green
+**READY TO MERGE** card for pull requests your review agents have finished,
+and **TID** grows from a silent clock into a desk companion: it chimes when
+a focus phase ends, its buttons-up face is a **meeting meter** that counts
+people × kr per hour, and it keeps the glass when the WiFi is gone instead
+of being covered by NO NETWORK and a self-opening setup window. A fitted
+cell shows as a battery badge, the onboard RTC keeps the clock and drives
+scheduled night dimming, 48.6 KB of static data moved to PSRAM, and the
+Waveshare 2.41 V2 has its own board profile. On the host, Claude and Codex
+approvals share one strict shell-command classifier, finished automation
+can be kept off the agent monitor, and the OTA sender tells the truth about
+a failed upload. Never a number it did not measure, still.
 
-### v1.1.0 verification
+<p align="center">
+  <img src="docs/img/time-meeting-setup.png" width="31%" alt="TID meeting meter set to 6 people at 900 kr per hour each: 5 400 kr per hour">
+  &nbsp;
+  <img src="docs/img/time-meeting-running.png" width="31%" alt="TID meeting meter after 27 minutes 40 seconds: 2 490 kr">
+  &nbsp;
+  <img src="docs/img/merge-queue/vibepulse-merge-one.png" width="31%" alt="READY TO MERGE card with one pull request waiting">
+</p>
+
+### v1.2.0 verification
 
 | Gate | Result |
 |---|---|
-| Host gate (`./test/run.sh`), tokenserver suite on ubuntu, macOS and Windows, both Workers, snapshot tool | **PASS** on every merged PR and on merged `main` |
-| ESP32-S3 firmware build | **PASS** in CI — a build, not a flash |
-| SETTINGS (UPDATE / WIFI / ABOUT) on the physical panel | **FLASHED, NOT REVIEWED** — `torget-home-01` runs `v1.0.0-67-ge51b79f` (USB, 2026-09-06), which carries the v1.1.0 menu; the static on-panel review, §3 of [`docs/manual-test-key3.md`](docs/manual-test-key3.md), has not been run |
-| Warm-up placeholders, coredump, reboot ledger, poller backoff, and the SETTINGS → LABS addition on the physical panel | **NOT YET FLASHED** — all landed after `e51b79f`; the run sheet is [`docs/flash-session-2026-09.md`](docs/flash-session-2026-09.md) |
+| Host gate (`./test/run.sh`), tokenserver suite on ubuntu, macOS and Windows, both Workers, snapshot tool | **PASS** on every merged PR and on `dev` |
+| ESP32-S3 firmware build, both board profiles | **PASS** in CI — a build, not a flash; the TID build (`TORGET_WITH_TIME=ON`) is built on the owner's Mac, not in CI |
+| TID meeting meter on the physical panel | **SEEN AND ACCEPTED** on `torget-216-02` (2026-11-02, `v1.1.0-95-g27e970b`) — [review](docs/superpowers/reviews/2026-11-02-tid-meeting-meter-physical.md); the hourly ring lap, the 10 h cap and the saved setup across a power cycle are host-tested only |
+| TID without a network | **SEEN** on `torget-216-02` (2026-11-02, `v1.1.0-96-g480d5a5`) — [review](docs/superpowers/reviews/2026-11-02-tid-offline-glass-physical.md); a cold boot without a network is host-tested only |
+| TID chimes (focus end, break end) | **HEARD** on `torget-216-02` (2026-10-05 and 2026-10-07) — [review](docs/superpowers/reviews/2026-10-05-tid-sound-physical.md), [break cue](docs/superpowers/reviews/2026-10-07-tid-break-cue-physical.md) |
+| READY TO MERGE card | **FIRST SEEN** on `torget-216-02` (2026-10-08, `v1.1.0-49-g8a83c3a`) — not reviewed as a static AMOLED frame, stack margin not measured |
+| Battery badge, RTC boot time, night dimming | **SEEN** on `torget-216-02` (2026-09-25) — the hour-long run of the badge is still open; the RTC backup supply is on the schematic, not yet verified through a power loss |
+| PSRAM move (OBS-47) | **MEASURED** on `torget-216-02` (2026-10-08, `v1.1.0-50-g8acb202`): largest free block 57–65 KB against a pinned 31 744 B before |
+| Waveshare 2.41 V2 | **PHYSICAL** evidence (2026-09-17) for the board profile — [review](docs/superpowers/reviews/2026-09-17-waveshare-241-v2-physical.md); OTA, auto-rotation and interaction replies are not claimed on V2 |
 | Windows v1 host claim (core, physical answer loop, lifecycle) | **Pinned to v1.0.0's runtime `bee5d8c`** — not re-run for this release |
+| statusLine bridge | **HOST-TESTED**, macOS install only; not adopted on the owner's desk |
 
-The coredump partition is new in the table, and OTA never writes the table:
-one USB `idf.py -p <port> partition-table-flash` is needed before a dump can
-land, and the boot log says so until then.
+Two things to know before installing over the air: an existing `sdkconfig`
+needs the two Kconfig lines from the PSRAM entry and `idf.py reconfigure`,
+and the coredump partition still needs one USB `partition-table-flash` on a
+panel that never had it.
 
-[Read the v1.1.0 notes](docs/releases/2026-09-10-settings-and-evidence.md)
-· [Windows v1 evidence](docs/superpowers/reviews/2026-08-28-windows-v1-full-lifecycle.md)
+[Read the v1.2.0 notes](docs/releases/2026-11-03-meeting-meter-and-offline-tid.md)
 · [Full changelog](CHANGELOG.md)
-· [Compare v1.0.0...v1.1.0](https://github.com/niclasvestlund-YT/vibepulse/compare/v1.0.0...v1.1.0)
+· [Compare v1.1.0...v1.2.0](https://github.com/ftornberg/vibepulse/compare/v1.1.0...v1.2.0)
 
 Contributing or validating another host? Read
 [CONTRIBUTING.md](CONTRIBUTING.md), the

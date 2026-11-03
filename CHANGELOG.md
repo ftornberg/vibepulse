@@ -6,6 +6,11 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
 
 ## Unreleased
 
+## v1.2.0 — 2026-11-03
+
+Release notes:
+[v1.2.0 — a meeting meter, TID without a network, READY TO MERGE](docs/releases/2026-11-03-meeting-meter-and-offline-tid.md).
+
 ### Added
 
 - **TID meeting meter (2.16, opt-in).** Buttons up on TID is now a meeting
@@ -54,8 +59,8 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
   NEEDS YOU for two hours and took a followed-transcript slot from a real
   session. Filtered at discovery; token and cost totals still count it.
 
-- **TID can chime.** Three rising notes (C6, E6, G6) when a timer or a
-  focus phase ends, also while another app is on the glass; silent during
+- **TID can chime.** Three rising notes (C6, E6, G6) when a focus phase (or,
+  until the meeting meter replaced it, a timer) ends, also while another app is on the glass; silent during
   the night schedule and the maintenance window. A speaker symbol in TID turns
   it on and off. A new platform engine, `components/torget_audio`, borrows
   I2S and the ES8311 codec per chime behind a DMA-margin check and returns
@@ -93,9 +98,89 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
 - **TID, an opt-in launcher app for the 2.16 panel** (`TORGET_WITH_TIME`, off by
   default): the side the panel stands on chooses a digital clock, a pomodoro
   timer or a 20/40/50 minute timer, with a ring for the seconds or the time
-  left. Simulator-reviewed only, silent, not yet flashed; see
-  [`docs/time-app.md`](docs/time-app.md). The platform gains one read-only host
+  left. On the owner's 2.16 panel since 2026-09-26 (`v1.1.0-32-g96d6947`);
+  the entries above add its sound, its meeting meter and its offline
+  behaviour. See [`docs/time-app.md`](docs/time-app.md). The platform gains one read-only host
   function, `torget_orientation()`.
+
+- `TK_CODEX_PAGES 0` in `secrets.h` hides the Codex pages (CODEX · WEEKLY
+  and the Codex Max Tracker page) for a Claude-only desk. Compile-time;
+  Needs You and the Codex agent feed are unaffected. Default 1, nothing
+  changes for existing installs.
+- **Battery badge.** With the optional cell fitted, the 2.16 panel shows
+  charge state and the PMU's own percentage bottom-right on every page,
+  caps brightness at the night level below 20 %, and lists power in
+  SETTINGS → ABOUT. The AXP2101 charge profile is untouched; the only
+  write enables the voltage measurement.
+  A NIGHT DIM row in LABS lands with it; the schedule follows below.
+- **RTC clock and scheduled night dimming.** The 2.16 panel takes its time
+  from the onboard PCF85063 on a power-on boot when the reading is
+  trustworthy — oscillator flag clear, year 2026 or later, and the chip's
+  RAM byte marked by this firmware, so a vendor demo's local-time value is
+  never applied as UTC (its backup supply is on the schematic, not yet
+  verified through a power loss) — keeps a clock and its source over a
+  soft restart, writes
+  NTP time back to the RTC after every sync including the hourly resyncs,
+  and shows the clock source in SETTINGS → ABOUT. The LABS row NIGHT DIM now
+  dims the glass to the night level between `TG_NIGHT_START_HHMM` and
+  `TG_NIGHT_END_HHMM` (23:00–07:00 by default) whenever the clock is valid.
+  Local time comes from the new `TG_TIMEZONE` (Europe/Stockholm rules by
+  default), which also makes the RUNS OUT line local instead of UTC. The
+  schedule and the local RUNS OUT time apply on the 2.41 V2 too, once NTP
+  has synced: its NIGHT DIM row is the same switch. The V2 has no RTC path.
+- Owner photographs of the working 2.41 V2, disclosed Waveshare affiliate
+  product links, and a [coming-soon hardware list](README.md#coming-soon--hardware-on-the-workbench).
+  AMOLED 1.75/1.8/1.91 ports are planned; RGB matrix hardware is experimental.
+  Neither listing claims additional firmware support.
+- **Waveshare ESP32-S3-Touch-AMOLED-2.41 V2 support**, selected with
+  `TORGET_BOARD=waveshare_241_v2`: fixed 600×450 landscape, V2 QSPI/I2C/reset
+  wiring, paired touch rotation, BOOT settings input and native UI margins.
+  [Setup and recovery](docs/waveshare-241-v2.md), [physical evidence](docs/superpowers/reviews/2026-09-17-waveshare-241-v2-physical.md),
+  a separate hardware registry and [next-display checklist](docs/adding-a-display.md)
+  record the boundaries. V1, auto-rotation, OTA and physical interaction replies
+  are not claimed validated. Firmware CI builds both board profiles and native
+  preview/raster tests protect the second layout. Target LVGL now pins 9.5.0
+  to match the simulator rather than resolving a newer 9.x release.
+- **Claude Code's statusLine as a quota source (host side).**
+  `python3 tools/vibepulse_setup.py statusline install --yes-single-account`
+  points Claude Code's `statusLine` at a generated launcher; the bridge
+  (`tools/tokenserver/statusline_bridge.py`) keeps the session and weekly
+  rate-limit windows Claude Code already hands that command, then runs the
+  status line you had before with the same stdin. The tokenserver arbitrates
+  each window against the OAuth probe (later reset wins; within a window
+  the higher figure, a stored value being a floor until its reset), slows
+  the probe to 30 min while a fresh sample covers both windows, and never
+  touches the model week. `statusline
+  status`, `doctor`, `smoke.py` and `GET /` (`claudeStatusline`) report
+  it. Single-account slice of the 2026-09-10 spec; account binding is not
+  implemented, and install is macOS-only for now.
+
+- The Claude session window is cached as a same-window floor (OBS-40), a
+  live week reading below the cached figure for the same reset is logged
+  and listed as `quotaRegressions` on `GET /` (OBS-39 evidence), and the
+  statusLine bridge slows the probe only when its figures are at least the
+  probe's for the same reset.
+
+- Docs and test hygiene from the observability backlog: a "Reading the
+  logs" block in `docs/agent-setup.md` with the serial-console command
+  (OBS-23), the tokenserver README no longer claims header names are logged
+  on a healthy first probe (OBS-23), and the tailer identity-cap test forces
+  the eviction path instead of depending on inode reuse (OBS-29).
+  OBS-26 and OBS-31 were already fixed and are marked done.
+
+- The host test suites run about four times faster with no product change:
+  every test HTTP server now polls its shutdown flag every 20 ms instead of
+  the stdlib's 0.5 s (about a hundred servers per run), and the
+  abandoned-hook tests shorten the liveness poll they assert against. The
+  tokenserver suite went from about 92 s to 22 s and the plugin suite from
+  48 s to 11 s on one Linux runner.
+
+- SETTINGS → LABS stores independent choices for burn rate, Max Tracker,
+  API-equivalent Value, the GitHub page and star popups. Choices apply after
+  restart. Fresh sample configurations start with quotas/activity; upgrades
+  using existing configurations retain their initial views. Disabled pages
+  and optional polling tasks are not created. Physical selector review is
+  pending; standalone clocks and quotes remain future experiments.
 
 ### Fixed
 
@@ -193,87 +278,6 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
 - Encrypted live-status publishing runs at most every five seconds instead of
   two, reducing normal host status uploads by 60%. Changed activity can appear
   up to three seconds later; approval delivery and signed expiry are unchanged.
-
-### Added
-
-- `TK_CODEX_PAGES 0` in `secrets.h` hides the Codex pages (CODEX · WEEKLY
-  and the Codex Max Tracker page) for a Claude-only desk. Compile-time;
-  Needs You and the Codex agent feed are unaffected. Default 1, nothing
-  changes for existing installs.
-- **Battery badge.** With the optional cell fitted, the 2.16 panel shows
-  charge state and the PMU's own percentage bottom-right on every page,
-  caps brightness at the night level below 20 %, and lists power in
-  SETTINGS → ABOUT. The AXP2101 charge profile is untouched; the only
-  write enables the voltage measurement.
-  A NIGHT DIM row in LABS lands with it; the schedule follows below.
-- **RTC clock and scheduled night dimming.** The 2.16 panel takes its time
-  from the onboard PCF85063 on a power-on boot when the reading is
-  trustworthy — oscillator flag clear, year 2026 or later, and the chip's
-  RAM byte marked by this firmware, so a vendor demo's local-time value is
-  never applied as UTC (its backup supply is on the schematic, not yet
-  verified through a power loss) — keeps a clock and its source over a
-  soft restart, writes
-  NTP time back to the RTC after every sync including the hourly resyncs,
-  and shows the clock source in SETTINGS → ABOUT. The LABS row NIGHT DIM now
-  dims the glass to the night level between `TG_NIGHT_START_HHMM` and
-  `TG_NIGHT_END_HHMM` (23:00–07:00 by default) whenever the clock is valid.
-  Local time comes from the new `TG_TIMEZONE` (Europe/Stockholm rules by
-  default), which also makes the RUNS OUT line local instead of UTC. The
-  schedule and the local RUNS OUT time apply on the 2.41 V2 too, once NTP
-  has synced: its NIGHT DIM row is the same switch. The V2 has no RTC path.
-- Owner photographs of the working 2.41 V2, disclosed Waveshare affiliate
-  product links, and a [coming-soon hardware list](README.md#coming-soon--hardware-on-the-workbench).
-  AMOLED 1.75/1.8/1.91 ports are planned; RGB matrix hardware is experimental.
-  Neither listing claims additional firmware support.
-- **Waveshare ESP32-S3-Touch-AMOLED-2.41 V2 support**, selected with
-  `TORGET_BOARD=waveshare_241_v2`: fixed 600×450 landscape, V2 QSPI/I2C/reset
-  wiring, paired touch rotation, BOOT settings input and native UI margins.
-  [Setup and recovery](docs/waveshare-241-v2.md), [physical evidence](docs/superpowers/reviews/2026-09-17-waveshare-241-v2-physical.md),
-  a separate hardware registry and [next-display checklist](docs/adding-a-display.md)
-  record the boundaries. V1, auto-rotation, OTA and physical interaction replies
-  are not claimed validated. Firmware CI builds both board profiles and native
-  preview/raster tests protect the second layout. Target LVGL now pins 9.5.0
-  to match the simulator rather than resolving a newer 9.x release.
-- **Claude Code's statusLine as a quota source (host side).**
-  `python3 tools/vibepulse_setup.py statusline install --yes-single-account`
-  points Claude Code's `statusLine` at a generated launcher; the bridge
-  (`tools/tokenserver/statusline_bridge.py`) keeps the session and weekly
-  rate-limit windows Claude Code already hands that command, then runs the
-  status line you had before with the same stdin. The tokenserver arbitrates
-  each window against the OAuth probe (later reset wins; within a window
-  the higher figure, a stored value being a floor until its reset), slows
-  the probe to 30 min while a fresh sample covers both windows, and never
-  touches the model week. `statusline
-  status`, `doctor`, `smoke.py` and `GET /` (`claudeStatusline`) report
-  it. Single-account slice of the 2026-09-10 spec; account binding is not
-  implemented, and install is macOS-only for now.
-
-- The Claude session window is cached as a same-window floor (OBS-40), a
-  live week reading below the cached figure for the same reset is logged
-  and listed as `quotaRegressions` on `GET /` (OBS-39 evidence), and the
-  statusLine bridge slows the probe only when its figures are at least the
-  probe's for the same reset.
-
-- Docs and test hygiene from the observability backlog: a "Reading the
-  logs" block in `docs/agent-setup.md` with the serial-console command
-  (OBS-23), the tokenserver README no longer claims header names are logged
-  on a healthy first probe (OBS-23), and the tailer identity-cap test forces
-  the eviction path instead of depending on inode reuse (OBS-29).
-  OBS-26 and OBS-31 were already fixed and are marked done.
-
-- The host test suites run about four times faster with no product change:
-  every test HTTP server now polls its shutdown flag every 20 ms instead of
-  the stdlib's 0.5 s (about a hundred servers per run), and the
-  abandoned-hook tests shorten the liveness poll they assert against. The
-  tokenserver suite went from about 92 s to 22 s and the plugin suite from
-  48 s to 11 s on one Linux runner.
-
-- SETTINGS → LABS stores independent choices for burn rate, Max Tracker,
-  API-equivalent Value, the GitHub page and star popups. Choices apply after
-  restart. Fresh sample configurations start with quotas/activity; upgrades
-  using existing configurations retain their initial views. Disabled pages
-  and optional polling tasks are not created. Physical selector review is
-  pending; standalone clocks and quotes remain future experiments.
 
 ## v1.1.0 — 2026-09-10
 
