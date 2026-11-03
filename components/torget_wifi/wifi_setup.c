@@ -602,6 +602,9 @@ static void guard_task(void *arg) {
   int64_t opened_us = 0;
   int64_t last_close_us = 0;
   int64_t got_ip_us = 0;
+  /* När glaset senast fick en app som behöver nätet; 0 = en offlineapp
+   * (TID) eller launchern står framme. Se tg_wifi_offline_since. */
+  int64_t needs_net_since = 0;
   tg_wifi_slot active_trial = {0};
   uint32_t applied_seq = 0;
 
@@ -625,6 +628,12 @@ static void guard_task(void *arg) {
       got_ip_us = 0;
     }
 
+    const bool needs_net = !s_hooks->foreground_needs_network ||
+                           s_hooks->foreground_needs_network();
+    if (!needs_net) needs_net_since = 0;
+    else if (needs_net_since == 0) needs_net_since = now;
+    const int64_t offline_since = tg_wifi_offline_since(no_ip_since, needs_net_since);
+
     if (!open) {
       if (phase == TG_WIFI_PHASE_FAILED &&
           atomic_exchange(&s_want_close, false)) {
@@ -637,7 +646,7 @@ static void guard_task(void *arg) {
       if (phase != TG_WIFI_PHASE_FAILED)
         atomic_store(&s_want_close, false);
       bool automatic = phase == TG_WIFI_PHASE_IDLE &&
-          tg_wifi_setup_should_open(have_ip, now, no_ip_since, last_close_us);
+          tg_wifi_setup_should_open(have_ip, now, offline_since, last_close_us);
       if (asked || automatic) {
         opened_us = now;
         got_ip_us = 0;
@@ -759,17 +768,18 @@ static void guard_task(void *arg) {
     } else if (now_open) {
       int left = (int)((TG_WIFI_SETUP_WINDOW_US - (now - opened_us)) / 1000000);
       torget_wifi_ui_set(TG_WIFI_UI_OPEN, AP_SSID, s_ap_pass, NULL, left);
-    } else if (tg_wifi_search_ui_visible(have_ip, now, no_ip_since)) {
+    } else if (tg_wifi_search_ui_visible(have_ip, now, offline_since)) {
       /* Den ärliga nätsidan: vilket nät jagas, vad radion svarade, och hur
        * länge det är kvar tills fönstret öppnar sig självt. Först efter
        * TG_WIFI_SEARCH_UI_US — bootskärmen äger uppstarten. */
       const char *ssid = s_hooks->current_ssid ? s_hooks->current_ssid() : NULL;
       const char *reason = s_hooks->last_reason ? s_hooks->last_reason() : NULL;
-      int64_t until = TG_WIFI_SETUP_AUTO_US - (now - no_ip_since);
+      int64_t until = TG_WIFI_SETUP_AUTO_US - (now - offline_since);
       int left = until > 0 ? (int)(until / 1000000) : 0;
       torget_wifi_ui_set(TG_WIFI_UI_SEARCHING, ssid, NULL, reason, left);
     } else {
-      /* Kort svacka eller pågående boot: apparna behåller glaset. */
+      /* Kort svacka, pågående boot eller en offlineapp (TID) på glaset:
+       * apparna behåller det. */
       torget_wifi_ui_set(TG_WIFI_UI_HIDDEN, NULL, NULL, NULL, 0);
     }
   }

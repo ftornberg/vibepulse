@@ -10,7 +10,8 @@
  * Inga påhittade förlopp: varje steg tänds av sin verkliga signal
  * (IP-eventet, SNTP-synken, första lyckade hämtningen), och en yttre
  * timeout i värdlagret tar ner skärmen om nätet aldrig kommer — bakom
- * den står apparnas ärliga NO DATA-läge.
+ * den står apparnas ärliga NO DATA-läge. Visar glaset en app som inte
+ * behöver nätet (TID) kliver skärmen av direkt (boot_screen_policy.h).
  *
  * Lagerordning: skapas på lv_layer_top FÖRE OTA-overlayn, så en
  * OTA-omstarts READY-ring alltid vinner över bootskärmen.

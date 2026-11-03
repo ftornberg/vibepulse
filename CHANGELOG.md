@@ -99,6 +99,19 @@ earlier are on the [original project's](https://github.com/niclasvestlund-YT/vib
 
 ### Fixed
 
+- **TID works without a network (2.16).** Offline, the shared network
+  layers covered TID's clock: the boot screen for 45 s, then NO NETWORK
+  from 60 s, then a setup window that opened by itself at 90 s, took KEY3
+  and kept coming back. Apps now declare `works_offline` in the app
+  contract (an additive field; apps that leave it out keep today's
+  behavior). While TID or the launcher is on the glass, the boot screen
+  leaves at once and neither NO NETWORK nor the self-opening setup window
+  takes the glass. The clock runs on the RTC time when it is valid, and
+  shows `––:––` when it is not. VibePulse keeps its NO DATA, NO NETWORK and
+  setup steps, and they now count from when it took the glass. WIFI under
+  SETTINGS opens the setup window as before. Host-tested; not yet seen on
+  glass.
+
 - **`tools/ota-flash.sh` no longer reports a failed upload as a success.** It
   printed its "202" line and exited 0 whatever the panel answered, also after
   an HTTP 408. It now exits 0 only for 202, names the failure otherwise, and

@@ -165,6 +165,46 @@ static void test_search_screen_lets_the_boot_screen_finish(void) {
         !tg_wifi_search_ui_visible(true, 500 * s, 0));
 }
 
+/* Läxan 2026-11-02: utan nät räknades klockan från boot oavsett glaset, så
+ * TID täcktes av NO NETWORK efter 60 s och setupfönstret efter 90 s, för
+ * evigt. Nätlagret räknar nu bara den tid en app som BEHÖVER nätet stått
+ * framme. Testerna går genom samma två regler som vakten anropar. */
+static void test_offline_app_keeps_the_glass(void) {
+  const int64_t s = 1000000LL;
+
+  check("an offline app on the glass gives no start point",
+        tg_wifi_offline_since(1 * s, 0) == 0);
+  check("a panel with an IP gives no start point",
+        tg_wifi_offline_since(0, 1 * s) == 0);
+  check("with VibePulse up since boot the outage counts from IP loss",
+        tg_wifi_offline_since(1 * s, 1 * s) == 1 * s);
+  check("an outage inside the VibePulse stint counts from the outage",
+        tg_wifi_offline_since(300 * s, 10 * s) == 300 * s);
+  check("switching to VibePulse mid-outage counts from the switch",
+        tg_wifi_offline_since(1 * s, 700 * s) == 700 * s);
+
+  /* TID framme sedan boot, inget nät på tjugo minuter: aldrig NO NETWORK,
+   * aldrig ett självöppnat fönster. */
+  int64_t tid = tg_wifi_offline_since(1 * s, 0);
+  check("TID offline for twenty minutes never shows NO NETWORK",
+        !tg_wifi_search_ui_visible(false, 1200 * s, tid));
+  check("TID offline for twenty minutes never opens the setup window",
+        !tg_wifi_setup_should_open(false, 1200 * s, tid, 0));
+
+  /* Byte till VibePulse efter tio minuter utan nät: dess ärliga NO DATA
+   * först, sedan NO NETWORK efter 60 s och fönstret efter 90 s — inte i
+   * samma ögonblick som bytet. */
+  int64_t vp = tg_wifi_offline_since(1 * s, 600 * s);
+  check("VibePulse just after the switch keeps its own glass",
+        !tg_wifi_search_ui_visible(false, 601 * s, vp));
+  check("VibePulse explains the outage a minute after the switch",
+        tg_wifi_search_ui_visible(false, 661 * s, vp));
+  check("the window does not open the instant VibePulse is chosen",
+        !tg_wifi_setup_should_open(false, 601 * s, vp, 0));
+  check("it opens ninety seconds after VibePulse took the glass",
+        tg_wifi_setup_should_open(false, 691 * s, vp, 0));
+}
+
 static void test_setup_window_closes(void) {
   const int64_t s = 1000000LL;
 
@@ -280,6 +320,7 @@ int main(void) {
   test_switching();
   test_setup_window_opens_only_when_it_can_help();
   test_search_screen_lets_the_boot_screen_finish();
+  test_offline_app_keeps_the_glass();
   test_setup_window_closes();
   test_setup_phase_owns_key3_without_accidental_release();
   test_join_submissions_retry_and_explain_failures();
