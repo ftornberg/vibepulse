@@ -27,7 +27,7 @@
 # would run a different rule implementation than CI and pass or fail
 # differently; ruff itself refuses to run when the versions disagree, so
 # the gate cannot silently lint with the wrong binary.
-required-version = "==0.17.2"
+required-version = "==0.17.3"
 target-version = "py311"
 extend-exclude = [
     # Claude Code's git worktrees live under .claude/worktrees and carry their
